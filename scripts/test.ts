@@ -1,5 +1,5 @@
 /**
- * Parses every `*.luaut` file under `smoketest/`, runs scope + type analysis,
+ * Parses every `*.tilua` file under `smoketest/`, runs scope + type analysis,
  * and writes the AST as JSON to `generated/`.
  *
  *   npm test        # = tsx scripts/test.ts
@@ -21,28 +21,28 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const smokeDir = join(root, "smoketest");
 const outDir = join(root, "generated");
 
-// The smoketests' own luaut.config.json, for resolving imports. They load no
+// The smoketests' own tilua.config.json, for resolving imports. They load no
 // type libraries: the parser is tested on its own, so a name such as `print`
 // is simply an undeclared global here.
-const lookup = findConfig(join(smokeDir, "smoketest.luaut"));
+const lookup = findConfig(join(smokeDir, "smoketest.tilua"));
 if (!lookup.config || lookup.problems.length) {
     throw new Error(`smoketest config: ${lookup.problems.map((p) => p.message).join("; ") || "not found"}`);
 }
 const config = lookup.config;
 
-function collectLuaut(dir: string): string[] {
+function collectTilua(dir: string): string[] {
     const out: string[] = [];
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
         const full = join(dir, entry.name);
-        if (entry.isDirectory()) out.push(...collectLuaut(full));
-        else if (entry.name.endsWith(".luaut")) out.push(full);
+        if (entry.isDirectory()) out.push(...collectTilua(full));
+        else if (entry.name.endsWith(".tilua")) out.push(full);
     }
     return out;
 }
 
-const files = collectLuaut(smokeDir).sort();
+const files = collectTilua(smokeDir).sort();
 if (files.length === 0) {
-    throw new Error(`no *.luaut files under ${relative(root, smokeDir)}/`);
+    throw new Error(`no *.tilua files under ${relative(root, smokeDir)}/`);
 }
 
 mkdirSync(outDir, { recursive: true });
@@ -91,7 +91,7 @@ for (const file of files) {
         const types = analyzeTypes(program, scopes, { resolveModule: resolverFor(file) });
 
         writeFileSync(
-            join(outDir, name.replace(/\.luaut$/, ".json")),
+            join(outDir, name.replace(/\.tilua$/, ".json")),
             JSON.stringify(program, null, 2) + "\n",
         );
 
@@ -105,7 +105,7 @@ for (const file of files) {
             if (b && b.kind !== "global") bindings.push(`${b.name}: ${formatType(t as Type)}`);
         }
         writeFileSync(
-            join(outDir, name.replace(/\.luaut$/, ".types.txt")),
+            join(outDir, name.replace(/\.tilua$/, ".types.txt")),
             bindings.sort().join("\n") + "\n",
         );
 

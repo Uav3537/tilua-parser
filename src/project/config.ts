@@ -1,24 +1,24 @@
 /**
- * `luaut.config.json`: finding the one that applies to a file, and reading it.
+ * `tilua.config.json`: finding the one that applies to a file, and reading it.
  *
  * A file takes the nearest config in its own folder or above, as with
- * tsconfig. The config may be written `luaut.config.json` or
- * `luaut.config.jsonc`; either allows comments and trailing commas. Both in one
+ * tsconfig. The config may be written `tilua.config.json` or
+ * `tilua.config.jsonc`; either allows comments and trailing commas. Both in one
  * folder is an error, since it would be ambiguous which applies.
  */
 import { dirname, join, resolve } from "node:path"
 import { nodeHost, type ProjectHost } from "./host"
 
-export const CONFIG_FILE_NAMES = ["luaut.config.json", "luaut.config.jsonc"] as const
+export const CONFIG_FILE_NAMES = ["tilua.config.json", "tilua.config.jsonc"] as const
 
-export interface LuautConfig {
+export interface TiluaConfig {
     /** Absolute path of the config file. */
     readonly path: string
     /** The folder it sits in. Relative paths in it resolve from here. */
     readonly directory: string
     /** The config file's text, for locating problems in it. */
     readonly source: string
-    /** Type libraries to load, in order: `"lua"`, `"@luaut/roblox"`, `"./types"`. */
+    /** Type libraries to load, in order: `"lua"`, `"@tilua-types/roblox"`, `"./types"`. */
     readonly types: readonly string[]
     /** Import path aliases, as in tsconfig: `{ "@shared/*": ["src/shared/*"] }`. */
     readonly paths: Readonly<Record<string, readonly string[]>>
@@ -26,7 +26,15 @@ export interface LuautConfig {
     readonly baseUrl: string
     /** Absolute path of a Rojo sourcemap, or `null` for none. */
     readonly sourceMap: string | null
+    /** Which Lua the compiler must emit for. `"luau"` (the default) keeps
+     *  Luau's own syntax; `"lua51"` also lowers what stock Lua 5.1 has no
+     *  syntax for. The parser does not care — it is the compiler's to act on,
+     *  and lives here because it belongs to the project. */
+    readonly target: BuildTarget
 }
+
+/** `"luau"` is Roblox's Lua. `"lua51"` is stock Lua 5.1. */
+export type BuildTarget = "luau" | "lua51"
 
 export interface ConfigProblem {
     /** The file the problem is about: a config file, or a sourcemap it names. */
@@ -39,7 +47,7 @@ export interface ConfigProblem {
 
 export interface ConfigLookup {
     /** The config that applies, if one was found and could be read. */
-    readonly config?: LuautConfig
+    readonly config?: TiluaConfig
     readonly problems: readonly ConfigProblem[]
     /** Every config path looked at on the way up, found or not — what a cache
      *  must watch, so that creating or deleting a config is noticed. */
@@ -58,7 +66,7 @@ export function findConfig(file: string, host: ProjectHost = nodeHost): ConfigLo
             if (host.readFile(path) !== undefined) found.push(path)
         }
         if (found.length > 1) {
-            const message = `Only one luaut config may be in a folder, but both ${CONFIG_FILE_NAMES.join(" and ")} are in ${directory}`
+            const message = `Only one tilua config may be in a folder, but both ${CONFIG_FILE_NAMES.join(" and ")} are in ${directory}`
             return { searched, problems: found.map(path => ({ file: path, message, line: 1, column: 1 })) }
         }
         if (found.length === 1) {
@@ -71,11 +79,12 @@ export function findConfig(file: string, host: ProjectHost = nodeHost): ConfigLo
     }
 }
 
-const OPTIONS = ["types", "paths", "baseUrl", "sourceMap"] as const
+const OPTIONS = ["types", "paths", "baseUrl", "sourceMap", "target"] as const
+const TARGETS = ["luau", "lua51"] as const
 
 /** Read and check one config file. Problems do not stop the rest of it from
  *  applying: an unknown option is reported and the known ones still work. */
-export function loadConfig(path: string, host: ProjectHost = nodeHost): { config?: LuautConfig; problems: ConfigProblem[] } {
+export function loadConfig(path: string, host: ProjectHost = nodeHost): { config?: TiluaConfig; problems: ConfigProblem[] } {
     const file = resolve(path)
     const source = host.readFile(file)
     if (source === undefined) return { problems: [{ file, message: "Cannot read the config file" }] }
@@ -135,7 +144,16 @@ export function loadConfig(path: string, host: ProjectHost = nodeHost): { config
         else problem("sourceMap", "'sourceMap' must be a path string, or null for none")
     }
 
-    return { config: { path: file, directory, source, types, paths, baseUrl, sourceMap }, problems }
+    let target: BuildTarget = "luau"
+    if (options.target !== undefined) {
+        if (typeof options.target === "string" && (TARGETS as readonly string[]).includes(options.target)) {
+            target = options.target as BuildTarget
+        } else {
+            problem("target", `'target' must be one of: ${TARGETS.join(", ")}`)
+        }
+    }
+
+    return { config: { path: file, directory, source, types, paths, baseUrl, sourceMap, target }, problems }
 }
 
 /** Blank out `//` and `/* *\/` comments and trailing commas, keeping every

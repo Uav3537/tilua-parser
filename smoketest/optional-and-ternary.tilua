@@ -1,6 +1,6 @@
 -- Optionality and the ternary operator.
 --
--- luaut has **no `T?` shorthand**. `?` in type position always belongs to a
+-- tilua has **no `T?` shorthand**. `?` in type position always belongs to a
 -- conditional type, and `?` in expression position always belongs to a
 -- ternary. Optionality is written the TypeScript way:
 --

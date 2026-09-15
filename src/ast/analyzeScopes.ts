@@ -574,6 +574,9 @@ class Analyzer {
             }
 
             case "CallStatement":
+            // An expression written as a statement does nothing, but the names
+            // in it are real references — that is the point of allowing it.
+            case "ExpressionStatement":
                 this.visitExpression(stmt.expression, scope)
                 return
 

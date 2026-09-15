@@ -1,4 +1,4 @@
--- luaut type syntax: `T[]` arrays, `[T, U]` tuples, object types with `:`.
+-- tilua type syntax: `T[]` arrays, `[T, U]` tuples, object types with `:`.
 
 type Vec2 = { x: number, y: number }
 type Vec2List = Vec2[]

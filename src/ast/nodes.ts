@@ -22,7 +22,7 @@ export interface Block extends BaseNode {
 }
 
 // ============================================================
-// Modules (luaut extension — Luau itself has no import/export;
+// Modules (tilua extension — Luau itself has no import/export;
 // these are compiled away by the bundler into the dependency-tree
 // IIFE, so they never survive to emitted Luau)
 // ============================================================
@@ -101,6 +101,7 @@ export type Statement =
     | AssignmentStatement
     | CompoundAssignmentStatement
     | CallStatement
+    | ExpressionStatement
     | DoStatement
     | WhileStatement
     | RepeatStatement
@@ -122,7 +123,7 @@ export type Statement =
     | ErrorStatement
 
 /** `declare game: DataModel` / `declare function require(m: string): unknown`
- *  — an ambient value/function declaration for a definitions file (`.d.luaut`).
+ *  — an ambient value/function declaration for a definitions file (`.d.tilua`).
  *  Contributes a global type; emits no runtime code. */
 export interface DeclareStatement extends BaseNode {
     type: "DeclareStatement"
@@ -153,7 +154,7 @@ export interface ErrorStatement extends BaseNode {
     type: "ErrorStatement"
 }
 
-/** `const x = 1` / `let x, y = a, b` — the only variable-binding form in luaut
+/** `const x = 1` / `let x, y = a, b` — the only variable-binding form in tilua
  *  (Luau's `local` is gone). `const` bindings are immutable and infer literal
  *  types (`const n = 1` → `1`); `let` bindings are mutable and widen. */
 export interface VariableDeclaration extends BaseNode {
@@ -164,7 +165,7 @@ export interface VariableDeclaration extends BaseNode {
 }
 
 // ============================================================
-// Destructuring patterns (luaut extension — JS-style)
+// Destructuring patterns (tilua extension — JS-style)
 // ------------------------------------------------------------
 // Appear in binding positions: `local <pattern> = ...`,
 // `<pattern> = ...` assignment, `for <pattern> in ...`, and
@@ -245,7 +246,7 @@ export interface FunctionDeclarationStatement extends BaseNode {
     signatures?: FunctionSignature[]
 }
 
-/** A bodyless function declaration — an overload signature. luaut uses the
+/** A bodyless function declaration — an overload signature. tilua uses the
  *  exact TS shape: one or more `function f(...): T` lines with no `end`,
  *  followed by the implementation `function f(...) ... end`. */
 export interface FunctionSignature extends BaseNode {
@@ -269,7 +270,7 @@ export interface FunctionName extends BaseNode {
     method?: Identifier
 }
 
-/** `class Name extends Base ... end` — luaut's one runtime class form.
+/** `class Name extends Base ... end` — tilua's one runtime class form.
  *
  *  It is sugar, and the shape it stands for is the ordinary Lua one: the
  *  class is a single table holding the methods and the statics, and an
@@ -383,6 +384,19 @@ export interface CompoundAssignmentStatement extends BaseNode {
 export interface CallStatement extends BaseNode {
     type: "CallStatement"
     expression: CallExpression | MethodCallExpression | NewExpression
+}
+
+/** An expression written as a statement, where Lua would want a call or an
+ *  assignment: `value` on a line of its own.
+ *
+ *  It does nothing, and the compiler drops it. It is here because writing a
+ *  name and asking the editor about it — hover, completion — is how code gets
+ *  written, and making that a syntax error means the file stops being
+ *  analysable exactly when the help is wanted. A call is a `CallStatement`
+ *  still; this is every other shape. */
+export interface ExpressionStatement extends BaseNode {
+    type: "ExpressionStatement"
+    expression: Expression
 }
 
 export interface DoStatement extends BaseNode {
@@ -592,7 +606,7 @@ export interface FunctionExpression extends BaseNode {
     func: FunctionBody
 }
 
-// luaut splits Luau's single `{}` table syntax the way JS does: `{}` is an
+// tilua splits Luau's single `{}` table syntax the way JS does: `{}` is an
 // object/dictionary literal ONLY (key → value), and `[]` is an array literal
 // ONLY (see `ArrayExpression`). This removes the ambiguity that made
 // destructuring (`local {a} = t` vs `local [a] = t`) undecidable in Luau.

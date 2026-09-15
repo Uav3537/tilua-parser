@@ -36,7 +36,7 @@ const peeked: number = counter:peek()
 const viaDot: number = counter.bump(counter, 2)
 
 -- Template literal types ----------------------------------------------------
--- Interpolation uses `${...}`, the same syntax as luaut's template *strings*.
+-- Interpolation uses `${...}`, the same syntax as tilua's template *strings*.
 
 type Event = "click" | "hover"
 
@@ -47,7 +47,7 @@ const anyOn: `on${string}` = "onWhatever"
 const onEvent: `on${Event}` = "onclick"
 const pair: `${"a" | "b"}-${"x" | "y"}` = "b-y"
 
--- The four string intrinsics, which cannot be written in luaut itself.
+-- The four string intrinsics, which cannot be written in tilua itself.
 const shout: Uppercase<Event> = "CLICK"
 const quiet: Lowercase<"ABC"> = "abc"
 const upper: Capitalize<"click"> = "Click"

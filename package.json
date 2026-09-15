@@ -1,7 +1,7 @@
 {
-  "name": "luaut-parser",
-  "version": "5.2.0",
-  "description": "luaut parser for roblox",
+  "name": "@tilua/parser",
+  "version": "1.0.0",
+  "description": "tilua parser for roblox",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -10,7 +10,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/Uav3537/luaut-parser.git"
+    "url": "https://github.com/Uav3537/tilua-parser.git"
   },
   "exports": {
     ".": {
@@ -36,5 +36,8 @@
     "tsup": "^8.5.1",
     "tsx": "^4.19.0",
     "typescript": "^5.0.4"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

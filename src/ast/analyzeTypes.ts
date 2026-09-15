@@ -3,14 +3,14 @@ import type {
     Identifier, FunctionBody, FunctionSignature, BindingTarget, GenericTypeParameter,
     ObjectPattern, ArrayPattern, ObjectPatternProperty, ReturnStatement,
     TableExpression, ArrayExpression, IfStatement, TypePredicateNode, DeclareClassStatement, DeclareStatement,
-    ClassDeclaration, ClassExpression, ClassLike, ClassMember,
+    ClassDeclaration, TypeAliasStatement, ExportTypeAliasStatement, ClassExpression, ClassLike, ClassMember,
 } from "./nodes"
 import type { ScopeAnalysis, BindingId } from "./analyzeScopes"
 import { preludeProgram } from "./prelude"
 import {
     type Type, type ObjectProperty, type ObjectType, type FunctionType, type TypePredicate, type ClassInfo,
     type GenericRefType,
-    anyType, unknownType, neverType, nilType, booleanType, numberType, stringType,
+    anyType, unknownType, declaredUnknownType, neverType, nilType, booleanType, numberType, stringType,
     primitive, literal, arrayOf, tuple, objectType, fn, union, intersection, optional,
     typeParam, substitute, unify, containsTypeParam, matchInfer, setAliasExpander, setDeferredBound, difference,
     widen, isAssignable, overlaps, narrowTo, narrowExclude, narrowTruthy, narrowFalsy,
@@ -30,6 +30,16 @@ export interface TypeDiagnostic {
     node: Expression | Statement | TypeNode | Block | ClassMember
     message: string
 }
+
+/** Members a class carries to model itself, which no one writes and so no one
+ *  should be told about. */
+const INTERNAL_MEMBERS = new Set(["ClassObject", "ParentClass"])
+
+/** How much of a mismatch to spell out. The point is to save the reader
+ *  comparing two shapes by eye — past a certain length it stops saving them
+ *  anything and starts being the thing they have to read. */
+const MAX_MISSING = 3
+const MAX_EXPLANATION = 90
 
 export interface TypeAnalysis {
     /** Inferred type of every expression node. */
@@ -81,9 +91,9 @@ export interface AnalyzeTypesOptions {
     globalTypes?: Record<string, Type>
     /** Extra named types available to annotations (e.g. Roblox classes). */
     libTypes?: Record<string, Type>
-    /** Parsed definitions files (`.d.luaut`): their `type` aliases become
+    /** Parsed definitions files (`.d.tilua`): their `type` aliases become
      *  available to annotations and their `declare` statements seed global
-     *  types. A project lists them under `types` in `luaut.config.json`; see
+     *  types. A project lists them under `types` in `tilua.config.json`; see
      *  `resolveTypeLibraries`. */
     libs?: readonly Program[]
     /** Resolve an `import`'s module path to what that module exports. Called
@@ -664,6 +674,7 @@ class TypeAnalyzer {
         for (const lib of this.options.libs ?? []) this.registerAliasDefs(lib.body, true)
         this.registerAliasDefs(this.program.body)
         this.registerNestedClasses()
+        this.registerNestedAliases()
         for (const lib of this.options.libs ?? []) this.harvestDeclares(lib.body)
         // Imported type names must be known before any annotation resolves.
         this.registerImportedTypes()
@@ -772,7 +783,7 @@ class TypeAnalyzer {
 
     /** `layering` is on for the prelude and for definitions files: a second
      *  library that declares an alias already declared *adds* to it, the way a
-     *  second `declare` of a table's name does, so `@luaut/roblox` can give
+     *  second `declare` of a table's name does, so `@tilua-types/roblox` can give
      *  `StringMethods` Luau's `split` without restating Lua's. The file being
      *  analysed is not a layer: its own alias replaces what the libraries
      *  gave, which is how a project opts out of a set. */
@@ -819,6 +830,23 @@ class TypeAnalyzer {
             const declaration = node as unknown as ClassDeclaration
             if (this.aliasDefs.has(declaration.name.name)) return
             this.registerClass(declaration)
+        })
+    }
+
+    /** A `type` alias written inside a function or block. The alias table is
+     *  keyed by bare name, so — as for a nested class — the alias is hoisted
+     *  into it and an outer name of the same spelling wins, rather than the
+     *  inner one being invisible and read as `Cannot find name`. */
+    private registerNestedAliases(): void {
+        walkNodes(this.program.body, node => {
+            const record = node as { type?: string }
+            const alias = record.type === "TypeAliasStatement"
+                ? node as unknown as TypeAliasStatement
+                : record.type === "ExportTypeAliasStatement"
+                    ? (node as unknown as ExportTypeAliasStatement).alias
+                    : undefined
+            if (!alias || this.aliasDefs.has(alias.name.name)) return
+            this.aliasDefs.set(alias.name.name, { params: alias.generics, node: alias.definition })
         })
     }
 
@@ -1280,7 +1308,8 @@ class TypeAnalyzer {
                         if (declared && this.emitDiagnostics && !isAssignable(actual, declared)) {
                             this.diagnostics.push({
                                 node: member.init,
-                                message: `Type '${formatType(actual)}' is not assignable to type '${formatType(declared)}'`,
+                                message: `Type '${formatType(actual)}' is not assignable to type '${formatType(declared)}'`
+                                    + this.explainMismatch(actual, declared),
                             })
                         }
                         continue
@@ -1518,7 +1547,8 @@ class TypeAnalyzer {
         if (fits) return
         this.diagnostics.push({
             node: stmt,
-            message: `Type '${formatType(actual)}' is not assignable to '${briefType(declared)}'`,
+            message: `Type '${formatType(actual)}' is not assignable to '${briefType(declared)}'`
+                + this.explainMismatch(actual, declared),
         })
     }
 
@@ -1729,7 +1759,7 @@ class TypeAnalyzer {
                 const name = node.namespace ? `${node.namespace}.${node.base}` : node.base
                 switch (node.base) {
                     case "any": return anyType
-                    case "unknown": return unknownType
+                    case "unknown": return declaredUnknownType
                     case "never": return neverType
                     case "nil": return nilType
                     case "boolean": return booleanType
@@ -1934,7 +1964,7 @@ class TypeAnalyzer {
     // `keyof`, `T[K]`, `C extends E ? A : B` and `{ [K in C]: V }` are built by
     // `resolveType` as deferred nodes and collapsed here as soon as their
     // inputs stop mentioning an unresolved type parameter. Every utility type
-    // (`Partial`, `ReturnType`, `Exclude`, ...) is written in `luau.d.luaut` on
+    // (`Partial`, `ReturnType`, `Exclude`, ...) is written in `luau.d.tilua` on
     // top of these — none of them is known to the analyzer by name.
 
     /** Evaluate every type-level operator in `t` that is ready to be evaluated.
@@ -2042,8 +2072,24 @@ class TypeAnalyzer {
             case "array":
             case "tuple":
                 return numberType
-            case "union":
-                return intersection(t.types.map(m => this.keysOf(m)))
+            case "union": {
+                // `keyof (A | B)` is the keys they share: a value that is one
+                // or the other certainly has only those. Work the set out here
+                // rather than leaving an intersection of literal unions for
+                // something later to reduce — nothing does, and a mapped type
+                // over it then finds no keys at all.
+                const sets = t.types.map(m => {
+                    const keys = this.keysOf(m)
+                    return keys.kind === "union" ? keys.types : [keys]
+                })
+                // An indexer's `string` / `number` key stands for every literal
+                // of that type, so a member declaring one shares them all.
+                const has = (set: readonly Type[], key: Type): boolean => set.some(k =>
+                    (k.kind === "literal" && key.kind === "literal" && k.value === key.value) ||
+                    (k.kind === "primitive" && key.kind === "primitive" && k.name === key.name) ||
+                    (k.kind === "primitive" && key.kind === "literal" && k.name === typeof key.value))
+                return union(sets[0].filter(key => sets.every(set => has(set, key))))
+            }
             case "intersection":
                 return union(t.types.map(m => this.keysOf(m)))
             case "any":
@@ -2102,7 +2148,7 @@ class TypeAnalyzer {
         return union(combos.map(c => literal(c)))
     }
 
-    /** TypeScript's four string intrinsics. They cannot be written in luaut —
+    /** TypeScript's four string intrinsics. They cannot be written in tilua —
      *  there is no character-level type arithmetic — so the analyzer supplies
      *  them, and only them, as named type functions. */
     private applyStringIntrinsic(name: string, arg: Type): Type | undefined {
@@ -2262,7 +2308,8 @@ class TypeAnalyzer {
                             !this.fitsAnnotation(source, declared, inferred, env)) {
                             this.diagnostics.push({
                                 node: stmt,
-                                message: `Type '${formatType(inferred)}' is not assignable to '${formatType(declared)}'`,
+                                message: `Type '${formatType(inferred)}' is not assignable to '${formatType(declared)}'`
+                                    + this.explainMismatch(inferred, declared),
                             })
                         } else if (declared.kind !== "any") {
                             this.reportExcessProperties(source, declared)
@@ -2385,7 +2432,8 @@ class TypeAnalyzer {
                                 if (this.emitDiagnostics && !isAssignable(next, declared) && declared.kind !== "any") {
                                     this.diagnostics.push({
                                         node: stmt,
-                                        message: `Type '${formatType(next)}' is not assignable to '${formatType(declared)}'`,
+                                        message: `Type '${formatType(next)}' is not assignable to '${formatType(declared)}'`
+                                            + this.explainMismatch(next, declared),
                                     })
                                 }
                                 this.setBinding(env, id, narrowTo(declared, next))
@@ -2396,6 +2444,7 @@ class TypeAnalyzer {
                         }
                     } else if (target.type === "MemberExpression" || target.type === "IndexExpression") {
                         this.infer(target, env)
+                        this.checkReadonlyAssign(target, env)
                         // The old narrowing of this path (and anything under it)
                         // described the previous value.
                         this.assignToRef(target, isFreshLiteralExpr(source) ? widen(vt) : vt, env)
@@ -2411,12 +2460,20 @@ class TypeAnalyzer {
             case "CompoundAssignmentStatement":
                 this.infer(stmt.target, env)
                 this.infer(stmt.value, env)
+                this.checkReadonlyAssign(stmt.target, env)
                 return
 
             case "CallStatement":
                 this.infer(stmt.expression, env)
                 // `assert(x)` and friends narrow the rest of this block.
                 this.applyAssertion(stmt.expression, env)
+                return
+
+            // Typed so the editor can answer about it — hover and completion
+            // are why it is allowed to stand at all. It narrows nothing and
+            // the compiler drops it.
+            case "ExpressionStatement":
+                this.infer(stmt.expression, env)
                 return
 
             case "DoStatement":
@@ -3313,7 +3370,8 @@ class TypeAnalyzer {
             if (isAssignable(arg, expected) || isAssignable(widen(arg), expected)) continue
             this.diagnostics.push({
                 node: written[i - self] ?? call,
-                message: `Argument of type '${formatType(arg)}' is not assignable to parameter of type '${briefType(expected)}'`,
+                message: `Argument of type '${formatType(arg)}' is not assignable to parameter of type '${briefType(expected)}'`
+                    + this.explainMismatch(arg, expected),
             })
             return
         }
@@ -3344,7 +3402,8 @@ class TypeAnalyzer {
             if (arg === undefined || arg.kind === "never" || isAssignable(arg, params[i])) continue
             this.diagnostics.push({
                 node: (spread && i >= spread.index ? written[spread.index - self] : written[i - self]) ?? call,
-                message: `Argument of type '${formatType(arg)}' is not assignable to parameter of type '${briefType(params[i])}'`,
+                message: `Argument of type '${formatType(arg)}' is not assignable to parameter of type '${briefType(params[i])}'`
+                    + this.explainMismatch(arg, params[i]),
             })
             return
         }
@@ -3353,7 +3412,8 @@ class TypeAnalyzer {
             if (isAssignable(args[i], f.varargs)) continue
             this.diagnostics.push({
                 node: written[i - self] ?? call,
-                message: `Argument of type '${formatType(args[i])}' is not assignable to parameter of type '${briefType(f.varargs)}'`,
+                message: `Argument of type '${formatType(args[i])}' is not assignable to parameter of type '${briefType(f.varargs)}'`
+                    + this.explainMismatch(args[i], f.varargs),
             })
             return
         }
@@ -4527,7 +4587,8 @@ class TypeAnalyzer {
 
     private inferCall(expr: Extract<Expression, { type: "CallExpression" }>, callee: Type, env: FlowEnv): Type {
         this.checkAmbiguousCall(expr)
-        const fns = this.overloadsOf(callee)
+        const united = this.unionSignatures(callee)
+        const fns = united ?? this.overloadsOf(callee)
         const explicit = this.explicitTypeArguments(expr, fns)
         const expected = this.expectedArguments(expr.arguments, fns, () => 0)
         expr.arguments.forEach((a, i) => this.applyContext(a, expected[i]))
@@ -4537,13 +4598,15 @@ class TypeAnalyzer {
             const spread = this.spreadOf(expr.arguments)
             const arityFits = this.checkArity(expr, fns, argTypes.length, 0, spread)
             const picked = this.pickOverload(fns, argTypes, undefined, spread)
-            const distributed = this.distributedReturn(fns, argTypes, picked, (_, args) => args)
-            if (distributed) return distributed
-            if (picked) {
-                this.checkInferredArguments(expr, expr.arguments, picked, argTypes, 0)
-                return this.callReturn(picked, this.constArgs(picked, expr.arguments, argTypes, env), explicit)
+            if (!united) {
+                const distributed = this.distributedReturn(fns, argTypes, picked, (_, args) => args)
+                if (distributed) return distributed
+                if (picked) {
+                    this.checkInferredArguments(expr, expr.arguments, picked, argTypes, 0)
+                    return this.callReturn(picked, this.constArgs(picked, expr.arguments, argTypes, env), explicit)
+                }
             }
-            if (arityFits) this.reportArguments(expr, expr.arguments, fns, () => argTypes, () => 0)
+            if (arityFits && !picked) this.reportArguments(expr, expr.arguments, fns, () => argTypes, () => 0)
             // Nothing accepts these arguments — the union of what any
             // signature could return is the most we can honestly say.
             return union(fns.map(f => this.callReturn(f, argTypes, explicit)))
@@ -4556,7 +4619,7 @@ class TypeAnalyzer {
      *      const value = map[key]
      *      ("text"):upper()
      *
-     *  calls `map[key]`, in luaut as in Lua and in JavaScript. It is almost
+     *  calls `map[key]`, in tilua as in Lua and in JavaScript. It is almost
      *  never what was meant, and what it does instead is invisible — so say
      *  so, and name the fix. */
     private checkAmbiguousCall(expr: Extract<Expression, { type: "CallExpression" }>): void {
@@ -4569,7 +4632,9 @@ class TypeAnalyzer {
     }
 
     private inferMethodCall(expr: Extract<Expression, { type: "MethodCallExpression" }>, objType: Type, env: FlowEnv): Type {
-        const fns = this.overloadsOf(this.propertyType(objType, expr.method.name))
+        const method = this.propertyType(objType, expr.method.name)
+        const united = this.unionSignatures(method)
+        const fns = united ?? this.overloadsOf(method)
         const explicit = this.explicitTypeArguments(expr, fns)
         const expected = this.expectedArguments(expr.arguments, fns, f => (this.takesSelf(f) ? 1 : 0))
         expr.arguments.forEach((a, i) => this.applyContext(a, expected[i]))
@@ -4589,16 +4654,18 @@ class TypeAnalyzer {
             const spread = this.spreadOf(expr.arguments, self0)
             const arityFits = this.checkArity(expr, fns, argTypes.length, self0, spread)
             const picked = this.pickOverload(fns, argTypes, withSelf, spread)
-            const distributed = this.distributedReturn(fns, argTypes, picked,
-                (f, args) => (this.takesSelf(f) ? [objType, ...args] : args))
-            if (distributed) return distributed
-            if (picked) {
-                const self = this.takesSelf(picked) ? 1 : 0
-                this.checkInferredArguments(expr, expr.arguments, picked, withSelf(picked), self)
-                const written = this.constArgs(picked, expr.arguments, argTypes, env, self)
-                return this.callReturn(picked, this.takesSelf(picked) ? [objType, ...written] : written, explicit)
+            if (!united) {
+                const distributed = this.distributedReturn(fns, argTypes, picked,
+                    (f, args) => (this.takesSelf(f) ? [objType, ...args] : args))
+                if (distributed) return distributed
+                if (picked) {
+                    const self = this.takesSelf(picked) ? 1 : 0
+                    this.checkInferredArguments(expr, expr.arguments, picked, withSelf(picked), self)
+                    const written = this.constArgs(picked, expr.arguments, argTypes, env, self)
+                    return this.callReturn(picked, this.takesSelf(picked) ? [objType, ...written] : written, explicit)
+                }
             }
-            if (arityFits) this.reportArguments(expr, expr.arguments, fns, withSelf, selfOf)
+            if (arityFits && !picked) this.reportArguments(expr, expr.arguments, fns, withSelf, selfOf)
             return union(fns.map(f => this.callReturn(f, withSelf(f), explicit)))
         }
         return objType.kind === "any" ? anyType : unknownType
@@ -4636,6 +4703,8 @@ class TypeAnalyzer {
             this.reportNilAccess(object, type)
             type = withoutNil(this.expand(type))
         }
+        const read = this.expand(type)
+        if (read.kind === "unknown" && read.declared) this.reportUnknownAccess(object)
         return { type, shortCircuits: inChain !== undefined || link.optional === true }
     }
 
@@ -4647,6 +4716,62 @@ class TypeAnalyzer {
         const t = this.expand(raw)
         if (t.kind === "primitive") return t.name === "nil"
         return t.kind === "union" && t.types.some(m => m.kind === "primitive" && m.name === "nil")
+    }
+
+    /** `readonly` is a promise about the property rather than the value it
+     *  holds: assigning *through* it is the one thing it rules out. */
+    private checkReadonlyAssign(target: Expression, env: FlowEnv): void {
+        if (!this.emitDiagnostics) return
+        let name: string
+        let object: Expression
+        if (target.type === "MemberExpression") {
+            name = target.property.name
+            object = target.object
+        } else if (target.type === "IndexExpression") {
+            const index = this.expand(this.infer(target.index, env))
+            // A computed key names no one property unless it is a known string.
+            if (index.kind !== "literal" || typeof index.value !== "string") return
+            name = index.value
+            object = target.object
+        } else {
+            return
+        }
+        // A write through `import * as M` is already reported, in the words of
+        // the module it really is about.
+        if (object.type === "Identifier") {
+            const id = this.bindingIdOf(object)
+            if (id !== undefined && this.scopes.bindings.get(id)?.declaredBy === "namespace") return
+        }
+        if (!this.isReadonlyProperty(this.expand(this.infer(object, env)), name)) return
+        this.diagnostics.push({
+            node: target,
+            message: `Cannot assign to '${name}' because it is a read-only property`,
+        })
+    }
+
+    private isReadonlyProperty(t: Type, name: string): boolean {
+        if (t.kind === "object") return t.properties.get(name)?.readonly === true
+        // Read-only in any member is read-only through the whole: an
+        // intersection has to keep every part's promise, and a union is only
+        // safely written through when each member allows it.
+        if (t.kind === "intersection" || t.kind === "union") {
+            return t.types.some(m => this.isReadonlyProperty(this.expand(m), name))
+        }
+        return false
+    }
+
+    private readonly unknownAccessReported = new WeakSet<Expression>()
+
+    /** `unknown` is the type that promises nothing: unlike `any`, a member of
+     *  it has to be narrowed out first. */
+    private reportUnknownAccess(object: Expression): void {
+        if (!this.emitDiagnostics || this.unknownAccessReported.has(object)) return
+        this.unknownAccessReported.add(object)
+        const label = expressionLabel(object)
+        this.diagnostics.push({
+            node: object,
+            message: `${label === undefined ? "Object" : `'${label}'`} is of type 'unknown'`,
+        })
     }
 
     private reportNilAccess(object: Expression, type: Type): void {
@@ -5430,6 +5555,24 @@ class TypeAnalyzer {
         return []
     }
 
+    /** A union of function types, as its members' call signatures. A value
+     *  that is one function or another is callable only when every member is,
+     *  and any of them may be the one called — so the call has to suit them
+     *  all and its result is their returns united, rather than one signature's
+     *  the way an overload set picks. An overloaded member contributes all of
+     *  its own signatures. */
+    private unionSignatures(t: Type): FunctionType[] | undefined {
+        const u = this.expand(t)
+        if (u.kind !== "union") return undefined
+        const signatures: FunctionType[] = []
+        for (const member of u.types) {
+            const fns = this.overloadsOf(this.expand(member))
+            if (!fns.length) return undefined
+            signatures.push(...fns)
+        }
+        return signatures.length ? signatures : undefined
+    }
+
 
     private asLiteral(e: Expression): string | number | boolean | undefined {
         if (e.type === "StringLiteral") return e.value
@@ -5548,6 +5691,43 @@ class TypeAnalyzer {
     private setBinding(env: FlowEnv, id: BindingId, t: Type): void {
         this.invalidateBelow(env, bindKey(id))
         env.set(bindKey(id), t)
+    }
+
+    /** Why `actual` does not fit `expected`, when something shorter than the
+     *  two whole shapes can be said: the properties it is missing, or the
+     *  first one whose type is wrong. Empty when it cannot — the types
+     *  themselves are then the whole story. */
+    private explainMismatch(actual: Type, expected: Type): string {
+        const from = this.expand(actual)
+        const to = this.expand(expected)
+        if (from.kind !== "object" || to.kind !== "object") return ""
+        const missing: { name: string; type: string }[] = []
+        for (const [name, property] of to.properties) {
+            if (property.optional || from.properties.has(name) || INTERNAL_MEMBERS.has(name)) continue
+            missing.push({ name, type: formatType(property.type) })
+        }
+        if (missing.length) {
+            const rest = missing.length - MAX_MISSING
+            const tail = rest > 0 ? ` and ${rest} more` : ""
+            const shown = missing.slice(0, MAX_MISSING)
+            // A key is worth naming with its type; a class's fifty members are
+            // worth naming only by name, and a signature spelled out in full
+            // would bury the sentence it is meant to finish.
+            const withTypes = shown.map(m => `${m.name}: ${m.type}`).join(", ")
+            if (withTypes.length <= MAX_EXPLANATION) return `, missing ${withTypes}${tail}`
+            return `, missing ${shown.map(m => m.name).join(", ")}${tail}`
+        }
+        // Every key is there, so the reason is one of their types.
+        for (const [name, property] of to.properties) {
+            if (INTERNAL_MEMBERS.has(name)) continue
+            const own = from.properties.get(name)
+            if (!own || isAssignable(own.type, property.type)) continue
+            const is = formatType(own.type)
+            const wanted = formatType(property.type)
+            if (is.length + wanted.length > MAX_EXPLANATION) return `, '${name}' does not match`
+            return `, '${name}' is ${is}, not ${wanted}`
+        }
+        return ""
     }
 
     private bindingIdOf(id: Identifier): BindingId | undefined {

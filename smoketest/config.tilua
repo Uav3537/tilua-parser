@@ -1,0 +1,3 @@
+-- Imported by modules.tilua: a module whose only export is its default.
+
+export default { scale: 2 }

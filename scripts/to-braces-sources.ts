@@ -1,5 +1,5 @@
 /**
- * The same rewrite as `to-braces.ts`, for luaut written inside a TypeScript
+ * The same rewrite as `to-braces.ts`, for tilua written inside a TypeScript
  * file — which is where the test suites keep most of it.
  *
  * Two shapes hold a snippet:
@@ -8,10 +8,10 @@
  *     analyze(`function f()\n    return 1\nend`)
  *
  * and a plain double-quoted string with `\n` in it is a third. Each is
- * decoded to the luaut it stands for, rewritten, and written back in the shape
+ * decoded to the tilua it stands for, rewritten, and written back in the shape
  * it came from.
  *
- * A string it cannot read as luaut, or that the rewrite leaves alone, is left
+ * A string it cannot read as tilua, or that the rewrite leaves alone, is left
  * exactly as it was — which is what keeps the *expected* strings beside the
  * snippets (a hover's markdown, a line of emitted Luau) out of it.
  *
@@ -21,10 +21,10 @@ import { readFileSync, writeFileSync } from "node:fs"
 import { parse } from "@ast/builders"
 import { toBraces } from "./to-braces.js"
 
-/** The luaut a snippet stands for, rewritten — or `undefined` when this is not
+/** The tilua a snippet stands for, rewritten — or `undefined` when this is not
  *  a snippet, or has nothing to rewrite. */
 function rewrite(source: string): string | undefined {
-    // Markdown a test expects back, not luaut to read.
+    // Markdown a test expects back, not tilua to read.
     if (source.includes("```")) return undefined
     let before
     try {

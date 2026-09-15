@@ -5,19 +5,19 @@ import type { Program } from "./nodes"
  * The types that belong to the language itself, available in every file with
  * or without a type library — as TypeScript's `Partial` and `ReturnType` are.
  *
- * They are written in luaut on top of `keyof`, `T[K]`, conditional types with
+ * They are written in tilua on top of `keyof`, `T[K]`, conditional types with
  * `infer`, mapped types and set difference; the analyzer knows none of these
  * names. A type library or the file itself may declare one of them again, and
  * that declaration wins.
  *
  * What a runtime provides — `print`, `string`, `game` — is not here: that is a
- * type library's job (`@luaut/lua`, `@luaut/roblox`).
+ * type library's job (`@tilua-types/lua`, `@tilua-types/roblox`).
  *
  * The methods an array and a string answer to — `names:filter(f)`,
  * `text:trim()` — are a library's too. `propertyType` reads them from types
  * named `ArrayMethods<T>` and `StringMethods`, whichever library declares
  * those; the library also says which of them the compiler must emit code for
- * (`luaut.methods` in its package.json). Nothing about `filter` is written
+ * (`tilua.methods` in its package.json). Nothing about `filter` is written
  * into the analyzer.
  */
 export const PRELUDE_SOURCE = `
@@ -33,8 +33,8 @@ type Exclude<T, U> = T - U
 type Extract<T, U> = T extends U ? T : never
 type NonNullable<T> = T - nil
 
-type ReturnType<T> = T extends (...unknown) -> infer R ? R : never
-type Parameters<T> = T extends (...infer P) -> unknown ? P : never
+type ReturnType<T> = T extends (...unknown) => infer R ? R : never
+type Parameters<T> = T extends (...infer P) => unknown ? P : never
 
 type Partial<T> = { [K in keyof T]?: T[K] }
 type Required<T> = { [K in keyof T]-?: T[K] }

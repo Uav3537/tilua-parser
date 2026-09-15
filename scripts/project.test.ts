@@ -11,7 +11,7 @@ import {
     type ProjectHost, type ModuleExports,
 } from "../src/index.js"
 
-const ROOT = resolve("/luaut-project")
+const ROOT = resolve("/tilua-project")
 
 let passed = 0
 const failures: string[] = []
@@ -37,116 +37,116 @@ const rel = (path: string | undefined): string | undefined =>
 // --- the nearest config applies -----------------------------------------
 {
     const h = host({
-        "luaut.config.json": `{ "types": ["luau"] }`,
-        "a.luaut": "",
-        "b/luaut.config.json": `{ "types": ["roblox"] }`,
-        "b/c.luaut": "",
-        "b/deep/d.luaut": "",
+        "tilua.config.json": `{ "types": ["luau"] }`,
+        "a.tilua": "",
+        "b/tilua.config.json": `{ "types": ["roblox"] }`,
+        "b/c.tilua": "",
+        "b/deep/d.tilua": "",
     })
     check("config: a file takes the config in its folder",
-        rel(findConfig(join(ROOT, "a.luaut"), h).config?.path), "luaut.config.json")
+        rel(findConfig(join(ROOT, "a.tilua"), h).config?.path), "tilua.config.json")
     check("config: a nested folder's config wins",
-        rel(findConfig(join(ROOT, "b/c.luaut"), h).config?.path), "b/luaut.config.json")
+        rel(findConfig(join(ROOT, "b/c.tilua"), h).config?.path), "b/tilua.config.json")
     check("config: and applies to folders below it",
-        findConfig(join(ROOT, "b/deep/d.luaut"), h).config?.types, ["roblox"])
+        findConfig(join(ROOT, "b/deep/d.tilua"), h).config?.types, ["roblox"])
     check("config: a file with no config above it has none",
-        findConfig(resolve("/somewhere-else/x.luaut"), h).config, undefined)
+        findConfig(resolve("/somewhere-else/x.tilua"), h).config, undefined)
 }
 
 // --- two configs in one folder -------------------------------------------
 {
-    const h = host({ "dup/luaut.config.json": "{}", "dup/luaut.config.jsonc": "{}", "dup/x.luaut": "" })
-    const lookup = findConfig(join(ROOT, "dup/x.luaut"), h)
+    const h = host({ "dup/tilua.config.json": "{}", "dup/tilua.config.jsonc": "{}", "dup/x.tilua": "" })
+    const lookup = findConfig(join(ROOT, "dup/x.tilua"), h)
     check("config: two in one folder is an error, reported on both",
         [lookup.config, lookup.problems.map(p => rel(p.file))],
-        [undefined, ["dup/luaut.config.json", "dup/luaut.config.jsonc"]])
+        [undefined, ["dup/tilua.config.json", "dup/tilua.config.jsonc"]])
 }
 
 // --- reading a config ----------------------------------------------------
 {
     const h = host({
-        "ok/luaut.config.jsonc": `{\n  // types to load\n  "types": ["luau",],\n  /* the tree */ "sourceMap": "sourcemap.json",\n}\n`,
-        "typo/luaut.config.json": `{\n  "types": ["luau"],\n  "typo": true\n}\n`,
-        "broken/luaut.config.json": `{\n  "types": [\n}\n`,
-        "none/luaut.config.json": `{ "types": [], "paths": {}, "sourceMap": null }`,
-        "wrong/luaut.config.json": `{ "types": "luau" }`,
+        "ok/tilua.config.jsonc": `{\n  // types to load\n  "types": ["luau",],\n  /* the tree */ "sourceMap": "sourcemap.json",\n}\n`,
+        "typo/tilua.config.json": `{\n  "types": ["luau"],\n  "typo": true\n}\n`,
+        "broken/tilua.config.json": `{\n  "types": [\n}\n`,
+        "none/tilua.config.json": `{ "types": [], "paths": {}, "sourceMap": null }`,
+        "wrong/tilua.config.json": `{ "types": "luau" }`,
     })
-    const ok = loadConfig(join(ROOT, "ok/luaut.config.jsonc"), h)
+    const ok = loadConfig(join(ROOT, "ok/tilua.config.jsonc"), h)
     check("config: comments and trailing commas are allowed", ok.problems, [])
     check("config: sourceMap resolves from the config's folder", rel(ok.config?.sourceMap ?? undefined), "ok/sourcemap.json")
 
-    const typo = loadConfig(join(ROOT, "typo/luaut.config.json"), h)
+    const typo = loadConfig(join(ROOT, "typo/tilua.config.json"), h)
     check("config: an unknown option is reported on its line",
         typo.problems.map(p => [p.line, p.message.split(".")[0]]), [[3, "Unknown option 'typo'"]])
     check("config: and the rest of the config still applies", typo.config?.types, ["luau"])
 
-    const broken = loadConfig(join(ROOT, "broken/luaut.config.json"), h)
+    const broken = loadConfig(join(ROOT, "broken/tilua.config.json"), h)
     check("config: invalid JSON is reported with a position",
         [broken.config, broken.problems.length, typeof broken.problems[0]?.line], [undefined, 1, "number"])
-    check("config: a null sourceMap means none", loadConfig(join(ROOT, "none/luaut.config.json"), h).config?.sourceMap, null)
+    check("config: a null sourceMap means none", loadConfig(join(ROOT, "none/tilua.config.json"), h).config?.sourceMap, null)
     check("config: an option of the wrong type is reported",
-        loadConfig(join(ROOT, "wrong/luaut.config.json"), h).problems.map(p => p.message.split(",")[0]),
+        loadConfig(join(ROOT, "wrong/tilua.config.json"), h).problems.map(p => p.message.split(",")[0]),
         ["'types' must be an array of strings"])
 }
 
 // --- type libraries -------------------------------------------------------
 {
     const files: Record<string, string> = {
-        "node_modules/@luaut/luau/package.json": JSON.stringify({ name: "@luaut/luau", luaut: { types: "index.d.luaut" } }),
-        "node_modules/@luaut/luau/index.d.luaut": "declare function print(...: unknown): ()",
-        "node_modules/@luaut/roblox/package.json": JSON.stringify({ name: "@luaut/roblox", dependencies: { "@luaut/luau": "^1.0.0" } }),
-        "node_modules/@luaut/roblox/index.d.luaut": "declare game: unknown",
-        "node_modules/plain/index.d.luaut": "declare plain: number",
-        "local/types/index.d.luaut": "declare fromFolder: number",
-        "local/defs.d.luaut": "declare fromFile: number",
+        "node_modules/@tilua-types/luau/package.json": JSON.stringify({ name: "@tilua-types/luau", tilua: { types: "index.d.tilua" } }),
+        "node_modules/@tilua-types/luau/index.d.tilua": "declare function print(...: unknown): ()",
+        "node_modules/@tilua-types/roblox/package.json": JSON.stringify({ name: "@tilua-types/roblox", dependencies: { "@tilua-types/luau": "^1.0.0" } }),
+        "node_modules/@tilua-types/roblox/index.d.tilua": "declare game: unknown",
+        "node_modules/plain/index.d.tilua": "declare plain: number",
+        "local/types/index.d.tilua": "declare fromFolder: number",
+        "local/defs.d.tilua": "declare fromFile: number",
     }
     const libraries = (types: string[], folder = ""): { files: (string | undefined)[]; problems: string[] } => {
-        const h = host({ ...files, [`${folder}luaut.config.json`]: JSON.stringify({ types }) })
-        const config = loadConfig(join(ROOT, `${folder}luaut.config.json`), h).config!
+        const h = host({ ...files, [`${folder}tilua.config.json`]: JSON.stringify({ types }) })
+        const config = loadConfig(join(ROOT, `${folder}tilua.config.json`), h).config!
         const result = resolveTypeLibraries(config, h)
         return { files: result.files.map(rel), problems: result.problems.map(p => p.message) }
     }
-    const LUAU = "node_modules/@luaut/luau/index.d.luaut"
-    const ROBLOX = "node_modules/@luaut/roblox/index.d.luaut"
+    const LUAU = "node_modules/@tilua-types/luau/index.d.tilua"
+    const ROBLOX = "node_modules/@tilua-types/roblox/index.d.tilua"
 
     check("types: nothing is loaded by default", libraries([]).files, [])
     check("types: a library brings its dependencies first", libraries(["roblox"]).files, [LUAU, ROBLOX])
     check("types: a library listed twice loads once", libraries(["luau", "roblox"]).files, [LUAU, ROBLOX])
-    check("types: a full package name", libraries(["@luaut/roblox"]).files, [LUAU, ROBLOX])
-    check("types: a name is only looked for under @luaut", libraries(["plain"]),
-        { files: [], problems: ["Cannot find type library '@luaut/plain'. Install it with: npm i -D @luaut/plain"] })
+    check("types: a full package name", libraries(["@tilua-types/roblox"]).files, [LUAU, ROBLOX])
+    check("types: a name is only looked for under @tilua", libraries(["plain"]),
+        { files: [], problems: ["Cannot find type library '@tilua-types/plain'. Install it with: npm i -D @tilua-types/plain"] })
     check("types: a folder and a file by relative path",
-        libraries(["./local/types", "./local/defs.d.luaut"]).files, ["local/types/index.d.luaut", "local/defs.d.luaut"])
+        libraries(["./local/types", "./local/defs.d.tilua"]).files, ["local/types/index.d.tilua", "local/defs.d.tilua"])
     check("types: node_modules is searched upward from a nested config", libraries(["luau"], "nested/").files, [LUAU])
     check("types: a missing library says how to install it", libraries(["nope"]),
-        { files: [], problems: ["Cannot find type library '@luaut/nope'. Install it with: npm i -D @luaut/nope"] })
+        { files: [], problems: ["Cannot find type library '@tilua-types/nope'. Install it with: npm i -D @tilua-types/nope"] })
 }
 
 // --- import paths -----------------------------------------------------------
 {
     const h = host({
-        "luaut.config.json": JSON.stringify({
+        "tilua.config.json": JSON.stringify({
             baseUrl: "src",
             paths: {
                 "@shared/*": ["shared/*"],
                 "@shared/special/*": ["special/*"],
-                "@config": ["config/index.luaut"],
+                "@config": ["config/index.tilua"],
             },
         }),
-        "src/main.luaut": "",
-        "src/sibling.luaut": "",
-        "src/shared/util.luaut": "",
-        "src/special/thing.luaut": "",
-        "src/config/index.luaut": "",
+        "src/main.tilua": "",
+        "src/sibling.tilua": "",
+        "src/shared/util.tilua": "",
+        "src/special/thing.tilua": "",
+        "src/config/index.tilua": "",
     })
-    const config = loadConfig(join(ROOT, "luaut.config.json"), h).config!
-    const from = join(ROOT, "src/main.luaut")
+    const config = loadConfig(join(ROOT, "tilua.config.json"), h).config!
+    const from = join(ROOT, "src/main.tilua")
     const resolved = (specifier: string): string | undefined => rel(resolveModulePath(from, specifier, config, h))
 
-    check("paths: a relative import", resolved("./sibling"), "src/sibling.luaut")
-    check("paths: a `*` alias, from baseUrl", resolved("@shared/util"), "src/shared/util.luaut")
-    check("paths: an exact alias", resolved("@config"), "src/config/index.luaut")
-    check("paths: the longest matching prefix wins", resolved("@shared/special/thing"), "src/special/thing.luaut")
+    check("paths: a relative import", resolved("./sibling"), "src/sibling.tilua")
+    check("paths: a `*` alias, from baseUrl", resolved("@shared/util"), "src/shared/util.tilua")
+    check("paths: an exact alias", resolved("@config"), "src/config/index.tilua")
+    check("paths: the longest matching prefix wins", resolved("@shared/special/thing"), "src/special/thing.tilua")
     check("paths: neither relative nor aliased resolves to nothing", resolved("somewhere"), undefined)
 }
 
@@ -171,9 +171,9 @@ const rel = (path: string | undefined): string | undefined =>
     const { types, problem } = sourceMapTypes(JSON.stringify(tree), join(ROOT, "sourcemap.json"), { classes })
     check("sourcemap: turns into types", problem, undefined)
     check("sourcemap: a mapped file gets its own `script`",
-        types!.scriptFor(join(ROOT, "src/shared/Util.luaut")) !== undefined, true)
+        types!.scriptFor(join(ROOT, "src/shared/Util.tilua")) !== undefined, true)
     check("sourcemap: an unmapped file has no `script` of its own",
-        types!.scriptFor(join(ROOT, "src/other.luaut")), undefined)
+        types!.scriptFor(join(ROOT, "src/other.tilua")), undefined)
     check("sourcemap: invalid JSON is reported",
         sourceMapTypes("{ nope", join(ROOT, "sourcemap.json"), { classes }).problem?.startsWith("Invalid sourcemap"), true)
 }
@@ -211,7 +211,7 @@ const rel = (path: string | undefined): string | undefined =>
     // Functions have no `const` / `let`: `function f()` declares `f`.
     check("functions: `function name()` declares a function", analyze("function twice(n: number): number { return n * 2 }\nconst four = twice(2)").bindings.four, "number")
     check("functions: its name cannot be reassigned", analyze("function f() { }\nf = nil").errors, ["Cannot assign to 'f' — it is a function"])
-    check("functions: `const function` is not luaut", parseError("const function f() {}"),
+    check("functions: `const function` is not tilua", parseError("const function f() {}"),
         "A function is declared as 'function name()'; 'const' does not apply to functions")
     check("functions: exported with `export function`", analyze(`import { twice } from "./m"\nconst n = twice(1)`,
         { "./m": "export function twice(n: number): number { return n * 2 }" }).bindings.n, "number")
@@ -407,7 +407,7 @@ const rel = (path: string | undefined): string | undefined =>
         ].join("\n"))
         check("recovery: strings, `local`, `obj.`, a stray `}`, types, interpolation, calls and initializers", [r.errors, Object.keys(r.bindings)], [[
             "Unterminated string",
-            "luaut has no 'local'; declare with 'const' or 'let'",
+            "tilua has no 'local'; declare with 'const' or 'let'",
             // `part.` is followed by the stray `end`: one problem, reported once.
             "Expected identifier",
             "Unexpected token in type annotation",
@@ -1057,7 +1057,7 @@ const a: A = { p: 1 }`).errors.length,
         ].join("\n")).errors,
     ], [
         [],
-        [`Argument of type '{ Method: "FETCH", Url: string }' is not assignable to parameter of type 'Request'`],
+        [`Argument of type '{ Method: "FETCH", Url: string }' is not assignable to parameter of type 'Request', 'Method' is "FETCH", not "GET" | "POST"`],
         "{ Method: string }",
         [],
     ])
@@ -1071,7 +1071,7 @@ const a: A = { p: 1 }`).errors.length,
             "send({ Method })",
         ].join("\n")).errors, [])
 
-    // Definitions files are layers: `@luaut/roblox` adds to `@luaut/lua`
+    // Definitions files are layers: `@tilua-types/roblox` adds to `@tilua-types/lua`
     // rather than replacing it.
     {
         const lua = parse([
@@ -1417,7 +1417,7 @@ function g() {
         [exportedQuery.bindings.t, exportedQuery.bindings.n, exportedQuery.errors],
         [`["Sans", "Asgore"]`, `"Sans" | "Asgore"`, [`Type '"Nope"' is not assignable to '"Sans" | "Asgore"'`]])
 
-    // `--@luaut-...` comments switch checking off.
+    // `--@tilua-...` comments switch checking off.
     const directed = (code: string) => {
         const { program, directives } = parseWithRecovery(code)
         const scopes = analyzeScopes(program)
@@ -1428,15 +1428,15 @@ function g() {
     }
     check("directives: ignore and expect-error cover the next line of code", directed([
         "const a: number = \"x\"",
-        "--@luaut-ignore",
+        "--@tilua-ignore",
         "const b: number = \"x\"",
-        "-- @luaut-expect-error: the reason",
+        "-- @tilua-expect-error: the reason",
         "",
         "-- another comment",
         "const c: number = \"x\"",
-        "--@luaut-expect-error",
+        "--@tilua-expect-error",
         "const d: number = 1",
-        "const e: number = \"x\" --@luaut-ignore",
+        "const e: number = \"x\" --@tilua-ignore",
         "const f: number = \"x\"",
     ].join("\n")), [
         "1: Type '\"x\"' is not assignable to 'number'",
@@ -1444,8 +1444,8 @@ function g() {
         "8: unused",
     ])
     check("directives: nocheck before the code turns the file off", [
-        directed("-- header\n--@luaut-nocheck\nconst a: number = \"x\"\nnope = 1"),
-        directed("const a: number = \"x\"\n--@luaut-nocheck"),
+        directed("-- header\n--@tilua-nocheck\nconst a: number = \"x\"\nnope = 1"),
+        directed("const a: number = \"x\"\n--@tilua-nocheck"),
     ], [[], ["1: Type '\"x\"' is not assignable to 'number'"]])
 
     // An overload set with a union argument picks per member.
@@ -1595,7 +1595,7 @@ function g() {
     ], ["Node", "Node | nil", "Node", "Node"])
 }
 
-// `[...]` is the varargs as an array — Lua's `{...}`, written the way luaut
+// `[...]` is the varargs as an array — Lua's `{...}`, written the way tilua
 // writes an array. `[...xs]` still spreads what follows the dots.
 {
     const program = parse([
@@ -1718,7 +1718,7 @@ function g() {
 }
 
 // --- braces -------------------------------------------------------------
-// luaut writes a block in braces. `scripts/to-braces.ts` rewrote every file
+// tilua writes a block in braces. `scripts/to-braces.ts` rewrote every file
 // and every snippet here out of the `end` spellings Lua uses.
 {
     const analyze = (code: string) => {
@@ -1855,11 +1855,39 @@ function g() {
         "",
         "",
     ].join("\n"))
-    check("arrows: a function type is written `=>`, and `->` still reads",
+    check("arrows: a function type is written `=>`",
         [written.errors, written.bindings.apply, written.bindings.handle, written.bindings.old],
         [[], "(f: (n: number) => string, n: number) => string",
             // `handled` was declared as `Handler`, and that is what it reads as.
             "Handler", "(n: number) => string"])
+
+    const refusal = (code: string): string | undefined => {
+        try {
+            parse(code)
+            return undefined
+        } catch (error) {
+            return (error as Error).message.replace(/ \(\d+:\d+\)$/, "")
+        }
+    }
+
+    // Luau's arrow is refused rather than quietly accepted: reading both only
+    // raised the question of whether they meant different things.
+    check("arrows: `->` is refused, and the message says what to write", [
+        refusal("declare f: (n: number) -> string"),
+        refusal("type T = (n: number) -> string"),
+        refusal("declare g: () -> ()"),
+        // In recovery it is read as the arrow it was meant to be, so the rest
+        // of the file still analyses.
+        (() => {
+            const { program, errors } = parseWithRecovery("declare f: (n: number) -> string\nconst x = 1")
+            return [errors.map(e => e.message.replace(/ \(\d+:\d+\)$/, "")), program.body.statements.map(s => s.type)]
+        })(),
+    ], [
+        "tilua writes a function type with '=>', not '->'",
+        "tilua writes a function type with '=>', not '->'",
+        "tilua writes a function type with '=>', not '->'",
+        [["tilua writes a function type with '=>', not '->'"], ["DeclareStatement", "VariableDeclaration"]],
+    ])
 
     const values = analyze([
         "declare function tostring(v: unknown): string",
@@ -2447,7 +2475,7 @@ function g() {
     ].join("\n"))
     check("class: one instantiation is not another, and a parameter reads the argument off it",
         [instantiations.errors, instantiations.bindings.unwrapped],
-        [["Argument of type 'Box<string>' is not assignable to parameter of type 'Box<number>'"], "boolean"])
+        [["Argument of type 'Box<string>' is not assignable to parameter of type 'Box<number>', 'value' is string, not number"], "boolean"])
 
     const fixed = analyze([
         BOX,
@@ -2467,7 +2495,7 @@ function g() {
     ].join("\n"))
     check("class: extending a generic class fixes its argument",
         [fixed.errors, fixed.bindings.doubled],
-        [["Argument of type 'Ints' is not assignable to parameter of type 'Box<string>'"], "number"])
+        [["Argument of type 'Ints' is not assignable to parameter of type 'Box<string>', 'value' is number, not string"], "number"])
 
     // A class written as a value.
     const asValue = analyze([
@@ -2570,6 +2598,150 @@ function g() {
     check("generic object arguments: nested literals infer without widening",
         [nestedGeneric.errors, nestedGeneric.bindings.object, nestedGeneric.bindings.literal],
         [[], "{ kind: \"ready\" }", "\"ready\""])
+}
+
+// Regressions: the bugs fixed after 5.2.0.
+{
+    const analyze = (code: string) => {
+        const program = parse(code)
+        const scopes = analyzeScopes(program)
+        const types = analyzeTypes(program, scopes, {})
+        const bindings: Record<string, string> = {}
+        for (const [id, type] of types.bindingType) bindings[scopes.bindings.get(id)!.name] = formatType(type)
+        return { errors: [...scopes.diagnostics, ...types.diagnostics].map(d => d.message), bindings }
+    }
+    const aliasOf = (code: string): string => {
+        const program = parse(code)
+        return formatType(analyzeTypes(program, analyzeScopes(program), {}).aliases.get("A")!)
+    }
+
+    // A ternary's `:` and Lua's method-call `:` are the same character. The
+    // consequent keeps as many method calls as it can, and the ternary still
+    // gets its own.
+    {
+        const shape = (code: string): string => {
+            const statement = parse(code).body.statements[0] as unknown as { init: unknown[] }
+            const describe = (n: any): string =>
+                n.type === "IfElseExpression" ? `ternary(${describe(n.clauses[0].body)} : ${describe(n.alternate)})`
+                    : n.type === "MethodCallExpression" ? `method(${describe(n.object)}:${n.method.name})`
+                        : n.type === "CallExpression" ? `call(${describe(n.callee)})`
+                            : n.type === "Identifier" ? n.name : n.type
+            return describe(statement.init[0])
+        }
+        check("ternary: a call in the alternate is not a method call on the consequent", [
+            shape("const x = c ? a : b()"),
+            shape("const x = c ? obj:m() : b"),
+            shape("const x = c ? obj:m() : b()"),
+            shape("const x = c ? a:b():d() : e()"),
+            shape("const x = c ? f(a:b()) : g()"),
+            shape("const x = c ? a : d ? e() : f()"),
+        ], [
+            "ternary(a : call(b))",
+            "ternary(method(obj:m) : b)",
+            "ternary(method(obj:m) : call(b))",
+            "ternary(method(method(a:b):d) : call(e))",
+            "ternary(call(f) : call(g))",
+            "ternary(a : ternary(call(e) : call(f)))",
+        ])
+    }
+
+    // A `type` written inside a function is still a type.
+    check("type aliases: one declared in a nested scope resolves", analyze([
+        "function outer() {",
+        "    type A = number",
+        "    function inner(a: A) { return a }",
+        "    return inner(1)",
+        "}",
+    ].join("\n")).errors, [])
+
+    // `unknown` promises nothing, so a member of it has to be narrowed out
+    // first — unlike `any`. The analyzer's own "not worked out yet" is a
+    // different thing that happens to share the name, and says nothing.
+    check("unknown: reading a member of a written one is an error", [
+        analyze("declare u: unknown\nconst p = u.prop").errors,
+        analyze("declare a: any\nconst p = a.prop.deep").errors,
+        analyze("type S = { prop: number }\ndeclare u: unknown\nconst p = (u as S).prop").errors,
+        analyze("declare map: { [string]: string }\ndeclare key: string\nconst value = map[key]\n;(\"A\"):split(\",\")").errors,
+    ], [["'u' is of type 'unknown'"], [], [], []])
+
+    // A value that is one function or another is callable, and returns either.
+    const united = analyze([
+        "type Stat = { Status: boolean }",
+        "declare pick: ((a: number, b: string) => Stat) | ((a: number) => Stat)",
+        "const stat = pick(1, \"x\")",
+    ].join("\n"))
+    check("union of function types: callable, returning their returns united",
+        [united.errors, united.bindings.stat], [[], "Stat"])
+
+    // A homomorphic mapped type distributes over a union argument, as in
+    // TypeScript, and `keyof` a union is the keys its members share.
+    {
+        const STAT = [
+            "type Success = { Attack: number, Status: true }",
+            "type Err = { Status: false, Message: string }",
+            "type Stat = Success | Err",
+        ].join("\n")
+        check("mapped types: homomorphic ones distribute over a union", [
+            aliasOf(`${STAT}\ntype A = Partial<Stat>`),
+            aliasOf(`${STAT}\ntype A = keyof Stat`),
+            aliasOf(`${STAT}\ntype A = { [K in keyof Stat]?: Stat[K] }`),
+        ], [
+            "{ Attack?: number, Status?: true } | { Message?: string, Status?: false }",
+            `"Status"`,
+            "{ Status?: boolean }",
+        ])
+    }
+
+    // `readonly` is a promise about the property rather than the value it
+    // holds: writing *through* it is the one thing it rules out.
+    check("readonly: assigning through it is reported", [
+        analyze("type T = { readonly a: number }\ndeclare t: T\nt.a = 2").errors,
+        analyze("type T = { readonly a: number }\ndeclare t: T\nt[\"a\"] = 2").errors,
+        analyze("type T = { readonly a: number }\ndeclare t: T\nt.a += 1").errors,
+        analyze("type T = { a: number }\ndeclare t: T\nt.a = 2").errors,
+        analyze("type T = { readonly a: { b: number } }\ndeclare t: T\nt.a.b = 2").errors,
+    ], [
+        ["Cannot assign to 'a' because it is a read-only property"],
+        ["Cannot assign to 'a' because it is a read-only property"],
+        ["Cannot assign to 'a' because it is a read-only property"],
+        [], [],
+    ])
+
+    // A name on a line of its own is how code gets written — you type it to
+    // ask the editor about it. It parses, it is typed so hover can answer, and
+    // the compiler drops it.
+    {
+        const statements = (code: string): string[] =>
+            parse(code).body.statements.map(s => s.type)
+        const bare = parse("const value = 1\nvalue")
+        const scopes = analyzeScopes(bare)
+        const types = analyzeTypes(bare, scopes, {})
+        const statement = bare.body.statements[1] as { expression: never }
+        check("expression statements: a bare name parses, types, and reports nothing", [
+            statements("const value = 1\nvalue"),
+            statements("const o = { a: 1 }\no.a"),
+            statements("const value = 1\nvalue + 1"),
+            statements("declare f: () => ()\nf()"),
+            formatType(types.typeOf.get(statement.expression)!),
+            [...scopes.diagnostics, ...types.diagnostics].map(d => d.message),
+        ], [
+            ["VariableDeclaration", "ExpressionStatement"],
+            ["VariableDeclaration", "ExpressionStatement"],
+            ["VariableDeclaration", "ExpressionStatement"],
+            ["DeclareStatement", "CallStatement"],
+            "1",
+            [],
+        ])
+    }
+
+    // Two shapes printed side by side leave the reader to spot the difference.
+    check("assignability: the message names what is missing or wrong", [
+        analyze("type Big = { a: number, b: string }\ndeclare f: (x: Big) => ()\nf({ a: 1 })").errors,
+        analyze("type Big = { a: number, b: string }\ndeclare f: (x: Big) => ()\nf({ a: 1, b: 2 })").errors,
+    ], [
+        ["Argument of type '{ a: number }' is not assignable to parameter of type 'Big', missing b: string"],
+        ["Argument of type '{ a: number, b: number }' is not assignable to parameter of type 'Big', 'b' is number, not string"],
+    ])
 }
 
 for (const failure of failures) console.log(`FAIL ${failure}`)

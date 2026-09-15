@@ -3,7 +3,7 @@
  *
  * A library's definitions file says what a value *is*; when what it gives is
  * not something the value already answers to, the library must also say how
- * it runs. `names:filter(f)` is a call to a function because `@luaut/lua`
+ * it runs. `names:filter(f)` is a call to a function because `@tilua-types/lua`
  * declares the method and ships the Luau behind it — the compiler lowers the
  * language (`import`, `export`, `?.`, `a ? b : c`, destructuring, spreads)
  * and asks a library about everything else.
@@ -15,7 +15,7 @@
  *
  *     // lowering.mjs, in a type library
  *     // @ts-check
- *     /** @type {import("luaut-parser").LoweringPlugin} *\/
+ *     /** @type {import("@tilua/parser").LoweringPlugin} *\/
  *     const plugin = {
  *         runtime: { array: "local __NAME__ = {}\n..." },
  *         methodCall({ method, receiver, use }) {

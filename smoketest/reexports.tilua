@@ -1,10 +1,10 @@
--- Export lists and re-exports. imports.luaut imports every name below, so each
+-- Export lists and re-exports. imports.tilua imports every name below, so each
 -- one's type is checked there.
 
--- Everything math.luaut exports.
+-- Everything math.tilua exports.
 export * from "./math"
 
--- Some of util.luaut's names, one of them renamed.
+-- Some of util.tilua's names, one of them renamed.
 export { helper as help, VERSION } from "./util"
 
 type Size = { w: number, h: number }

@@ -1,13 +1,30 @@
-# luaut-parser
+# @tilua/parser
 
-Front end for **luaut** — a TypeScript-flavoured language that compiles to Luau.
+Front end for **tilua** — a TypeScript-flavoured language that compiles to Luau.
 Source → tokens → AST → scope analysis → flow-sensitive type analysis.
 
-This package is the front end only. Lowering the luaut AST to Luau is the
-compiler's job and lives elsewhere; there is deliberately no printer here.
+This package is for people building tools: editors, linters, codemods, a
+compiler of your own. It parses and analyses; it never emits. **If you want to
+*write* tilua, you want [`@tilua/compiler`][compiler] and the
+[VS Code extension][vscode] instead** — though the language reference below is
+the same one either way.
+
+| package | for |
+|---|---|
+| [`@tilua/compiler`][compiler] | building a project to one Luau file |
+| [`@tilua/language-server`][server] | editor support over LSP |
+| [`@tilua-types/roblox`][roblox], [`@tilua-types/lua`][lua], [`@tilua-types/sunc`][sunc] | the globals a project may use |
+| `@tilua/parser` | this: tokens, AST, scopes, types |
+
+[compiler]: https://www.npmjs.com/package/@tilua/compiler
+[server]: https://www.npmjs.com/package/@tilua/language-server
+[roblox]: https://www.npmjs.com/package/@tilua-types/roblox
+[lua]: https://www.npmjs.com/package/@tilua-types/lua
+[sunc]: https://www.npmjs.com/package/@tilua-types/sunc
+[vscode]: https://marketplace.visualstudio.com/search?term=tilua
 
 ```bash
-npm install luaut-parser
+npm install @tilua/parser
 ```
 
 ```ts
@@ -15,7 +32,7 @@ import { readFileSync } from "node:fs"
 import {
   parse, analyzeScopes, analyzeTypes,
   findConfig, resolveTypeLibraries, resolveModulePath,
-} from "luaut-parser"
+} from "@tilua/parser"
 
 // The project the file belongs to, and the type libraries it names.
 const { config } = findConfig(file)
@@ -37,9 +54,9 @@ for (const d of [...scopes.diagnostics, ...types.diagnostics]) console.log(d.mes
 | `analyzeScopes(program, opts)` | `bindingOf`, `bindings`, `references`, `diagnostics` | go-to-definition, find-references, rename |
 | `analyzeTypes(program, scopes, opts)` | `typeOf`, `narrowedTypeOf`, `bindingType`, `typeOfTypeNode`, `expectedTypeOf`, `aliases`, `diagnostics` | hover, completion, type errors |
 
-Every name in the AST has a node with its own span — including the ones that
-used to be bare strings: `DeclareStatement.id`, `TableTypeProperty.key`,
-`FunctionTypeParameter.id`, `GenericTypeParameter.id`, `InferTypeNode.id`,
+Every name in the AST has a node with its own span, down to
+`DeclareStatement.id`, `TableTypeProperty.key`, `FunctionTypeParameter.id`,
+`GenericTypeParameter.id`, `InferTypeNode.id` and
 `MappedTypeNode.parameterId`. `typeOfTypeNode` gives what each type
 annotation resolves to, and `expectedTypeOf` what each call argument should
 be, so a tool never has to re-derive a type from text.
@@ -61,41 +78,41 @@ Neither analysis mutates the AST; both return side tables.
 **No globals are built in** — not `print`, not `string`, not `game`. Only the
 language's own utility types are (`Partial`, `Pick`, `Omit`, `Record`,
 `ReturnType`, `Truthy`, ...; see `PRELUDE_SOURCE`). A project lists the type
-libraries it uses in `luaut.config.json`, the way TypeScript uses `@types/*`:
+libraries it uses in `tilua.config.json`, the way TypeScript uses `@types/*`:
 
 ```bash
-npm i -D @luaut/roblox        # Luau + Roblox; or @luaut/lua on its own
+npm i -D @tilua-types/roblox        # Luau + Roblox; or @tilua-types/lua on its own
 ```
 
 ```jsonc
-// luaut.config.json
+// tilua.config.json
 {
-  "types": ["roblox"],                          // and what it depends on: @luaut/lua
+  "types": ["roblox"],                          // and what it depends on: @tilua-types/lua
   "paths": { "@shared/*": ["src/shared/*"] },   // import aliases, as in tsconfig
   "sourceMap": "sourcemap.json"                 // a Rojo sourcemap, or null
 }
 ```
 
 - **Which config applies** — the nearest one in the file's folder or above.
-  `luaut.config.json` and `luaut.config.jsonc` in the same folder is an error.
+  `tilua.config.json` and `tilua.config.jsonc` in the same folder is an error.
   Both forms accept comments and trailing commas.
-- **`types`** — any name, looked up as the package `@luaut/<name>` in
+- **`types`** — any name, looked up as the package `@tilua-types/<name>` in
   `node_modules` from the config upward; one that is not installed is an
-  error. A relative path (`"./types"`, `"./defs.d.luaut"`) loads the project's
+  error. A relative path (`"./types"`, `"./defs.d.tilua"`) loads the project's
   own definitions. A type library's own type-library dependencies load first.
 - **`paths`** — tsconfig rules: an exact pattern wins, then the `*` pattern
   with the longest prefix; targets resolve from `baseUrl` (default: the
   config's folder).
 - **`sourceMap`** — the instance tree becomes types: `game` and `workspace`
   follow it, and a file the tree maps gets its own `script`, so
-  `script.Parent.Remotes` is typed. A `.luaut` file matches the Luau file of
+  `script.Parent.Remotes` is typed. A `.tilua` file matches the Luau file of
   the same path.
 
 | function | does |
 |---|---|
 | `findConfig(file, host?)` | the config that applies, problems with it, and every path searched |
 | `loadConfig(path, host?)` | read and check one config |
-| `resolveTypeLibraries(config, host?)` | the `.d.luaut` files to load, in order |
+| `resolveTypeLibraries(config, host?)` | the `.d.tilua` files to load, in order |
 | `moduleCandidates(from, specifier, config?)` / `resolveModulePath(...)` | what an `import` means |
 | `sourceMapTypes(text, path, { classes })` | the tree's types, and `scriptFor(file)` |
 
@@ -104,12 +121,12 @@ the config (or sourcemap) it is about. `host` reads files — pass your own to
 read unsaved editor buffers or to record what was read.
 
 `type` / `typeof` are **not** special-cased in the analyzer either: they are
-overload sets in `@luaut/lua` and `@luaut/roblox`, and narrowing is derived
+overload sets in `@tilua-types/lua` and `@tilua-types/roblox`, and narrowing is derived
 from them. Without a library that declares them, they narrow nothing.
 
 Libraries stack: a name declared again *adds* to what an earlier library gave
 it — overloads of a function accumulate, and the members of a declared table
-merge. That is how `@luaut/roblox` extends Lua's `table` and `type` without
+merge. That is how `@tilua-types/roblox` extends Lua's `table` and `type` without
 restating them.
 
 ## The language, in brief
@@ -146,7 +163,7 @@ class Dog extends Animal {
 The parentheses are not decoration: `f {}` is a call with a table argument, so
 without them `if ready { ... }` would be a call of `ready` followed by a block.
 
-There is no `end` in luaut, and `then` is not a word it knows.
+There is no `end` in tilua, and `then` is not a word it knows.
 
 **One statement instead of a block** — an `if`, an `elseif`, an `else`, a
 `while` or a `for` may be written with the single statement it does, no braces,
@@ -195,17 +212,6 @@ const wrap = (n: number) => ({ value: n })   -- so an object is parenthesized
 An arrow is a function expression written short — there is no second kind of
 function — so `this` inside one is the `this` of the method around it, which
 is what a JavaScript arrow is for.
-
-**Moving a file over** — `end`, `then`, `do` as a block opener, and `->` for a
-function type are Lua's spellings, and luaut no longer reads any of them.
-`npx tsx scripts/to-braces.ts <file|dir>` rewrites a file written in them,
-and `scripts/to-braces-sources.ts <file>` does the same for luaut written
-inside a TypeScript file, which is where a test suite keeps most of it. Each
-rewrite is parsed and compared with the tree the original made before it is
-written; a file it cannot say the same thing about is left alone.
-
-Both scripts need a parser that still reads the old spellings, so run them
-from a checkout of the commit before they were dropped.
 
 **Declarations** — `const` and `let` only; Lua's `local` is gone.
 
@@ -268,12 +274,12 @@ Running them is that library's business too. A library points at a JavaScript
 module in its package.json, and the compiler asks it what a call becomes:
 
 ```json
-"luaut": { "types": "index.d.luaut", "lowering": "lowering.mjs" }
+"tilua": { "types": "index.d.tilua", "lowering": "lowering.mjs" }
 ```
 
 ```js
 // @ts-check
-/** @type {import("luaut-parser").LoweringPlugin} */   // the contract, declared here
+/** @type {import("@tilua/parser").LoweringPlugin} */   // the contract, declared here
 const plugin = {
     runtime: { array: "local __NAME__ = {}\nfunction __NAME__.filter(t, test) ... end" },
     methodCall({ method, receiver, use }) {
@@ -286,7 +292,7 @@ const plugin = {
 export default plugin
 ```
 
-`receiver` is the luaut type the analyzer worked out, `use(key)` gives the
+`receiver` is the tilua type the analyzer worked out, `use(key)` gives the
 local name that table got — emitted once, at the top of the output, only if a
 call needed it — and the receiver is passed as the call's first argument. An
 answer of `undefined` leaves an ordinary Luau method call, which is what
@@ -295,13 +301,13 @@ answer of `undefined` leaves an ordinary Luau method call, which is what
 The compiler lowers the language and nothing else: `filter` appears nowhere in
 it.
 
-`@luaut/lua` ships the JavaScript-shaped set; there, indices are Luau's (the
+`@tilua-types/lua` ships the JavaScript-shaped set; there, indices are Luau's (the
 first element is 1, `indexOf` answers `nil` rather than -1) and `push`, `pop`,
 `shift`, `unshift`, `sort` and `reverse` change the array they are called on.
 
 **A `(` that starts a line** continues the statement above it, as in Lua and
 in JavaScript — `const v = map[key]` followed by `("A"):upper()` is one
-statement, a call of `map[key]`. luaut says so rather than letting it pass:
+statement, a call of `map[key]`. tilua says so rather than letting it pass:
 write `;` before the `(` when a new statement was meant.
 
 **Object types** — `{ name: T, name?: T, [K]: V }`, and a name that is not an
@@ -596,7 +602,7 @@ several values a function returns), `keyof`, `T[K]`, conditional types with
 `infer`, mapped types with `as` remapping, template literal types
 (`` `on${Event}` ``), and set difference `A - B`. The utility types
 (`Partial`, `Pick`, `Omit`, `ReturnType`, `Parameters`, `Exclude`, …) are
-built in, and written in luaut on top of those rather than special-cased in
+built in, and written in tilua on top of those rather than special-cased in
 the analyzer. A type library or a file may declare one again; the later
 declaration wins.
 
@@ -645,9 +651,9 @@ libraries the file names are loaded.
 `// @ts-...` do. They silence scope and type errors, never syntax errors:
 
 ```luau
---@luaut-nocheck          -- before the first line of code: the whole file
---@luaut-ignore           -- the next line of code
---@luaut-expect-error     -- the next line of code, which must have an error
+--@tilua-nocheck          -- before the first line of code: the whole file
+--@tilua-ignore           -- the next line of code
+--@tilua-expect-error     -- the next line of code, which must have an error
 ```
 
 `parseWithRecovery` returns them as `directives`; `directivesOf(source)` reads
@@ -663,7 +669,7 @@ analyzeScopes(program, {
 })
 
 analyzeTypes(program, scopes, {
-  libs,                       // parsed `.d.luaut` definitions
+  libs,                       // parsed `.d.tilua` definitions
   globalTypes: { … },         // types for specific globals; wins over `libs`
   libTypes: { … },            // extra named types for annotations
   diagnostics: true,          // emit type errors (default)
@@ -685,7 +691,7 @@ analyzeTypes(program, scopes, {
 
 ```bash
 npm install
-npm test        # smoketests (types via smoketest/luaut.config.json), then project tests
+npm test        # smoketests (types via smoketest/tilua.config.json), then project tests
 npm run build
 npm run typecheck
 ```

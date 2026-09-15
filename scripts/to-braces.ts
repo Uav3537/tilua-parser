@@ -1,5 +1,5 @@
 /**
- * Rewrite luaut's older `end` spelling into braces.
+ * Rewrite tilua's older `end` spelling into braces.
  *
  *     if x then ... end        ->   if (x) { ... }
  *     while x do ... end       ->   while (x) { ... }
@@ -320,7 +320,7 @@ function apply(source: string, edits: readonly Edit[]): string {
 // ------------------------------------------------------------
 
 function files(path: string): string[] {
-    if (statSync(path).isFile()) return path.endsWith(".luaut") ? [path] : []
+    if (statSync(path).isFile()) return path.endsWith(".tilua") ? [path] : []
     return readdirSync(path).flatMap(entry => files(join(path, entry)))
 }
 

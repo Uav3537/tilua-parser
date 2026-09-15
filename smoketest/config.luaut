@@ -1,3 +1,0 @@
--- Imported by modules.luaut: a module whose only export is its default.
-
-export default { scale: 2 }

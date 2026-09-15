@@ -3,7 +3,7 @@ export type { RecoverResult, ParserOptions } from '@ast/builders'
 import { tokenize, LexError } from '@lexer/lexer'
 export type { SourceComment, TokenizeOptions } from '@lexer/lexer'
 
-// Re-export every AST/token type so consumers can `import type { ... } from "luaut-parser"`.
+// Re-export every AST/token type so consumers can `import type { ... } from "@tilua/parser"`.
 export * from '@lexer/token'
 export * from '@ast/nodes'
 import { analyzeScopes, getBinding, isGlobal, isUnassignedGlobal } from '@ast/analyzeScopes'
@@ -13,7 +13,7 @@ export type { TypeAnalysis, AnalyzeTypesOptions, TypeDiagnostic, ModuleExports, 
 export * from '@ast/typeModel'
 // The language's own utility types (`Partial`, `ReturnType`, ...) are built
 // in; see `PRELUDE_SOURCE`. No globals are — not even `print`. A project names
-// the type libraries it wants in `luaut.config.json` (`"types": ["roblox"]`), and
+// the type libraries it wants in `tilua.config.json` (`"types": ["roblox"]`), and
 // the project functions find and load them. See `findConfig` and
 // `resolveTypeLibraries`.
 export { PRELUDE_SOURCE } from '@ast/prelude'
@@ -23,9 +23,9 @@ export {
 } from '@ast/directives'
 export * from './project'
 
-// This package is the luaut *front end* only: source -> luaut AST (+ scope
+// This package is the tilua *front end* only: source -> tilua AST (+ scope
 // analysis). Emitting Luau is the downstream compiler's job — it lowers the
-// luaut AST to a plain Luau AST and runs its own Luau printer (which lives in
+// tilua AST to a plain Luau AST and runs its own Luau printer (which lives in
 // a separate project). There is deliberately no printer here.
 export {
     tokenize, LexError,
@@ -34,7 +34,7 @@ export {
     analyzeTypes, moduleExports,
 }
 
-export const luautparser = {
+export const tilua = {
     tokenize,
     parseTokens,
     parse,
@@ -47,4 +47,4 @@ export const luautparser = {
     analyzeTypes,
 } as const
 
-export default luautparser
+export default tilua

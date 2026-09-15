@@ -172,6 +172,12 @@ export class Parser {
     /** Inside a class body, where `super` means the base class. Outside
      *  one it is an ordinary name, so existing code using it still reads. */
     private classDepth = 0
+    /** Set while reading a ternary's consequent, to ration the `:`s that may
+     *  be read as method calls at the `?`'s own bracket depth — one of them is
+     *  the ternary's own. `allowance` is how many to allow (-1 for all),
+     *  `used` counts how many were offered. Null inside brackets, where a `:`
+     *  can only be a method call's. See `parseTernaryConsequent`. */
+    private ternaryColons: { allowance: number; used: number } | null = null
 
     constructor(tokens: Token[], options: ParserOptions = {}) {
         this.tokens = tokens
@@ -521,7 +527,7 @@ export class Parser {
     // ============================================================
     // Bodies
     // ------------------------------------------------------------
-    // luaut writes a block in braces — `if (ready) { ... }`, `function f() {
+    // tilua writes a block in braces — `if (ready) { ... }`, `function f() {
     // ... }`. The `end` spellings Lua uses are still read, so a file written
     // in them keeps working while it is being moved over.
     //
@@ -718,10 +724,10 @@ export class Parser {
             }
         }
 
-        // Lua's `local`, out of habit: say what luaut writes, and read it as `let`.
+        // Lua's `local`, out of habit: say what tilua writes, and read it as `let`.
         if (this.recover && t.type === "Identifier" && (t as any).value === "local" &&
             (this.peek(1).type === "Identifier" || this.checkPunctuatorAt(1, "{") || this.checkPunctuatorAt(1, "["))) {
-            this.softError("luaut has no 'local'; declare with 'const' or 'let'")
+            this.softError("tilua has no 'local'; declare with 'const' or 'let'")
             return this.parseVariableDeclaration("let")
         }
 
@@ -755,7 +761,7 @@ export class Parser {
     }
 
     // `declare NAME: T` / `declare function NAME<G>(params): R` — ambient
-    // declarations for a `.d.luaut` definitions file. `declare type X = ...`
+    // declarations for a `.d.tilua` definitions file. `declare type X = ...`
     // is written as a plain `type X = ...` (aliases are ambient already).
     private parseDeclareStatement(): DeclareStatement {
         const start = this.current()
@@ -1001,7 +1007,7 @@ export class Parser {
     }
 
     // `const x = ...` / `let x, y = ...`.
-    // luaut has no `local` — `const` bindings are immutable, `let` mutable.
+    // tilua has no `local` — `const` bindings are immutable, `let` mutable.
     /** `kind` reads the leading word as that keyword (recovery's `local`). */
     private parseVariableDeclaration(as?: "let"): VariableDeclaration {
         const start = this.current()
@@ -1214,7 +1220,7 @@ export class Parser {
 
     /** `class Name extends Base <members> end`.
      *
-     *  The body is a block like every other in luaut, closed by `end` — not a
+     *  The body is a block like every other in tilua, closed by `end` — not a
      *  brace-delimited list. Members are written the way the same thing is
      *  written outside a class: a field like a field (`x: number`), a method
      *  like a function (`function m() ... end`). */
@@ -1489,6 +1495,8 @@ export class Parser {
             return { type: "AssignmentStatement", targets, values, ...spanFrom(start, this.previous()) }
         }
 
+        const statementStart = this.cursor
+        const errorsAtStart = this.errors.length
         const first = this.parsePrefixExpression()
 
         if (this.checkOperator("=") || this.checkPunctuator(",")) {
@@ -1521,7 +1529,23 @@ export class Parser {
             return { type: "CallStatement", expression: first, ...spanFrom(start, this.previous()) }
         }
 
-        this.error("Unexpected expression statement (expected assignment or call)")
+        // Any other expression on a line of its own. Lua has no such statement
+        // and the compiler drops it, but writing a name and asking the editor
+        // about it is how code gets written: making that a syntax error stops
+        // the file being analysed exactly when the help is wanted.
+        //
+        // `parsePrefixExpression` stopped at the first thing that cannot start
+        // a call or an assignment, so an expression that continues past it
+        // (`value + 1`, `a ? b : c`) is only half read. Read the statement
+        // again as a whole expression, from where it started.
+        let expression: Expression = first
+        if (this.isBinaryOperator() || this.checkPunctuator("?") ||
+            this.checkIdentifierValue("as") || this.checkIdentifierValue("satisfies")) {
+            this.cursor = statementStart
+            this.errors.length = errorsAtStart
+            expression = this.parseExpression()
+        }
+        return { type: "ExpressionStatement", expression, ...spanFrom(start, this.previous()) }
     }
 
     // ============================================================
@@ -1596,11 +1620,94 @@ export class Parser {
         }
     }
 
+    /** `->` where `=>` belongs. tilua has one arrow, for the type and for the
+     *  function; Luau's is still lexed only so that writing it says so. In
+     *  recovery the `->` is read as the arrow it was meant to be, so the rest
+     *  of the file still analyses. */
+    private mistypedArrow(): boolean {
+        if (!this.checkPunctuator("->")) return false
+        const at = this.current()
+        const error = new ParseError(
+            "tilua writes a function type with '=>', not '->'", at.line.start, at.column.start)
+        if (!this.recover) throw error
+        this.record(error)
+        this.advance()
+        return true
+    }
+
     private isUnaryOperator(): string | null {
         const t = this.current()
         if (t.type === "Keyword" && (t as any).value === "not") return "not"
         if (t.type === "Operator" && ((t as any).value === "-" || (t as any).value === "#")) return (t as any).value
         return null
+    }
+
+    /** Runs `fn` inside a bracket, where a `:` can only ever be a method
+     *  call's: an enclosing ternary's `:` lives outside the bracket. */
+    private inBrackets<T>(fn: () => T): T {
+        const saved = this.ternaryColons
+        this.ternaryColons = null
+        try {
+            return fn()
+        } finally {
+            this.ternaryColons = saved
+        }
+    }
+
+    /** A `:` at the cursor reads as a method call's — unless it is one of a
+     *  ternary consequent's rationed `:`s and the ration has run out. */
+    private takeMethodColon(): boolean {
+        const colons = this.ternaryColons
+        if (!colons) return true
+        colons.used++
+        return colons.allowance < 0 || colons.used <= colons.allowance
+    }
+
+    /** The consequent of `cond ? a : b`.
+     *
+     *  `a : b()` is ambiguous — Lua reads `a:b()` as a method call, which eats
+     *  the ternary's `:`. Method calls win, since `cond ? obj:m() : other` is
+     *  real code, so read the consequent that way first and fall back to
+     *  refusing a method-call `:` at this depth only when the first reading
+     *  leaves the ternary without its `:`. */
+    private parseTernaryConsequent(): Expression {
+        // Greediest first: every `:` at this depth is a method call's.
+        const greedy = this.tryTernaryConsequent(-1)
+        if (greedy.expression) return greedy.expression
+        // That overshot the ternary's `:`. Give back one `:` at a time, so the
+        // consequent keeps as many method calls as it can and the ternary
+        // still gets its own.
+        for (let allowance = greedy.colons - 1; allowance >= 0; allowance--) {
+            const attempt = this.tryTernaryConsequent(allowance)
+            if (attempt.expression) return attempt.expression
+        }
+        // No reading reaches a `:`. Take the ordinary one and let the caller
+        // report the missing `:` where it really is.
+        return this.parseExpression()
+    }
+
+    /** One reading of a ternary's consequent, or `undefined` if it does not
+     *  end at the ternary's `:` — in which case the cursor and any recorded
+     *  errors are left exactly as they were. */
+    private tryTernaryConsequent(allowance: number): { expression?: Expression; colons: number } {
+        const start = this.cursor
+        const errors = this.errors.length
+        const missingEnd = this.missingEnd
+        const saved = this.ternaryColons
+        const colons = { allowance, used: 0 }
+        this.ternaryColons = colons
+        try {
+            const expression = this.parseExpression()
+            if (this.checkPunctuator(":")) return { expression, colons: colons.used }
+        } catch (error) {
+            if (!(error instanceof ParseError)) throw error
+        } finally {
+            this.ternaryColons = saved
+        }
+        this.cursor = start
+        this.errors.length = errors
+        this.missingEnd = missingEnd
+        return { colons: colons.used }
     }
 
     parseExpression(minPrec = 0): Expression {
@@ -1611,7 +1718,7 @@ export class Parser {
         // for the compiler to lower, two ways to write it.
         if (minPrec > 0 || !this.checkPunctuator("?")) return expr
         this.advance()
-        const consequent = this.parseExpression()
+        const consequent = this.parseTernaryConsequent()
         this.expectPunctuator(":")
         const alternate = this.parseExpression()
         return {
@@ -1663,7 +1770,7 @@ export class Parser {
 
     private parseAtomWithAssertion(): Expression {
         let expr = this.parseAtom()
-        // luaut drops Luau's `::` assertion syntax entirely in favor of `as`,
+        // tilua drops Luau's `::` assertion syntax entirely in favor of `as`,
         // mirroring TypeScript. `as const` is a special case with no TypeNode
         // on the right — the checker infers the narrowest literal type itself.
         while (this.checkKeyword("as") || this.checkIdentifierValue("satisfies")) {
@@ -1829,7 +1936,7 @@ export class Parser {
         } else if (this.checkType("Identifier")) {
             base = this.parseIdentifier()
         } else if (this.matchPunctuator("(")) {
-            const inner = this.parseExpression()
+            const inner = this.inBrackets(() => this.parseExpression())
             this.expectPunctuator(")")
             base = { type: "ParenthesizedExpression", expression: inner, ...spanFrom(start, this.previous()) }
         } else {
@@ -1860,7 +1967,7 @@ export class Parser {
                     }
                     continue
                 }
-                if (punct === ":" && this.startsMethodCall(1)) {
+                if (punct === ":" && this.startsMethodCall(1) && this.takeMethodColon()) {
                     this.advance()
                     this.advance()
                     const method = this.parseIdentifier()
@@ -1886,12 +1993,12 @@ export class Parser {
                 continue
             }
             if (this.matchPunctuator("[")) {
-                const index = this.parseExpression()
+                const index = this.inBrackets(() => this.parseExpression())
                 this.expectPunctuator("]")
                 base = { type: "IndexExpression", object: base, index, ...spanFrom(base, this.previous()) }
                 continue
             }
-            if (this.checkPunctuator(":") && this.startsMethodCall()) {
+            if (this.checkPunctuator(":") && this.startsMethodCall() && this.takeMethodColon()) {
                 this.advance()
                 const method = this.parseIdentifier()
                 const typeArguments = this.tryCallTypeArguments()
@@ -2030,6 +2137,10 @@ export class Parser {
     }
 
     private parseCallArguments(): Expression[] {
+        return this.inBrackets(() => this.parseCallArgumentsInner())
+    }
+
+    private parseCallArgumentsInner(): Expression[] {
         if (this.matchPunctuator("(")) {
             const list: Expression[] = []
             const stop = (): boolean => this.checkPunctuator(",")
@@ -2080,9 +2191,13 @@ export class Parser {
         return { type: "Identifier", name: t.value as string, ...spanFrom(t, t) }
     }
 
-    // `{}` is an OBJECT literal only in luaut: `{ a = 1, [k] = v, shorthand }`.
+    // `{}` is an OBJECT literal only in tilua: `{ a = 1, [k] = v, shorthand }`.
     // Positional entries (`{ 1, 2, 3 }`) are gone — use an array literal `[...]`.
     private parseTableExpression(): TableExpression {
+        return this.inBrackets(() => this.parseTableExpressionInner())
+    }
+
+    private parseTableExpressionInner(): TableExpression {
         const start = this.current()
         this.expectPunctuator("{")
         const fields: TableField[] = []
@@ -2152,6 +2267,10 @@ export class Parser {
 
     // `[1, 2, 3]` — array literal (trailing comma allowed).
     private parseArrayExpression(): ArrayExpression {
+        return this.inBrackets(() => this.parseArrayExpressionInner())
+    }
+
+    private parseArrayExpressionInner(): ArrayExpression {
         const start = this.current()
         this.expectPunctuator("[")
         const elements: (Expression | SpreadElement)[] = []
@@ -2226,6 +2345,10 @@ export class Parser {
     }
 
     private parseObjectPattern(): ObjectPattern {
+        return this.inBrackets(() => this.parseObjectPatternInner())
+    }
+
+    private parseObjectPatternInner(): ObjectPattern {
         const start = this.current()
         this.expectPunctuator("{")
         const properties: ObjectPatternProperty[] = []
@@ -2284,6 +2407,10 @@ export class Parser {
     }
 
     private parseArrayPattern(): ArrayPattern {
+        return this.inBrackets(() => this.parseArrayPatternInner())
+    }
+
+    private parseArrayPatternInner(): ArrayPattern {
         const start = this.current()
         this.expectPunctuator("[")
         const elements: (ArrayPatternElement | null)[] = []
@@ -2602,7 +2729,7 @@ export class Parser {
         return this.parseConditionalType()
     }
 
-    /** `C extends E ? A : B`. `?` in type position always means this — luaut
+    /** `C extends E ? A : B`. `?` in type position always means this — tilua
      *  has no `T?` shorthand — so the grammar needs no lookahead beyond the
      *  `extends`, which stays a soft keyword. */
     private parseConditionalType(): TypeNode {
@@ -2900,7 +3027,12 @@ export class Parser {
 
         this.expectPunctuator(")")
 
-        if (this.matchPunctuator("=>") || this.matchPunctuator("->")) {
+        // `->` is Luau's arrow, and reading both spellings only invited the
+        // question of whether they differ. They never did: one arrow, for the
+        // type and for the function. It is still lexed, so writing it gets an
+        // answer rather than a puzzle — and in recovery it is read as the
+        // arrow it was meant to be, so the rest of the file still analyses.
+        if (this.matchPunctuator("=>") || this.mistypedArrow()) {
             const predicate = this.tryParseTypePredicate()
             const returnType: TypeNode = predicate
                 ? { type: "TypeReference", base: "boolean", typeArguments: [], ...spanFrom(start, this.previous()) }
@@ -2921,7 +3053,7 @@ export class Parser {
         }
 
         if (params.some(p => p.name !== undefined)) {
-            this.error("Expected '->' for function type")
+            this.error("Expected '=>' for function type")
         }
 
         return {
@@ -3037,7 +3169,7 @@ export class Parser {
                 ((this.peek(1).type === "Punctuator" && (this.peek(1) as any).value === ":") ||
                  (this.peek(1).type === "Punctuator" && (this.peek(1) as any).value === "?" &&
                   this.peek(2).type === "Punctuator" && (this.peek(2) as any).value === ":"))) {
-                // luaut uses TS-style `name?: T` for an optional property
+                // tilua uses TS-style `name?: T` for an optional property
                 // (it may be absent). A required property whose value may be
                 // nil is written `name: T | nil`.
                 const keyTok = this.expectIdentifier()
@@ -3184,7 +3316,7 @@ export function parseExpressionFromSource(raw: string, inClass = false): Express
 export interface RecoverResult {
     program: Program
     errors: ParseError[]
-    /** The file's `--@luaut-...` comments; see `applyDirectives`. */
+    /** The file's `--@tilua-...` comments; see `applyDirectives`. */
     directives: Directives
 }
 

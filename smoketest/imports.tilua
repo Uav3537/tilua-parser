@@ -17,7 +17,7 @@ const r: number = main()
 
 print(origin, d, s, p, r)
 
--- Through export lists and re-exports (see reexports.luaut).
+-- Through export lists and re-exports (see reexports.tilua).
 import { clamp, lerp, help, VERSION, unit, area, surface, Size } from "./reexports"
 
 const clamped: number = clamp(5, 0, 10)   -- from `export *`

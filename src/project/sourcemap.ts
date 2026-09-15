@@ -11,10 +11,10 @@
  *   - a file the tree maps declares `script` as its own instance, so
  *     `script.Parent.Remotes` is typed.
  *
- * A sourcemap lists the Luau files Rojo syncs; a `.luaut` file matches the
+ * A sourcemap lists the Luau files Rojo syncs; a `.tilua` file matches the
  * entry with the same path apart from the extension.
  *
- * The types are emitted as `.d.luaut` source and parsed, so they go through
+ * The types are emitted as `.d.tilua` source and parsed, so they go through
  * exactly the same resolution as a hand-written definitions file — recursive
  * references (`Parent`) included.
  */
@@ -48,7 +48,7 @@ export interface SourceMapTypes {
 
 const IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/
 const INSTANCE_MEMBERS: ReadonlySet<string> = new Set(["Name", "ClassName", "Parent", "Archivable"])
-const SCRIPT_EXTENSIONS = new Set([".luaut", ".luau", ".lua"])
+const SCRIPT_EXTENSIONS = new Set([".tilua", ".luau", ".lua"])
 
 export function sourceMapTypes(
     text: string,
@@ -137,7 +137,7 @@ function isNode(value: unknown): value is SourceMapNode {
     return typeof node.name === "string" && typeof node.className === "string"
 }
 
-/** A script file without its extension — the part a `.luaut` file and the
+/** A script file without its extension — the part a `.tilua` file and the
  *  Luau file synced for it share. */
 function fileKey(path: string): string {
     const extension = extname(path)

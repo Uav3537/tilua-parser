@@ -1,4 +1,4 @@
--- Imported by modules.luaut: named exports alongside a default.
+-- Imported by modules.tilua: named exports alongside a default.
 
 export const VERSION = 3
 

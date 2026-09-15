@@ -1,5 +1,5 @@
 // ============================================================
-// luaut type model
+// tilua type model
 // ------------------------------------------------------------
 // The internal representation `analyzeTypes` produces and both
 // downstream consumers (the LSP, the compiler's `as const` /
@@ -34,7 +34,15 @@ export type Type =
 /** `any` — opts out of checking. Assignable to and from everything. */
 export interface AnyType { kind: "any"; alias?: string }
 /** `unknown` — top type. Everything is assignable to it; it is assignable to nothing but itself. */
-export interface UnknownType { kind: "unknown"; alias?: string }
+export interface UnknownType {
+    kind: "unknown"
+    alias?: string
+    /** The `unknown` a program wrote, as opposed to the one the analyzer falls
+     *  back to when it cannot work a type out. Only a written one makes reading
+     *  a member of it an error — the fallback means "not known here", and
+     *  reporting that would be noise. */
+    declared?: boolean
+}
 /** `never` — bottom type. Assignable to everything; nothing (but never) is assignable to it. */
 export interface NeverType { kind: "never"; alias?: string }
 
@@ -314,6 +322,7 @@ export interface MappedType {
 
 export const anyType: AnyType = { kind: "any" }
 export const unknownType: UnknownType = { kind: "unknown" }
+export const declaredUnknownType: UnknownType = { kind: "unknown", declared: true }
 export const neverType: NeverType = { kind: "never" }
 export const nilType: PrimitiveType = { kind: "primitive", name: "nil" }
 export const booleanType: PrimitiveType = { kind: "primitive", name: "boolean" }
@@ -464,6 +473,17 @@ export function substitute(t: Type, subst: Map<string, Type>): Type {
         case "mapped": {
             // The mapped parameter shadows an outer binding of the same name.
             const inner = new Map([...subst].filter(([k]) => k !== t.parameter))
+            // A homomorphic mapped type over a *naked* type parameter
+            // distributes over a union argument, as in TypeScript:
+            // `Partial<A | B>` is `Partial<A> | Partial<B>`. Written over a
+            // concrete union (`{ [K in keyof (A | B)]: ... }`) it maps the keys
+            // the members share instead, so only this case distributes.
+            const bound = t.source?.kind === "typeParam" ? subst.get(t.source.name) : undefined
+            if (bound?.kind === "union") {
+                const name = (t.source as TypeParamType).name
+                return union(bound.types.map(member =>
+                    substitute(t, new Map([...subst, [name, member]]))))
+            }
             return {
                 ...t,
                 constraint: substitute(t.constraint, subst),

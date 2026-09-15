@@ -15,7 +15,7 @@ export const Keywords = [
     'in', 'nil', 'not', 'or', 'repeat',
     'return', 'then', 'true', 'until', 'while',
     'continue',
-    // luaut extensions. `local` is gone — declarations use `const` / `let`
+    // tilua extensions. `local` is gone — declarations use `const` / `let`
     // (hard keywords). `type` stays a soft keyword.
     'const', 'let', 'import', 'export', 'from', 'as',
 ] as const
@@ -199,7 +199,7 @@ export function tokenize(source: string, options: TokenizeOptions = {}): Token[]
 
     /**
      * `allowLevel0` — whether a bare `[[ ... ]]` (no `=` signs) counts as a
-     * long bracket. luaut reuses `[` / `]` for array literals, so `[[` in
+     * long bracket. tilua reuses `[` / `]` for array literals, so `[[` in
      * expression position is a nested array, NOT a long string. Level-0 long
      * brackets are therefore only recognized inside comments (`--[[ ... ]]`);
      * long string *literals* require `[=[ ... ]=]` (level ≥ 1).

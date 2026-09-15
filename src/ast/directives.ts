@@ -3,9 +3,9 @@ import { tokenize, type LexError, type SourceComment, type Token } from "@lexer/
 /**
  * Comments that switch checking off, as TypeScript's `// @ts-...` comments do:
  *
- *     --@luaut-nocheck         no scope or type errors anywhere in this file
- *     --@luaut-ignore          none on the next line of code
- *     --@luaut-expect-error    none on the next line of code, and an error if
+ *     --@tilua-nocheck         no scope or type errors anywhere in this file
+ *     --@tilua-ignore          none on the next line of code
+ *     --@tilua-expect-error    none on the next line of code, and an error if
  *                              that line has none to suppress
  *
  * A space after `--` is fine, and so is text after the directive (a reason).
@@ -26,14 +26,14 @@ export interface Directive {
 }
 
 export interface Directives {
-    /** The file has `--@luaut-nocheck` before its first line of code. */
+    /** The file has `--@tilua-nocheck` before its first line of code. */
     nocheck: boolean
     /** Every directive, in order — a `nocheck` after the code starts included,
      *  so a tool can point out that it does nothing. */
     all: Directive[]
 }
 
-const DIRECTIVE = /^\s*@luaut-(nocheck|ignore|expect-error)(?![\w-])/
+const DIRECTIVE = /^\s*@tilua-(nocheck|ignore|expect-error)(?![\w-])/
 
 /** The directives in `comments`, placed against `tokens` (both from one
  *  `tokenize` of the file). */
@@ -68,8 +68,8 @@ export function directivesOf(source: string): Directives {
 export interface DirectiveOutcome<T> {
     /** The diagnostics no directive suppresses. */
     kept: T[]
-    /** `--@luaut-expect-error` comments with nothing to suppress. Each is an
-     *  error to report: "Unused '@luaut-expect-error' directive". */
+    /** `--@tilua-expect-error` comments with nothing to suppress. Each is an
+     *  error to report: "Unused '@tilua-expect-error' directive". */
     unusedExpectErrors: Directive[]
 }
 
@@ -97,4 +97,4 @@ export function applyDirectives<T>(
     return { kept, unusedExpectErrors }
 }
 
-export const UNUSED_EXPECT_ERROR = "Unused '@luaut-expect-error' directive"
+export const UNUSED_EXPECT_ERROR = "Unused '@tilua-expect-error' directive"
