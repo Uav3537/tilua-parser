@@ -4,6 +4,7 @@ import type {
     ObjectPattern, ArrayPattern, ObjectPatternProperty, ReturnStatement,
     TableExpression, ArrayExpression, IfStatement, TypePredicateNode, DeclareClassStatement, DeclareStatement,
     ClassDeclaration, TypeAliasStatement, ExportTypeAliasStatement, ClassExpression, ClassLike, ClassMember,
+    GenericForStatement,
 } from "./nodes"
 import type { ScopeAnalysis, BindingId } from "./analyzeScopes"
 import { preludeProgram } from "./prelude"
@@ -40,6 +41,11 @@ const INTERNAL_MEMBERS = new Set(["ClassObject", "ParentClass"])
  *  anything and starts being the thing they have to read. */
 const MAX_MISSING = 3
 const MAX_EXPLANATION = 90
+const MAX_TYPE = 120
+
+/** What `iterationTypes` works out about one generic-for: the types its first
+ *  two variables take, and whether the first one is a value rather than a key. */
+type IterationTypes = [key: Type, value: Type, iteratesValues: boolean]
 
 export interface TypeAnalysis {
     /** Inferred type of every expression node. */
@@ -62,6 +68,13 @@ export interface TypeAnalysis {
     /** Top-level type aliases, resolved — and the type names this module
      *  imports, so tooling treats both alike. */
     readonly aliases: Map<string, Type>
+    /** The `for x in t` loops that walk a table directly, where tilua's one
+     *  variable takes the *value* — not an iterator such as `pairs(t)` or
+     *  `string.gmatch(s, p)`, whose variables are bound as written. Luau hands
+     *  the key over first, so lowering these needs a key variable in front.
+     *  Deciding that here keeps it next to the types the same choice produces:
+     *  the variable's type and the code bound to it cannot drift apart. */
+    readonly iteratesValues: ReadonlySet<GenericForStatement>
     readonly diagnostics: TypeDiagnostic[]
 }
 
@@ -611,6 +624,7 @@ class TypeAnalyzer {
     private readonly narrowedTypeOf = new Map<Identifier, Type>()
     private readonly typeOfTypeNode = new Map<TypeNode | TypePackNode, Type>()
     private readonly expectedTypeOf = new Map<Expression, Type>()
+    private readonly iteratesValues = new Set<GenericForStatement>()
     /** Public: each alias resolved once (generic aliases keep their params as
      *  `typeParam` nodes in the body). */
     private readonly aliases = new AliasMap()
@@ -712,6 +726,7 @@ class TypeAnalyzer {
             typeOfTypeNode: this.typeOfTypeNode,
             expectedTypeOf: this.expectedTypeOf,
             aliases: this.resolveDeferredAliases(),
+            iteratesValues: this.iteratesValues,
             diagnostics: this.diagnostics,
         }
     }
@@ -1308,7 +1323,7 @@ class TypeAnalyzer {
                         if (declared && this.emitDiagnostics && !isAssignable(actual, declared)) {
                             this.diagnostics.push({
                                 node: member.init,
-                                message: `Type '${formatType(actual)}' is not assignable to type '${formatType(declared)}'`
+                                message: `Type '${briefType(actual)}' is not assignable to type '${briefType(declared)}'`
                                     + this.explainMismatch(actual, declared),
                             })
                         }
@@ -1547,7 +1562,7 @@ class TypeAnalyzer {
         if (fits) return
         this.diagnostics.push({
             node: stmt,
-            message: `Type '${formatType(actual)}' is not assignable to '${briefType(declared)}'`
+            message: `Type '${briefType(actual)}' is not assignable to '${briefType(declared)}'`
                 + this.explainMismatch(actual, declared),
         })
     }
@@ -2308,7 +2323,7 @@ class TypeAnalyzer {
                             !this.fitsAnnotation(source, declared, inferred, env)) {
                             this.diagnostics.push({
                                 node: stmt,
-                                message: `Type '${formatType(inferred)}' is not assignable to '${formatType(declared)}'`
+                                message: `Type '${briefType(inferred)}' is not assignable to '${briefType(declared)}'`
                                     + this.explainMismatch(inferred, declared),
                             })
                         } else if (declared.kind !== "any") {
@@ -2432,7 +2447,7 @@ class TypeAnalyzer {
                                 if (this.emitDiagnostics && !isAssignable(next, declared) && declared.kind !== "any") {
                                     this.diagnostics.push({
                                         node: stmt,
-                                        message: `Type '${formatType(next)}' is not assignable to '${formatType(declared)}'`
+                                        message: `Type '${briefType(next)}' is not assignable to '${briefType(declared)}'`
                                             + this.explainMismatch(next, declared),
                                     })
                                 }
@@ -2542,10 +2557,14 @@ class TypeAnalyzer {
                     const valueId = value.type === "IdentifierPattern" ? this.bindingIdByName(value.name, value) : undefined
                     if (keyId !== undefined && valueId !== undefined) this.correlateBindings(bodyEnv, [keyId, valueId], rows)
                 } else {
-                    const [keyT, valT] = this.iterationTypes(stmt.iterators[0], iterTypes[0], stmt.variables.length)
+                    const [keyT, valT, iteratesValues] =
+                        this.iterationTypes(stmt.iterators[0], iterTypes[0], stmt.variables.length)
                     stmt.variables.forEach((v, i) => {
                         this.bindPattern(v, i === 0 ? keyT : i === 1 ? valT : unknownType, bodyEnv, "widen")
                     })
+                    // Several iterators are a raw Lua triplet (`for x in f, s, v`),
+                    // whose variables are positional whatever the first one is.
+                    if (iteratesValues && stmt.iterators.length === 1) this.iteratesValues.add(stmt)
                 }
                 this.visitBlock(stmt.body, bodyEnv)
                 return
@@ -2555,12 +2574,16 @@ class TypeAnalyzer {
                 const declared = this.declaredReturns[this.declaredReturns.length - 1]
                 // The declared type says what belongs here: a callback takes
                 // its parameters from it, a literal keeps what it admits, and
-                // an editor can offer the values it names.
-                if (declared) {
+                // an editor can offer the values it names. With nothing
+                // declared, the position the function was written in says it
+                // instead — but only this far: `checkReturn` below still
+                // answers to the annotation alone, so a hint adds no errors.
+                const wanted = declared ?? this.contextualReturns[this.contextualReturns.length - 1]
+                if (wanted) {
                     if (stmt.arguments.length === 1) {
-                        this.applyContext(stmt.arguments[0], declared)
-                    } else if (declared.kind === "tuple" && declared.isPack) {
-                        stmt.arguments.forEach((a, i) => this.applyContext(a, declared.elements[i]))
+                        this.applyContext(stmt.arguments[0], wanted)
+                    } else if (wanted.kind === "tuple" && wanted.isPack) {
+                        stmt.arguments.forEach((a, i) => this.applyContext(a, wanted.elements[i]))
                     }
                 }
                 // The declared type also says how many values there is room
@@ -2866,6 +2889,19 @@ class TypeAnalyzer {
      *  it is written — see `applyContext`. */
     private readonly contextualParams = new WeakMap<object, Type>()
 
+    /** What a function expression written in a typed position returns, from
+     *  that position — see `applyContext`. A body with no `return` annotation
+     *  would otherwise infer its `return` expressions with nothing wanted of
+     *  them, and widen the literals in them: `() => S = function() { return
+     *  { Status: true } }` inferred `Status: boolean` and then failed against
+     *  `S`. It is a hint, not a contract: only `applyContext` reads it, so a
+     *  body that does not match still reports at the assignment, not here. */
+    private readonly contextualReturnOf = new WeakMap<object, Type>()
+
+    /** `contextualReturnOf` for each function body being walked, alongside
+     *  `declaredReturns`. */
+    private readonly contextualReturns: (Type | undefined)[] = []
+
     /** `expected` is the type the surroundings want for `expr`. A function
      *  expression written there takes its unannotated parameters' types from
      *  it, as in TypeScript: `signal:Connect(function(player) ... end)` knows
@@ -2892,6 +2928,12 @@ class TypeAnalyzer {
         const members = expected.kind === "union" ? expected.types : [expected]
         const signatures = members.flatMap(m => this.overloadsOf(this.expand(m)))
         if (!signatures.length) return
+        // What the position wants back, for a body that does not say. A
+        // generic still waiting on the call's own inference says nothing.
+        if (!e.func.returnType && !e.func.predicate) {
+            const returns = signatures.map(s => s.returns).filter(t => !containsTypeParam(t))
+            if (returns.length) this.contextualReturnOf.set(e.func, union(returns))
+        }
         e.func.params.forEach((p, k) => {
             if (p.typeAnnotation || p.pattern || p.default) return
             const candidates: Type[] = []
@@ -2943,7 +2985,9 @@ class TypeAnalyzer {
                 return property ? [property.type] : o.indexer ? [o.indexer.value] : []
             })
             if (types.length) {
-                this.applyContext(field.type === "TableFieldShorthand" ? field.name : field.value, union(types))
+                const target = field.type === "TableFieldShorthand" ? field.name : field.value
+                this.contextArms.set(target, types)
+                this.applyContext(target, union(types))
             }
         }
     }
@@ -3032,11 +3076,13 @@ class TypeAnalyzer {
         this.declaredReturns.push(func.predicate
             ? booleanType
             : func.returnType ? this.resolveType(func.returnType) : undefined)
+        this.contextualReturns.push(this.contextualReturnOf.get(func))
         try {
             return body()
         } finally {
             this.varargs.pop()
             this.declaredReturns.pop()
+            this.contextualReturns.pop()
         }
     }
 
@@ -3840,21 +3886,24 @@ class TypeAnalyzer {
         this.correlateBindings(env, ids, objects.map(member => names.map(name => this.propertyType(member, name))))
     }
 
-    /** `(keyType, valueType)` yielded by a generic-for iterator. Handles
-     *  `ipairs`/`pairs`/`next(t)` and Luau generalized iteration (`for … in t`).
-     *  `varCount` is how many loop variables were written. */
-    private iterationTypes(iterNode: Expression | undefined, iterType: Type, varCount: number): [Type, Type] {
+    /** `(keyType, valueType, iteratesValues)` yielded by a generic-for
+     *  iterator. Handles `ipairs`/`pairs`/`next(t)` and Luau generalized
+     *  iteration (`for … in t`). `varCount` is how many loop variables were
+     *  written. `iteratesValues` reports the one case where the first variable
+     *  is bound to the value rather than the key, which is what lowering has
+     *  to know to emit the loop; see `TypeAnalysis.iteratesValues`. */
+    private iterationTypes(iterNode: Expression | undefined, iterType: Type, varCount: number): IterationTypes {
         // ipairs(t) / pairs(t) / next(t)
         if (iterNode?.type === "CallExpression" && iterNode.callee.type === "Identifier" && iterNode.arguments[0]) {
             const name = iterNode.callee.name
             const src = this.expand(this.typeOf.get(iterNode.arguments[0]) ?? unknownType)
-            if (name === "ipairs") return [numberType, this.elementType(src, 0)]
+            if (name === "ipairs") return [numberType, this.elementType(src, 0), false]
             if (name === "pairs" || name === "next") {
                 if (src.kind === "object") {
                     return [src.indexer?.key ?? stringType,
-                        src.indexer?.value ?? union([...src.properties.values()].map(p => p.type))]
+                        src.indexer?.value ?? union([...src.properties.values()].map(p => p.type)), false]
                 }
-                if (src.kind === "array") return [numberType, src.element]
+                if (src.kind === "array") return [numberType, src.element, false]
             }
         }
         // `for x in it`: an iterator function gives the loop its variables —
@@ -3865,18 +3914,22 @@ class TypeAnalyzer {
             const returns = this.expand(iterator.returns)
             const parts = returns.kind === "tuple" ? returns.elements.map(m => this.expand(m)) : [returns]
             const at = (i: number): Type => parts[i] ?? (parts.length === 1 ? parts[0] : unknownType)
-            return [at(0), at(1)]
+            return [at(0), at(1), false]
         }
 
-        // generalized iteration `for x in t` / `for i, x in t`
+        // generalized iteration `for x in t` / `for i, x in t`. With one
+        // variable tilua hands over the value, as `for x in list` reads —
+        // which is the case lowering has to put a key variable in front of.
         const t = this.expand(iterType)
-        if (t.kind === "array") return varCount >= 2 ? [numberType, t.element] : [t.element, unknownType]
+        if (t.kind === "array") {
+            return varCount >= 2 ? [numberType, t.element, false] : [t.element, unknownType, true]
+        }
         if (t.kind === "object") {
             const k = t.indexer?.key ?? stringType
             const v = t.indexer?.value ?? union([...t.properties.values()].map(p => p.type))
-            return varCount >= 2 ? [k, v] : [v, unknownType]
+            return varCount >= 2 ? [k, v, false] : [v, unknownType, true]
         }
-        return [unknownType, unknownType]
+        return [unknownType, unknownType, false]
     }
 
     private inferReturnType(body: Block, env: FlowEnv): Type {
@@ -4425,7 +4478,8 @@ class TypeAnalyzer {
                 if (!isAssignable(narrow, declared) && !isAssignable(actual, declared)) {
                     this.diagnostics.push({
                         node: expr,
-                        message: `Type '${formatType(actual)}' does not satisfy the expected type '${formatType(declared)}'`,
+                        message: `Type '${briefType(actual)}' does not satisfy the expected type '${briefType(declared)}'`
+                            + this.explainMismatch(actual, declared),
                     })
                 } else {
                     this.reportExcessProperties(expr.expression, declared)
@@ -4849,8 +4903,22 @@ class TypeAnalyzer {
      *  inferred, so this is a lookup rather than a second pass. */
     private widenUnlessAsked(value: Type, at: Expression): Type {
         const wanted = this.expectedTypeOf.get(at)
+        // Each arm of the contract is asked on its own, before any of them are
+        // merged. `{ Status?: true } | { Status?: false }` wants a literal of
+        // `Status` in either arm, but the two merge to `boolean` — the one
+        // type that cannot say it wanted a literal. Asking first is what
+        // TypeScript does, and what keeps a discriminant a discriminant.
+        if (value.kind === "literal") {
+            const arms = this.contextArms.get(at)
+            if (arms?.some(arm => this.admitsLiteral(arm, value.base))) return value
+        }
         return wanted === undefined ? widen(value) : this.keepContextualLiterals(value, wanted)
     }
+
+    /** What each arm of the contract wanted of an expression, unmerged — see
+     *  `widenUnlessAsked`. Recorded by `applyTableContext` beside the merged
+     *  type it hands to `applyContext`. */
+    private readonly contextArms = new WeakMap<object, Type[]>()
 
     private inferObject(expr: TableExpression, env: FlowEnv, asConst: boolean): Type {
         const entries: [string, ObjectProperty][] = []
@@ -5699,8 +5767,14 @@ class TypeAnalyzer {
      *  themselves are then the whole story. */
     private explainMismatch(actual: Type, expected: Type): string {
         const from = this.expand(actual)
-        const to = this.expand(expected)
-        if (from.kind !== "object" || to.kind !== "object") return ""
+        if (from.kind !== "object") return ""
+        // A union target is the common case worth explaining, not the one to
+        // give up on: `Stat` is `StatSuccess | StatError`, and a value that
+        // says `Status: true` was reaching for the first. Name what that arm
+        // still wanted rather than printing both arms and leaving the reader
+        // to diff them.
+        const to = this.likeliestArm(from, this.expand(expected))
+        if (to === undefined) return ""
         const missing: { name: string; type: string }[] = []
         for (const [name, property] of to.properties) {
             if (property.optional || from.properties.has(name) || INTERNAL_MEMBERS.has(name)) continue
@@ -5728,6 +5802,38 @@ class TypeAnalyzer {
             return `, '${name}' is ${is}, not ${wanted}`
         }
         return ""
+    }
+
+    /** Which object of a contract the value was reaching for. One object is
+     *  itself; among several, a discriminant decides — the arm whose literal
+     *  properties the value already agrees with (`Status: true` picks
+     *  `StatSuccess` over `StatError`). Failing that, the arm it is closest to
+     *  fitting, so the explanation is about the shortest gap rather than an
+     *  arbitrary one. `undefined` when there is no object to explain against. */
+    private likeliestArm(from: ObjectType, expected: Type): ObjectType | undefined {
+        const arms = this.membersOf(expected).filter((m): m is ObjectType => m.kind === "object")
+        if (arms.length <= 1) return arms[0]
+        const gapOf = (arm: ObjectType): number => {
+            let gap = 0
+            for (const [name, property] of arm.properties) {
+                if (INTERNAL_MEMBERS.has(name)) continue
+                const own = from.properties.get(name)
+                if (!own) { if (!property.optional) gap += 1; continue }
+                if (isAssignable(own.type, property.type)) continue
+                // Contradicting a literal the arm insists on is contradicting
+                // which arm this is — `Status: true` is not `StatError` with a
+                // typo in it, it is `StatSuccess`.
+                gap += this.expand(property.type).kind === "literal" ? 100 : 1
+            }
+            // A property the arm has never heard of counts too: without it,
+            // the arm that declares almost nothing wins every time by being
+            // the one with least to miss.
+            for (const name of from.properties.keys()) {
+                if (!INTERNAL_MEMBERS.has(name) && !arm.properties.has(name) && !arm.indexer) gap += 1
+            }
+            return gap
+        }
+        return arms.reduce((best, arm) => (gapOf(arm) < gapOf(best) ? arm : best))
     }
 
     private bindingIdOf(id: Identifier): BindingId | undefined {
@@ -5791,5 +5897,17 @@ function briefType(t: Type): string {
         const shown = t.types.slice(0, 6).map(formatType).join(" | ")
         return `${shown} | ... ${t.types.length - 6} more`
     }
-    return formatType(t)
+    const full = formatType(t)
+    if (full.length <= MAX_TYPE) return full
+    // Past this, the whole type is no longer the message — it buries it. An
+    // object keeps its first few keys, since those are what a reader matches
+    // against the value they wrote; anything else is cut where it stands. The
+    // explanation that follows is what actually says what went wrong.
+    if (t.kind === "object" && t.properties.size) {
+        const names = [...t.properties.keys()].filter(n => !INTERNAL_MEMBERS.has(n))
+        const shown = names.slice(0, MAX_MISSING)
+        const rest = names.length - shown.length
+        return `{ ${shown.join(", ")}${rest > 0 ? `, ... ${rest} more` : ""} }`
+    }
+    return `${full.slice(0, MAX_TYPE)}...`
 }

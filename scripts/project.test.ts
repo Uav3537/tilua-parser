@@ -8,7 +8,7 @@ import { join, resolve } from "node:path"
 import {
     findConfig, loadConfig, resolveTypeLibraries, resolveModulePath, sourceMapTypes,
     parse, parseWithRecovery, analyzeScopes, analyzeTypes, moduleExports, formatType, applyDirectives,
-    type ProjectHost, type ModuleExports,
+    type ProjectHost, type ModuleExports, type GenericForStatement,
 } from "../src/index.js"
 
 const ROOT = resolve("/tilua-project")
@@ -439,7 +439,7 @@ const rel = (path: string | undefined): string | undefined =>
         [satisfied.bindings.circle, satisfied.bindings.config, satisfied.bindings.handlers, satisfied.bindings.empty, satisfied.bindings.five, satisfied.bindings.widened],
         [`{ kind: "circle", size: number }`, "{ debug: boolean, level: 3, tags: string[] }", "{ Click: (x: number) => number }", "number[]", "5", "number"])
     check("satisfies: a value that does not fit, and properties the contract does not know", satisfied.errors, [
-        `Type '{ kind: "tri", size: number }' does not satisfy the expected type 'Shape'`,
+        `Type '{ kind: "tri", size: number }' does not satisfy the expected type 'Shape', 'kind' is "tri", not "circle" | "rect"`,
         "Object literal may only specify known properties, and 'colour' does not exist in type 'Shape'",
         "Object literal may only specify known properties, and 'b' does not exist in type '{ a: number }'",
         "Object literal may only specify known properties, and 'typo' does not exist in type 'Shape'",
@@ -458,7 +458,7 @@ const rel = (path: string | undefined): string | undefined =>
         [constSatisfied.bindings.Map, constSatisfied.errors], [
             `{ readonly Asgore: { readonly Thumbnail: "id://2" }, readonly Sans: { readonly Thumbnail: "id://1" } }`,
             [
-                `Type '{ readonly Sans: { readonly Thumbnail: 1 } }' does not satisfy the expected type '{ Asgore: { Thumbnail: string }, Sans: { Thumbnail: string } }'`,
+                `Type '{ readonly Sans: { readonly Thumbnail: 1 } }' does not satisfy the expected type '{ Asgore: { Thumbnail: string }, Sans: { Thumbnail: string } }', missing Asgore: { Thumbnail: string }`,
                 "Object literal may only specify known properties, and 'b' does not exist in type '{ a: number }'",
             ],
         ])
@@ -710,6 +710,32 @@ const rel = (path: string | undefined): string | undefined =>
         for (const [id, type] of types.bindingType) bindings[scopes.bindings.get(id)!.name] = formatType(type)
         check("generic for: the loop variables come from the iterator",
             [bindings.word, bindings.who, bindings.many], ["string", "string", "number"])
+    }
+
+    // Which loops bind their one variable to the *value*. Lowering reads this
+    // to decide where a key variable goes, so the name a loop binds and the
+    // type inferred for it come from one decision rather than two.
+    {
+        const program = parse([
+            "declare function gmatch(s: string, pattern: string): () => ...string",
+            "declare list: number[]",
+            "declare map: { [string]: number }",
+            "for (v in list) { print(v) }",
+            "for (v in map) { print(v) }",
+            "for (k in pairs(map)) { print(k) }",
+            "for (i in ipairs(list)) { print(i) }",
+            "for (c in gmatch(\"ab\", \"%a\")) { print(c) }",
+            "for (k, v in pairs(map)) { print(k, v) }",
+            "for (k, v in map) { print(k, v) }",
+            "",
+            "",
+        ].join("\n"))
+        const types = analyzeTypes(program, analyzeScopes(program))
+        const loops = program.body.statements
+            .filter((s): s is GenericForStatement => s.type === "GenericForStatement")
+        check("iteratesValues: only a table walked directly, with one variable",
+            loops.map(loop => types.iteratesValues.has(loop)),
+            [true, true, false, false, false, false, false])
     }
 
     // `unknown - nil` is itself, whichever way round the union is written.
