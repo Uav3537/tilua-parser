@@ -69,7 +69,15 @@ export interface ArrayType { kind: "array"; element: Type; alias?: string }
  *  be told apart. */
 export interface TupleType { kind: "tuple"; elements: Type[]; isPack?: boolean; alias?: string }
 
-export interface ObjectProperty { type: Type; optional: boolean; readonly?: boolean }
+export interface ObjectProperty {
+    type: Type
+    optional: boolean
+    readonly?: boolean
+    /** A class member written `private`: reachable only from inside the class
+     *  that declared it. `owner` is that class's node, compared by identity;
+     *  `className` is how a diagnostic names it. Checked, never lowered. */
+    private?: { owner: object; className: string }
+}
 export interface ObjectType {
     kind: "object"
     properties: Map<string, ObjectProperty>

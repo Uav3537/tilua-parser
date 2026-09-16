@@ -19,7 +19,7 @@ import type {
     TableExpression, TableField, ArrayExpression,
     BinaryExpression, UnaryExpression, MemberExpression, IndexExpression,
     CallExpression, MethodCallExpression, ParenthesizedExpression,
-    ClassDeclaration, ClassExpression, ClassMember, NewExpression, SuperExpression,
+    ClassDeclaration, ClassExpression, ClassMember, ClassAccessibility, NewExpression, SuperExpression,
     TypeAssertionExpression, AsConstExpression, IfElseExpression, ErrorExpression,
     TypeReference, TypeLiteralString, TypeLiteralBoolean, TypeLiteralNumber, TableTypeNode,
     ArrayTypeNode, TupleTypeNode,
@@ -1310,6 +1310,23 @@ export class Parser {
 
     private parseClassMember(): ClassMember | undefined {
         const start = this.current()
+        // `public` / `private` are soft keywords as well: `private: boolean`
+        // and `public()` still name a member.
+        let accessibility: ClassAccessibility | undefined
+        if ((this.checkIdentifierValue("public") || this.checkIdentifierValue("private")) &&
+            !this.punctuatorAt(1, ":") && !this.operatorAt(1, "=") && !this.punctuatorAt(1, "(")) {
+            accessibility = (this.advance() as { value: string }).value as ClassAccessibility
+        }
+        const member = this.parseClassMemberAfterAccessibility(start)
+        if (!accessibility || !member) return member
+        if (member.type === "ClassConstructor") {
+            this.problem(`A constructor cannot be '${accessibility}'`)
+            return member
+        }
+        return { ...member, accessibility }
+    }
+
+    private parseClassMemberAfterAccessibility(start: Token): ClassMember | undefined {
         // `static` is a soft keyword — `static: number` is still a field.
         const isStatic = this.checkIdentifierValue("static") && !this.punctuatorAt(1, ":") && !this.operatorAt(1, "=")
         if (isStatic) this.advance()

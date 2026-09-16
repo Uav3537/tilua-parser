@@ -298,6 +298,18 @@ call needed it — and the receiver is passed as the call's first argument. An
 answer of `undefined` leaves an ordinary Luau method call, which is what
 `text:upper()` wants, since a string already answers to it.
 
+A call can also carry more than was written. Every hook is told `at`, where
+the call was written (`{ file, line, column }`), and `arguments`: each one's
+type, that type as text, the code it was written as, and, for a name, the
+code of what it names. An answer's `prepend` lists Luau expressions to pass
+ahead of the written arguments. `globalCall` answers for a call to a global,
+such as `print(x)`, and `globalValue` for a global read as a value, such as
+`local p = print`. A local with the same name belongs to the author, and no
+hook is asked about it. A runtime can read `__LINES__`, the bundle's line map
+(`nil` outside a bundle), to turn a line Luau reports back into a place in the
+project. `console:log`, `print` and `error` in `@tilua-types/lua` are built on
+these hooks.
+
 The compiler lowers the language and nothing else: `filter` appears nowhere in
 it.
 
@@ -405,6 +417,14 @@ The receiver is written `this`, and it is an ordinary first parameter: a
 method's type is `(this: Dog, ...) => R`, so `rex:speak()` supplies it the way
 `function T:m()` supplies `self`. `new Dog(x)` *is* `Dog.new(x)` — the same
 function, callable by hand and passable as a value.
+
+**`public` and `private`** go before a member — `private balance = 0`,
+`private static function check()`, `public get size()`. Leaving it out means
+public. A private member can be reached only inside the body of the class that
+declared it, including functions nested in its methods; a subclass is outside,
+as in TypeScript. It is a type check and nothing more: the member is an
+ordinary key at runtime. `public` and `private` stay ordinary names elsewhere,
+so `private: boolean` is still a field.
 
 A declaration names two things. As a **type**, `Dog` is the type of its
 instances, nominal the same way a `declare class` is: a table with the same

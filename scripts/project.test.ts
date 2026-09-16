@@ -2762,6 +2762,29 @@ function g() {
         [], [],
     ])
 
+    // `private` is checked where the member is reached: inside the class that
+    // declared it, including functions nested in its methods, and nowhere
+    // else — a subclass is outside.
+    {
+        const klass = "class A {\n    private n = 1\n    private static s = 2\n    private function f(): number { return this.n }\n"
+            + "    function g(): number { const h = (): number => this.n; return h() + this:f() + A.s }\n}\n"
+        check("private: reachable inside the class, reported outside it", [
+            analyze(klass + "const a = new A()\nconst x = a:g()").errors,
+            analyze(klass + "const a = new A()\nconst x = a.n").errors,
+            analyze(klass + "const a = new A()\nconst x = a:f()").errors,
+            analyze(klass + "const x = A.s").errors,
+            analyze(klass + "class B extends A {\n    function m(): number { return this.n }\n}").errors,
+            analyze("class C {\n    public n = 1\n    private: boolean = false\n}\nconst c = new C()\nconst x = c.n\nconst y = c.private").errors,
+        ], [
+            [],
+            ["Property 'n' is private and only accessible within class 'A'"],
+            ["Property 'f' is private and only accessible within class 'A'"],
+            ["Property 's' is private and only accessible within class 'A'"],
+            ["Property 'n' is private and only accessible within class 'A'"],
+            [],
+        ])
+    }
+
     // A name on a line of its own is how code gets written — you type it to
     // ask the editor about it. It parses, it is typed so hover can answer, and
     // the compiler drops it.

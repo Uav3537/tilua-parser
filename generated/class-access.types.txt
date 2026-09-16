@@ -1,0 +1,18 @@
+Account: typeof Account
+Flags: typeof Flags
+Savings: typeof Savings
+account: Account
+amount: number
+amount: number
+balance: number
+flags: Flags
+n: number
+opened: number
+owner: string
+owner: string
+positive: (n: number) => number
+shown: boolean
+this: Account
+this: Account
+this: Account
+this: Savings

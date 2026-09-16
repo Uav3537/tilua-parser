@@ -9,6 +9,8 @@ export {
     type TiluaConfig, type BuildTarget, type ConfigProblem, type ConfigLookup,
 } from "./config"
 export { resolveTypeLibraries, type TypeLibraries, type LoweringModule } from "./libraries"
-export type { LoweringPlugin, MethodCall, MethodLowering } from "./lowering"
+export type {
+    LoweringPlugin, MethodCall, MethodLowering, GlobalCall, GlobalValue, CallLowering, CallSite, ArgumentInfo,
+} from "./lowering"
 export { moduleCandidates, resolveModulePath } from "./modules"
 export { sourceMapTypes, type SourceMapNode, type SourceMapOptions, type SourceMapTypes } from "./sourcemap"

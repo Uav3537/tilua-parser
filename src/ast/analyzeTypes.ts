@@ -982,13 +982,19 @@ class TypeAnalyzer {
     /** The class whose members are being read, so `super` knows its base. */
     private currentClass?: ClassLike
 
+    /** Every class whose body the checker is inside, innermost last — what
+     *  decides whether a `private` member may be reached. */
+    private readonly enclosingClasses: ClassLike[] = []
+
     private withClass<T>(stmt: ClassLike, fn: () => T): T {
         const previous = this.currentClass
         this.currentClass = stmt
+        this.enclosingClasses.push(stmt)
         try {
             return fn()
         } finally {
             this.currentClass = previous
+            this.enclosingClasses.pop()
         }
     }
 
@@ -1256,8 +1262,12 @@ class TypeAnalyzer {
     }
 
     private fillShape(stmt: ClassLike, shape: ClassShape): void {
+        const className = this.className(stmt)
         const put = (isStatic: boolean, name: string, property: ObjectProperty): void => {
-            (isStatic ? shape.statics : shape.instance).set(name, property)
+            const member = stmt.members.find(m => m.type !== "ClassConstructor" && m.isStatic === isStatic
+                && m.name.name === name && m.accessibility === "private")
+            const marked = member ? { ...property, private: { owner: stmt, className } } : property
+            ;(isStatic ? shape.statics : shape.instance).set(name, marked)
         }
         // Fields first: a method's body can then read them.
         for (const member of stmt.members) {
@@ -4295,6 +4305,30 @@ class TypeAnalyzer {
         })
     }
 
+    /** A `private` member read from outside the class that declared it —
+     *  a subclass counts as outside, as in TypeScript. */
+    private checkPrivateMember(node: Expression | Identifier, object: Type, name: string): void {
+        if (!this.emitDiagnostics) return
+        const raw = this.expand(object)
+        for (const part of raw.kind === "union" ? raw.types : [raw]) {
+            const t = this.deferredAccess(this.expand(part))
+            if (t.kind !== "object") continue
+            const access = t.properties.get(name)?.private
+            if (!access || this.insideClass(access.owner)) continue
+            this.diagnostics.push({
+                node,
+                message: `Property '${name}' is private and only accessible within class '${access.className}'`,
+            })
+            return
+        }
+    }
+
+    /** Is the code being checked written inside `owner`'s body — its own
+     *  methods, or a class or function nested in them? */
+    private insideClass(owner: object): boolean {
+        return this.enclosingClasses.includes(owner as ClassLike)
+    }
+
     private propertyType(raw: Type, name: string): Type {
         const t = this.deferredAccess(this.expand(raw))
         if (t.kind === "object") {
@@ -4542,6 +4576,7 @@ class TypeAnalyzer {
 
             case "MemberExpression": {
                 const { type: obj, shortCircuits } = this.chainObject(expr, expr.object, env)
+                this.checkPrivateMember(expr.property, obj, expr.property.name)
                 const key = this.refKeyOf(expr)
                 const narrowed = key === undefined ? undefined : env.get(key)
                 this.checkStringMember(expr, obj, literal(expr.property.name))
@@ -4694,6 +4729,7 @@ class TypeAnalyzer {
     }
 
     private inferMethodCall(expr: Extract<Expression, { type: "MethodCallExpression" }>, objType: Type, env: FlowEnv): Type {
+        this.checkPrivateMember(expr.method, objType, expr.method.name)
         const method = this.propertyType(objType, expr.method.name)
         const united = this.unionSignatures(method)
         const fns = united ?? this.overloadsOf(method)

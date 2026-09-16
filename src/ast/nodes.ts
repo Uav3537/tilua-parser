@@ -313,11 +313,17 @@ export type ClassMember = ClassField | ClassMethod | ClassAccessor | ClassConstr
  *  alike: only the name and the type parameters differ. */
 export type ClassLike = ClassDeclaration | ClassExpression
 
+/** `public` / `private` written before a member. Only the type checker reads
+ *  it: a private member is still an ordinary key at runtime. */
+export type ClassAccessibility = "public" | "private"
+
 /** `x: number` / `x = 1` / `static count = 0`. An instance field is assigned
  *  when the instance is built, before the constructor body runs; a `static`
  *  one is assigned on the class table, once. */
 export interface ClassField extends BaseNode {
     type: "ClassField"
+    /** Left out, the member is public. */
+    accessibility?: ClassAccessibility
     name: Identifier
     isStatic: boolean
     typeAnnotation?: TypeNode
@@ -328,6 +334,8 @@ export interface ClassField extends BaseNode {
  *  A `static` one is a plain function on the class table, with no `this`. */
 export interface ClassMethod extends BaseNode {
     type: "ClassMethod"
+    /** Left out, the member is public. */
+    accessibility?: ClassAccessibility
     name: Identifier
     isStatic: boolean
     func: FunctionBody
@@ -339,6 +347,8 @@ export interface ClassMethod extends BaseNode {
  *  property, run as a function. */
 export interface ClassAccessor extends BaseNode {
     type: "ClassAccessor"
+    /** Left out, the member is public. */
+    accessibility?: ClassAccessibility
     kind: "get" | "set"
     name: Identifier
     isStatic: boolean

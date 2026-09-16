@@ -1,0 +1,1900 @@
+{
+  "type": "Program",
+  "body": {
+    "type": "Block",
+    "statements": [
+      {
+        "type": "ClassDeclaration",
+        "name": {
+          "type": "Identifier",
+          "name": "Account",
+          "line": {
+            "start": 5,
+            "end": 5
+          },
+          "column": {
+            "start": 7,
+            "end": 14
+          }
+        },
+        "typeParams": [],
+        "members": [
+          {
+            "type": "ClassField",
+            "name": {
+              "type": "Identifier",
+              "name": "owner",
+              "line": {
+                "start": 6,
+                "end": 6
+              },
+              "column": {
+                "start": 12,
+                "end": 17
+              }
+            },
+            "isStatic": false,
+            "typeAnnotation": {
+              "type": "TypeReference",
+              "base": "string",
+              "typeArguments": [],
+              "line": {
+                "start": 6,
+                "end": 6
+              },
+              "column": {
+                "start": 19,
+                "end": 25
+              }
+            },
+            "line": {
+              "start": 6,
+              "end": 6
+            },
+            "column": {
+              "start": 5,
+              "end": 25
+            },
+            "accessibility": "public"
+          },
+          {
+            "type": "ClassField",
+            "name": {
+              "type": "Identifier",
+              "name": "balance",
+              "line": {
+                "start": 7,
+                "end": 7
+              },
+              "column": {
+                "start": 13,
+                "end": 20
+              }
+            },
+            "isStatic": false,
+            "init": {
+              "type": "NumberLiteral",
+              "value": 0,
+              "raw": "0",
+              "line": {
+                "start": 7,
+                "end": 7
+              },
+              "column": {
+                "start": 23,
+                "end": 24
+              }
+            },
+            "line": {
+              "start": 7,
+              "end": 7
+            },
+            "column": {
+              "start": 5,
+              "end": 24
+            },
+            "accessibility": "private"
+          },
+          {
+            "type": "ClassField",
+            "name": {
+              "type": "Identifier",
+              "name": "opened",
+              "line": {
+                "start": 8,
+                "end": 8
+              },
+              "column": {
+                "start": 20,
+                "end": 26
+              }
+            },
+            "isStatic": true,
+            "init": {
+              "type": "NumberLiteral",
+              "value": 0,
+              "raw": "0",
+              "line": {
+                "start": 8,
+                "end": 8
+              },
+              "column": {
+                "start": 29,
+                "end": 30
+              }
+            },
+            "line": {
+              "start": 8,
+              "end": 8
+            },
+            "column": {
+              "start": 5,
+              "end": 30
+            },
+            "accessibility": "private"
+          },
+          {
+            "type": "ClassConstructor",
+            "func": {
+              "type": "FunctionBody",
+              "generics": [],
+              "params": [
+                {
+                  "type": "FunctionParameter",
+                  "name": "this",
+                  "line": {
+                    "start": 10,
+                    "end": 10
+                  },
+                  "column": {
+                    "start": 5,
+                    "end": 16
+                  }
+                },
+                {
+                  "type": "FunctionParameter",
+                  "name": "owner",
+                  "typeAnnotation": {
+                    "type": "TypeReference",
+                    "base": "string",
+                    "typeArguments": [],
+                    "line": {
+                      "start": 10,
+                      "end": 10
+                    },
+                    "column": {
+                      "start": 24,
+                      "end": 30
+                    }
+                  },
+                  "line": {
+                    "start": 10,
+                    "end": 10
+                  },
+                  "column": {
+                    "start": 17,
+                    "end": 30
+                  }
+                }
+              ],
+              "hasVarargs": false,
+              "body": {
+                "type": "Block",
+                "statements": [
+                  {
+                    "type": "AssignmentStatement",
+                    "targets": [
+                      {
+                        "type": "MemberExpression",
+                        "object": {
+                          "type": "Identifier",
+                          "name": "this",
+                          "line": {
+                            "start": 11,
+                            "end": 11
+                          },
+                          "column": {
+                            "start": 9,
+                            "end": 13
+                          }
+                        },
+                        "property": {
+                          "type": "Identifier",
+                          "name": "owner",
+                          "line": {
+                            "start": 11,
+                            "end": 11
+                          },
+                          "column": {
+                            "start": 14,
+                            "end": 19
+                          }
+                        },
+                        "line": {
+                          "start": 11,
+                          "end": 11
+                        },
+                        "column": {
+                          "start": 9,
+                          "end": 19
+                        }
+                      }
+                    ],
+                    "values": [
+                      {
+                        "type": "Identifier",
+                        "name": "owner",
+                        "line": {
+                          "start": 11,
+                          "end": 11
+                        },
+                        "column": {
+                          "start": 22,
+                          "end": 27
+                        }
+                      }
+                    ],
+                    "line": {
+                      "start": 11,
+                      "end": 11
+                    },
+                    "column": {
+                      "start": 9,
+                      "end": 27
+                    }
+                  },
+                  {
+                    "type": "CompoundAssignmentStatement",
+                    "operator": "+=",
+                    "target": {
+                      "type": "MemberExpression",
+                      "object": {
+                        "type": "Identifier",
+                        "name": "Account",
+                        "line": {
+                          "start": 12,
+                          "end": 12
+                        },
+                        "column": {
+                          "start": 9,
+                          "end": 16
+                        }
+                      },
+                      "property": {
+                        "type": "Identifier",
+                        "name": "opened",
+                        "line": {
+                          "start": 12,
+                          "end": 12
+                        },
+                        "column": {
+                          "start": 17,
+                          "end": 23
+                        }
+                      },
+                      "line": {
+                        "start": 12,
+                        "end": 12
+                      },
+                      "column": {
+                        "start": 9,
+                        "end": 23
+                      }
+                    },
+                    "value": {
+                      "type": "NumberLiteral",
+                      "value": 1,
+                      "raw": "1",
+                      "line": {
+                        "start": 12,
+                        "end": 12
+                      },
+                      "column": {
+                        "start": 27,
+                        "end": 28
+                      }
+                    },
+                    "line": {
+                      "start": 12,
+                      "end": 12
+                    },
+                    "column": {
+                      "start": 9,
+                      "end": 28
+                    }
+                  }
+                ],
+                "line": {
+                  "start": 11,
+                  "end": 12
+                },
+                "column": {
+                  "start": 9,
+                  "end": 28
+                }
+              },
+              "line": {
+                "start": 10,
+                "end": 13
+              },
+              "column": {
+                "start": 16,
+                "end": 6
+              },
+              "isMethod": true
+            },
+            "line": {
+              "start": 10,
+              "end": 13
+            },
+            "column": {
+              "start": 5,
+              "end": 6
+            }
+          },
+          {
+            "type": "ClassMethod",
+            "name": {
+              "type": "Identifier",
+              "name": "deposit",
+              "line": {
+                "start": 15,
+                "end": 15
+              },
+              "column": {
+                "start": 21,
+                "end": 28
+              }
+            },
+            "isStatic": false,
+            "func": {
+              "type": "FunctionBody",
+              "generics": [],
+              "params": [
+                {
+                  "type": "FunctionParameter",
+                  "name": "this",
+                  "line": {
+                    "start": 15,
+                    "end": 15
+                  },
+                  "column": {
+                    "start": 5,
+                    "end": 11
+                  }
+                },
+                {
+                  "type": "FunctionParameter",
+                  "name": "amount",
+                  "typeAnnotation": {
+                    "type": "TypeReference",
+                    "base": "number",
+                    "typeArguments": [],
+                    "line": {
+                      "start": 15,
+                      "end": 15
+                    },
+                    "column": {
+                      "start": 37,
+                      "end": 43
+                    }
+                  },
+                  "line": {
+                    "start": 15,
+                    "end": 15
+                  },
+                  "column": {
+                    "start": 29,
+                    "end": 43
+                  }
+                }
+              ],
+              "hasVarargs": false,
+              "returnType": {
+                "type": "TypeReference",
+                "base": "number",
+                "typeArguments": [],
+                "line": {
+                  "start": 15,
+                  "end": 15
+                },
+                "column": {
+                  "start": 46,
+                  "end": 52
+                }
+              },
+              "body": {
+                "type": "Block",
+                "statements": [
+                  {
+                    "type": "AssignmentStatement",
+                    "targets": [
+                      {
+                        "type": "MemberExpression",
+                        "object": {
+                          "type": "Identifier",
+                          "name": "this",
+                          "line": {
+                            "start": 16,
+                            "end": 16
+                          },
+                          "column": {
+                            "start": 9,
+                            "end": 13
+                          }
+                        },
+                        "property": {
+                          "type": "Identifier",
+                          "name": "balance",
+                          "line": {
+                            "start": 16,
+                            "end": 16
+                          },
+                          "column": {
+                            "start": 14,
+                            "end": 21
+                          }
+                        },
+                        "line": {
+                          "start": 16,
+                          "end": 16
+                        },
+                        "column": {
+                          "start": 9,
+                          "end": 21
+                        }
+                      }
+                    ],
+                    "values": [
+                      {
+                        "type": "BinaryExpression",
+                        "operator": "+",
+                        "left": {
+                          "type": "MethodCallExpression",
+                          "object": {
+                            "type": "Identifier",
+                            "name": "this",
+                            "line": {
+                              "start": 16,
+                              "end": 16
+                            },
+                            "column": {
+                              "start": 24,
+                              "end": 28
+                            }
+                          },
+                          "method": {
+                            "type": "Identifier",
+                            "name": "check",
+                            "line": {
+                              "start": 16,
+                              "end": 16
+                            },
+                            "column": {
+                              "start": 29,
+                              "end": 34
+                            }
+                          },
+                          "arguments": [
+                            {
+                              "type": "Identifier",
+                              "name": "amount",
+                              "line": {
+                                "start": 16,
+                                "end": 16
+                              },
+                              "column": {
+                                "start": 35,
+                                "end": 41
+                              }
+                            }
+                          ],
+                          "line": {
+                            "start": 16,
+                            "end": 16
+                          },
+                          "column": {
+                            "start": 24,
+                            "end": 42
+                          }
+                        },
+                        "right": {
+                          "type": "MemberExpression",
+                          "object": {
+                            "type": "Identifier",
+                            "name": "this",
+                            "line": {
+                              "start": 16,
+                              "end": 16
+                            },
+                            "column": {
+                              "start": 45,
+                              "end": 49
+                            }
+                          },
+                          "property": {
+                            "type": "Identifier",
+                            "name": "balance",
+                            "line": {
+                              "start": 16,
+                              "end": 16
+                            },
+                            "column": {
+                              "start": 50,
+                              "end": 57
+                            }
+                          },
+                          "line": {
+                            "start": 16,
+                            "end": 16
+                          },
+                          "column": {
+                            "start": 45,
+                            "end": 57
+                          }
+                        },
+                        "line": {
+                          "start": 16,
+                          "end": 16
+                        },
+                        "column": {
+                          "start": 24,
+                          "end": 57
+                        }
+                      }
+                    ],
+                    "line": {
+                      "start": 16,
+                      "end": 16
+                    },
+                    "column": {
+                      "start": 9,
+                      "end": 57
+                    }
+                  },
+                  {
+                    "type": "ReturnStatement",
+                    "arguments": [
+                      {
+                        "type": "MemberExpression",
+                        "object": {
+                          "type": "Identifier",
+                          "name": "this",
+                          "line": {
+                            "start": 17,
+                            "end": 17
+                          },
+                          "column": {
+                            "start": 16,
+                            "end": 20
+                          }
+                        },
+                        "property": {
+                          "type": "Identifier",
+                          "name": "balance",
+                          "line": {
+                            "start": 17,
+                            "end": 17
+                          },
+                          "column": {
+                            "start": 21,
+                            "end": 28
+                          }
+                        },
+                        "line": {
+                          "start": 17,
+                          "end": 17
+                        },
+                        "column": {
+                          "start": 16,
+                          "end": 28
+                        }
+                      }
+                    ],
+                    "line": {
+                      "start": 17,
+                      "end": 17
+                    },
+                    "column": {
+                      "start": 9,
+                      "end": 28
+                    }
+                  }
+                ],
+                "line": {
+                  "start": 16,
+                  "end": 17
+                },
+                "column": {
+                  "start": 9,
+                  "end": 28
+                }
+              },
+              "line": {
+                "start": 15,
+                "end": 18
+              },
+              "column": {
+                "start": 28,
+                "end": 6
+              },
+              "isMethod": true
+            },
+            "line": {
+              "start": 15,
+              "end": 18
+            },
+            "column": {
+              "start": 5,
+              "end": 6
+            },
+            "accessibility": "public"
+          },
+          {
+            "type": "ClassMethod",
+            "name": {
+              "type": "Identifier",
+              "name": "check",
+              "line": {
+                "start": 20,
+                "end": 20
+              },
+              "column": {
+                "start": 22,
+                "end": 27
+              }
+            },
+            "isStatic": false,
+            "func": {
+              "type": "FunctionBody",
+              "generics": [],
+              "params": [
+                {
+                  "type": "FunctionParameter",
+                  "name": "this",
+                  "line": {
+                    "start": 20,
+                    "end": 20
+                  },
+                  "column": {
+                    "start": 5,
+                    "end": 12
+                  }
+                },
+                {
+                  "type": "FunctionParameter",
+                  "name": "amount",
+                  "typeAnnotation": {
+                    "type": "TypeReference",
+                    "base": "number",
+                    "typeArguments": [],
+                    "line": {
+                      "start": 20,
+                      "end": 20
+                    },
+                    "column": {
+                      "start": 36,
+                      "end": 42
+                    }
+                  },
+                  "line": {
+                    "start": 20,
+                    "end": 20
+                  },
+                  "column": {
+                    "start": 28,
+                    "end": 42
+                  }
+                }
+              ],
+              "hasVarargs": false,
+              "returnType": {
+                "type": "TypeReference",
+                "base": "number",
+                "typeArguments": [],
+                "line": {
+                  "start": 20,
+                  "end": 20
+                },
+                "column": {
+                  "start": 45,
+                  "end": 51
+                }
+              },
+              "body": {
+                "type": "Block",
+                "statements": [
+                  {
+                    "type": "VariableDeclaration",
+                    "kind": "const",
+                    "names": [
+                      {
+                        "type": "IdentifierPattern",
+                        "name": "positive",
+                        "line": {
+                          "start": 22,
+                          "end": 22
+                        },
+                        "column": {
+                          "start": 15,
+                          "end": 23
+                        }
+                      }
+                    ],
+                    "init": [
+                      {
+                        "type": "FunctionExpression",
+                        "func": {
+                          "type": "FunctionBody",
+                          "generics": [],
+                          "params": [
+                            {
+                              "type": "FunctionParameter",
+                              "name": "n",
+                              "typeAnnotation": {
+                                "type": "TypeReference",
+                                "base": "number",
+                                "typeArguments": [],
+                                "line": {
+                                  "start": 22,
+                                  "end": 22
+                                },
+                                "column": {
+                                  "start": 30,
+                                  "end": 36
+                                }
+                              },
+                              "line": {
+                                "start": 22,
+                                "end": 22
+                              },
+                              "column": {
+                                "start": 27,
+                                "end": 36
+                              }
+                            }
+                          ],
+                          "hasVarargs": false,
+                          "returnType": {
+                            "type": "TypeReference",
+                            "base": "number",
+                            "typeArguments": [],
+                            "line": {
+                              "start": 22,
+                              "end": 22
+                            },
+                            "column": {
+                              "start": 39,
+                              "end": 45
+                            }
+                          },
+                          "body": {
+                            "type": "Block",
+                            "statements": [
+                              {
+                                "type": "ReturnStatement",
+                                "arguments": [
+                                  {
+                                    "type": "ParenthesizedExpression",
+                                    "expression": {
+                                      "type": "IfElseExpression",
+                                      "clauses": [
+                                        {
+                                          "condition": {
+                                            "type": "BinaryExpression",
+                                            "operator": ">",
+                                            "left": {
+                                              "type": "Identifier",
+                                              "name": "n",
+                                              "line": {
+                                                "start": 22,
+                                                "end": 22
+                                              },
+                                              "column": {
+                                                "start": 50,
+                                                "end": 51
+                                              }
+                                            },
+                                            "right": {
+                                              "type": "NumberLiteral",
+                                              "value": 0,
+                                              "raw": "0",
+                                              "line": {
+                                                "start": 22,
+                                                "end": 22
+                                              },
+                                              "column": {
+                                                "start": 54,
+                                                "end": 55
+                                              }
+                                            },
+                                            "line": {
+                                              "start": 22,
+                                              "end": 22
+                                            },
+                                            "column": {
+                                              "start": 50,
+                                              "end": 55
+                                            }
+                                          },
+                                          "body": {
+                                            "type": "Identifier",
+                                            "name": "n",
+                                            "line": {
+                                              "start": 22,
+                                              "end": 22
+                                            },
+                                            "column": {
+                                              "start": 58,
+                                              "end": 59
+                                            }
+                                          }
+                                        }
+                                      ],
+                                      "alternate": {
+                                        "type": "NumberLiteral",
+                                        "value": 0,
+                                        "raw": "0",
+                                        "line": {
+                                          "start": 22,
+                                          "end": 22
+                                        },
+                                        "column": {
+                                          "start": 62,
+                                          "end": 63
+                                        }
+                                      },
+                                      "line": {
+                                        "start": 22,
+                                        "end": 22
+                                      },
+                                      "column": {
+                                        "start": 50,
+                                        "end": 63
+                                      }
+                                    },
+                                    "line": {
+                                      "start": 22,
+                                      "end": 22
+                                    },
+                                    "column": {
+                                      "start": 49,
+                                      "end": 64
+                                    }
+                                  }
+                                ],
+                                "line": {
+                                  "start": 22,
+                                  "end": 22
+                                },
+                                "column": {
+                                  "start": 49,
+                                  "end": 64
+                                }
+                              }
+                            ],
+                            "line": {
+                              "start": 22,
+                              "end": 22
+                            },
+                            "column": {
+                              "start": 49,
+                              "end": 64
+                            }
+                          },
+                          "line": {
+                            "start": 22,
+                            "end": 22
+                          },
+                          "column": {
+                            "start": 26,
+                            "end": 64
+                          }
+                        },
+                        "line": {
+                          "start": 22,
+                          "end": 22
+                        },
+                        "column": {
+                          "start": 26,
+                          "end": 64
+                        }
+                      }
+                    ],
+                    "line": {
+                      "start": 22,
+                      "end": 22
+                    },
+                    "column": {
+                      "start": 9,
+                      "end": 64
+                    }
+                  },
+                  {
+                    "type": "ReturnStatement",
+                    "arguments": [
+                      {
+                        "type": "CallExpression",
+                        "callee": {
+                          "type": "Identifier",
+                          "name": "positive",
+                          "line": {
+                            "start": 23,
+                            "end": 23
+                          },
+                          "column": {
+                            "start": 16,
+                            "end": 24
+                          }
+                        },
+                        "arguments": [
+                          {
+                            "type": "Identifier",
+                            "name": "amount",
+                            "line": {
+                              "start": 23,
+                              "end": 23
+                            },
+                            "column": {
+                              "start": 25,
+                              "end": 31
+                            }
+                          }
+                        ],
+                        "line": {
+                          "start": 23,
+                          "end": 23
+                        },
+                        "column": {
+                          "start": 16,
+                          "end": 32
+                        }
+                      }
+                    ],
+                    "line": {
+                      "start": 23,
+                      "end": 23
+                    },
+                    "column": {
+                      "start": 9,
+                      "end": 32
+                    }
+                  }
+                ],
+                "line": {
+                  "start": 22,
+                  "end": 23
+                },
+                "column": {
+                  "start": 9,
+                  "end": 32
+                }
+              },
+              "line": {
+                "start": 20,
+                "end": 24
+              },
+              "column": {
+                "start": 27,
+                "end": 6
+              },
+              "isMethod": true
+            },
+            "line": {
+              "start": 20,
+              "end": 24
+            },
+            "column": {
+              "start": 5,
+              "end": 6
+            },
+            "accessibility": "private"
+          },
+          {
+            "type": "ClassMethod",
+            "name": {
+              "type": "Identifier",
+              "name": "count",
+              "line": {
+                "start": 26,
+                "end": 26
+              },
+              "column": {
+                "start": 21,
+                "end": 26
+              }
+            },
+            "isStatic": true,
+            "func": {
+              "type": "FunctionBody",
+              "generics": [],
+              "params": [],
+              "hasVarargs": false,
+              "returnType": {
+                "type": "TypeReference",
+                "base": "number",
+                "typeArguments": [],
+                "line": {
+                  "start": 26,
+                  "end": 26
+                },
+                "column": {
+                  "start": 30,
+                  "end": 36
+                }
+              },
+              "body": {
+                "type": "Block",
+                "statements": [
+                  {
+                    "type": "ReturnStatement",
+                    "arguments": [
+                      {
+                        "type": "MemberExpression",
+                        "object": {
+                          "type": "Identifier",
+                          "name": "Account",
+                          "line": {
+                            "start": 27,
+                            "end": 27
+                          },
+                          "column": {
+                            "start": 16,
+                            "end": 23
+                          }
+                        },
+                        "property": {
+                          "type": "Identifier",
+                          "name": "opened",
+                          "line": {
+                            "start": 27,
+                            "end": 27
+                          },
+                          "column": {
+                            "start": 24,
+                            "end": 30
+                          }
+                        },
+                        "line": {
+                          "start": 27,
+                          "end": 27
+                        },
+                        "column": {
+                          "start": 16,
+                          "end": 30
+                        }
+                      }
+                    ],
+                    "line": {
+                      "start": 27,
+                      "end": 27
+                    },
+                    "column": {
+                      "start": 9,
+                      "end": 30
+                    }
+                  }
+                ],
+                "line": {
+                  "start": 27,
+                  "end": 27
+                },
+                "column": {
+                  "start": 9,
+                  "end": 30
+                }
+              },
+              "line": {
+                "start": 26,
+                "end": 28
+              },
+              "column": {
+                "start": 26,
+                "end": 6
+              }
+            },
+            "line": {
+              "start": 26,
+              "end": 28
+            },
+            "column": {
+              "start": 5,
+              "end": 6
+            }
+          }
+        ],
+        "line": {
+          "start": 5,
+          "end": 29
+        },
+        "column": {
+          "start": 1,
+          "end": 2
+        }
+      },
+      {
+        "type": "ClassDeclaration",
+        "name": {
+          "type": "Identifier",
+          "name": "Savings",
+          "line": {
+            "start": 31,
+            "end": 31
+          },
+          "column": {
+            "start": 7,
+            "end": 14
+          }
+        },
+        "typeParams": [],
+        "superclass": {
+          "type": "Identifier",
+          "name": "Account",
+          "line": {
+            "start": 31,
+            "end": 31
+          },
+          "column": {
+            "start": 23,
+            "end": 30
+          }
+        },
+        "members": [
+          {
+            "type": "ClassMethod",
+            "name": {
+              "type": "Identifier",
+              "name": "peek",
+              "line": {
+                "start": 32,
+                "end": 32
+              },
+              "column": {
+                "start": 14,
+                "end": 18
+              }
+            },
+            "isStatic": false,
+            "func": {
+              "type": "FunctionBody",
+              "generics": [],
+              "params": [
+                {
+                  "type": "FunctionParameter",
+                  "name": "this",
+                  "line": {
+                    "start": 32,
+                    "end": 32
+                  },
+                  "column": {
+                    "start": 5,
+                    "end": 13
+                  }
+                }
+              ],
+              "hasVarargs": false,
+              "returnType": {
+                "type": "TypeReference",
+                "base": "number",
+                "typeArguments": [],
+                "line": {
+                  "start": 32,
+                  "end": 32
+                },
+                "column": {
+                  "start": 22,
+                  "end": 28
+                }
+              },
+              "body": {
+                "type": "Block",
+                "statements": [
+                  {
+                    "type": "ReturnStatement",
+                    "arguments": [
+                      {
+                        "type": "MemberExpression",
+                        "object": {
+                          "type": "Identifier",
+                          "name": "this",
+                          "line": {
+                            "start": 34,
+                            "end": 34
+                          },
+                          "column": {
+                            "start": 16,
+                            "end": 20
+                          }
+                        },
+                        "property": {
+                          "type": "Identifier",
+                          "name": "balance",
+                          "line": {
+                            "start": 34,
+                            "end": 34
+                          },
+                          "column": {
+                            "start": 21,
+                            "end": 28
+                          }
+                        },
+                        "line": {
+                          "start": 34,
+                          "end": 34
+                        },
+                        "column": {
+                          "start": 16,
+                          "end": 28
+                        }
+                      }
+                    ],
+                    "line": {
+                      "start": 34,
+                      "end": 34
+                    },
+                    "column": {
+                      "start": 9,
+                      "end": 28
+                    }
+                  }
+                ],
+                "line": {
+                  "start": 34,
+                  "end": 34
+                },
+                "column": {
+                  "start": 9,
+                  "end": 28
+                }
+              },
+              "line": {
+                "start": 32,
+                "end": 35
+              },
+              "column": {
+                "start": 18,
+                "end": 6
+              },
+              "isMethod": true
+            },
+            "line": {
+              "start": 32,
+              "end": 35
+            },
+            "column": {
+              "start": 5,
+              "end": 6
+            }
+          }
+        ],
+        "line": {
+          "start": 31,
+          "end": 36
+        },
+        "column": {
+          "start": 1,
+          "end": 2
+        }
+      },
+      {
+        "type": "VariableDeclaration",
+        "kind": "const",
+        "names": [
+          {
+            "type": "IdentifierPattern",
+            "name": "account",
+            "line": {
+              "start": 38,
+              "end": 38
+            },
+            "column": {
+              "start": 7,
+              "end": 14
+            }
+          }
+        ],
+        "init": [
+          {
+            "type": "NewExpression",
+            "callee": {
+              "type": "Identifier",
+              "name": "Account",
+              "line": {
+                "start": 38,
+                "end": 38
+              },
+              "column": {
+                "start": 21,
+                "end": 28
+              }
+            },
+            "arguments": [
+              {
+                "type": "StringLiteral",
+                "value": "ana",
+                "raw": "\"ana\"",
+                "line": {
+                  "start": 38,
+                  "end": 38
+                },
+                "column": {
+                  "start": 29,
+                  "end": 34
+                }
+              }
+            ],
+            "line": {
+              "start": 38,
+              "end": 38
+            },
+            "column": {
+              "start": 17,
+              "end": 35
+            }
+          }
+        ],
+        "line": {
+          "start": 38,
+          "end": 38
+        },
+        "column": {
+          "start": 1,
+          "end": 35
+        }
+      },
+      {
+        "type": "CallStatement",
+        "expression": {
+          "type": "MethodCallExpression",
+          "object": {
+            "type": "Identifier",
+            "name": "account",
+            "line": {
+              "start": 39,
+              "end": 39
+            },
+            "column": {
+              "start": 1,
+              "end": 8
+            }
+          },
+          "method": {
+            "type": "Identifier",
+            "name": "deposit",
+            "line": {
+              "start": 39,
+              "end": 39
+            },
+            "column": {
+              "start": 9,
+              "end": 16
+            }
+          },
+          "arguments": [
+            {
+              "type": "NumberLiteral",
+              "value": 10,
+              "raw": "10",
+              "line": {
+                "start": 39,
+                "end": 39
+              },
+              "column": {
+                "start": 17,
+                "end": 19
+              }
+            }
+          ],
+          "line": {
+            "start": 39,
+            "end": 39
+          },
+          "column": {
+            "start": 1,
+            "end": 20
+          }
+        },
+        "line": {
+          "start": 39,
+          "end": 39
+        },
+        "column": {
+          "start": 1,
+          "end": 20
+        }
+      },
+      {
+        "type": "VariableDeclaration",
+        "kind": "const",
+        "names": [
+          {
+            "type": "IdentifierPattern",
+            "name": "owner",
+            "line": {
+              "start": 40,
+              "end": 40
+            },
+            "column": {
+              "start": 7,
+              "end": 12
+            }
+          }
+        ],
+        "init": [
+          {
+            "type": "MemberExpression",
+            "object": {
+              "type": "Identifier",
+              "name": "account",
+              "line": {
+                "start": 40,
+                "end": 40
+              },
+              "column": {
+                "start": 15,
+                "end": 22
+              }
+            },
+            "property": {
+              "type": "Identifier",
+              "name": "owner",
+              "line": {
+                "start": 40,
+                "end": 40
+              },
+              "column": {
+                "start": 23,
+                "end": 28
+              }
+            },
+            "line": {
+              "start": 40,
+              "end": 40
+            },
+            "column": {
+              "start": 15,
+              "end": 28
+            }
+          }
+        ],
+        "line": {
+          "start": 40,
+          "end": 40
+        },
+        "column": {
+          "start": 1,
+          "end": 28
+        }
+      },
+      {
+        "type": "VariableDeclaration",
+        "kind": "const",
+        "names": [
+          {
+            "type": "IdentifierPattern",
+            "name": "balance",
+            "line": {
+              "start": 43,
+              "end": 43
+            },
+            "column": {
+              "start": 7,
+              "end": 14
+            }
+          }
+        ],
+        "init": [
+          {
+            "type": "MemberExpression",
+            "object": {
+              "type": "Identifier",
+              "name": "account",
+              "line": {
+                "start": 43,
+                "end": 43
+              },
+              "column": {
+                "start": 17,
+                "end": 24
+              }
+            },
+            "property": {
+              "type": "Identifier",
+              "name": "balance",
+              "line": {
+                "start": 43,
+                "end": 43
+              },
+              "column": {
+                "start": 25,
+                "end": 32
+              }
+            },
+            "line": {
+              "start": 43,
+              "end": 43
+            },
+            "column": {
+              "start": 17,
+              "end": 32
+            }
+          }
+        ],
+        "line": {
+          "start": 43,
+          "end": 43
+        },
+        "column": {
+          "start": 1,
+          "end": 32
+        }
+      },
+      {
+        "type": "CallStatement",
+        "expression": {
+          "type": "MethodCallExpression",
+          "object": {
+            "type": "Identifier",
+            "name": "account",
+            "line": {
+              "start": 45,
+              "end": 45
+            },
+            "column": {
+              "start": 1,
+              "end": 8
+            }
+          },
+          "method": {
+            "type": "Identifier",
+            "name": "check",
+            "line": {
+              "start": 45,
+              "end": 45
+            },
+            "column": {
+              "start": 9,
+              "end": 14
+            }
+          },
+          "arguments": [
+            {
+              "type": "NumberLiteral",
+              "value": 1,
+              "raw": "1",
+              "line": {
+                "start": 45,
+                "end": 45
+              },
+              "column": {
+                "start": 15,
+                "end": 16
+              }
+            }
+          ],
+          "line": {
+            "start": 45,
+            "end": 45
+          },
+          "column": {
+            "start": 1,
+            "end": 17
+          }
+        },
+        "line": {
+          "start": 45,
+          "end": 45
+        },
+        "column": {
+          "start": 1,
+          "end": 17
+        }
+      },
+      {
+        "type": "VariableDeclaration",
+        "kind": "const",
+        "names": [
+          {
+            "type": "IdentifierPattern",
+            "name": "opened",
+            "line": {
+              "start": 47,
+              "end": 47
+            },
+            "column": {
+              "start": 7,
+              "end": 13
+            }
+          }
+        ],
+        "init": [
+          {
+            "type": "MemberExpression",
+            "object": {
+              "type": "Identifier",
+              "name": "Account",
+              "line": {
+                "start": 47,
+                "end": 47
+              },
+              "column": {
+                "start": 16,
+                "end": 23
+              }
+            },
+            "property": {
+              "type": "Identifier",
+              "name": "opened",
+              "line": {
+                "start": 47,
+                "end": 47
+              },
+              "column": {
+                "start": 24,
+                "end": 30
+              }
+            },
+            "line": {
+              "start": 47,
+              "end": 47
+            },
+            "column": {
+              "start": 16,
+              "end": 30
+            }
+          }
+        ],
+        "line": {
+          "start": 47,
+          "end": 47
+        },
+        "column": {
+          "start": 1,
+          "end": 30
+        }
+      },
+      {
+        "type": "ClassDeclaration",
+        "name": {
+          "type": "Identifier",
+          "name": "Flags",
+          "line": {
+            "start": 50,
+            "end": 50
+          },
+          "column": {
+            "start": 7,
+            "end": 12
+          }
+        },
+        "typeParams": [],
+        "members": [
+          {
+            "type": "ClassField",
+            "name": {
+              "type": "Identifier",
+              "name": "private",
+              "line": {
+                "start": 51,
+                "end": 51
+              },
+              "column": {
+                "start": 5,
+                "end": 12
+              }
+            },
+            "isStatic": false,
+            "typeAnnotation": {
+              "type": "TypeReference",
+              "base": "boolean",
+              "typeArguments": [],
+              "line": {
+                "start": 51,
+                "end": 51
+              },
+              "column": {
+                "start": 14,
+                "end": 21
+              }
+            },
+            "init": {
+              "type": "BooleanLiteral",
+              "value": false,
+              "line": {
+                "start": 51,
+                "end": 51
+              },
+              "column": {
+                "start": 24,
+                "end": 29
+              }
+            },
+            "line": {
+              "start": 51,
+              "end": 51
+            },
+            "column": {
+              "start": 5,
+              "end": 29
+            }
+          },
+          {
+            "type": "ClassField",
+            "name": {
+              "type": "Identifier",
+              "name": "public",
+              "line": {
+                "start": 52,
+                "end": 52
+              },
+              "column": {
+                "start": 5,
+                "end": 11
+              }
+            },
+            "isStatic": false,
+            "init": {
+              "type": "BooleanLiteral",
+              "value": true,
+              "line": {
+                "start": 52,
+                "end": 52
+              },
+              "column": {
+                "start": 14,
+                "end": 18
+              }
+            },
+            "line": {
+              "start": 52,
+              "end": 52
+            },
+            "column": {
+              "start": 5,
+              "end": 18
+            }
+          }
+        ],
+        "line": {
+          "start": 50,
+          "end": 53
+        },
+        "column": {
+          "start": 1,
+          "end": 2
+        }
+      },
+      {
+        "type": "VariableDeclaration",
+        "kind": "const",
+        "names": [
+          {
+            "type": "IdentifierPattern",
+            "name": "flags",
+            "line": {
+              "start": 54,
+              "end": 54
+            },
+            "column": {
+              "start": 7,
+              "end": 12
+            }
+          }
+        ],
+        "init": [
+          {
+            "type": "NewExpression",
+            "callee": {
+              "type": "Identifier",
+              "name": "Flags",
+              "line": {
+                "start": 54,
+                "end": 54
+              },
+              "column": {
+                "start": 19,
+                "end": 24
+              }
+            },
+            "arguments": [],
+            "line": {
+              "start": 54,
+              "end": 54
+            },
+            "column": {
+              "start": 15,
+              "end": 26
+            }
+          }
+        ],
+        "line": {
+          "start": 54,
+          "end": 54
+        },
+        "column": {
+          "start": 1,
+          "end": 26
+        }
+      },
+      {
+        "type": "VariableDeclaration",
+        "kind": "const",
+        "names": [
+          {
+            "type": "IdentifierPattern",
+            "name": "shown",
+            "line": {
+              "start": 55,
+              "end": 55
+            },
+            "column": {
+              "start": 7,
+              "end": 12
+            }
+          }
+        ],
+        "init": [
+          {
+            "type": "MemberExpression",
+            "object": {
+              "type": "Identifier",
+              "name": "flags",
+              "line": {
+                "start": 55,
+                "end": 55
+              },
+              "column": {
+                "start": 15,
+                "end": 20
+              }
+            },
+            "property": {
+              "type": "Identifier",
+              "name": "private",
+              "line": {
+                "start": 55,
+                "end": 55
+              },
+              "column": {
+                "start": 21,
+                "end": 28
+              }
+            },
+            "line": {
+              "start": 55,
+              "end": 55
+            },
+            "column": {
+              "start": 15,
+              "end": 28
+            }
+          }
+        ],
+        "line": {
+          "start": 55,
+          "end": 55
+        },
+        "column": {
+          "start": 1,
+          "end": 28
+        }
+      }
+    ],
+    "line": {
+      "start": 5,
+      "end": 55
+    },
+    "column": {
+      "start": 1,
+      "end": 28
+    }
+  },
+  "line": {
+    "start": 5,
+    "end": 55
+  },
+  "column": {
+    "start": 1,
+    "end": 28
+  }
+}

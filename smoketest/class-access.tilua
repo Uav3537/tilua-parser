@@ -1,0 +1,55 @@
+-- `public` and `private` are checked, not lowered: a private member is an
+-- ordinary key at runtime, and reaching it from outside its class is a type
+-- error.
+
+class Account {
+    public owner: string
+    private balance = 0
+    private static opened = 0
+
+    constructor(owner: string) {
+        this.owner = owner
+        Account.opened += 1
+    }
+
+    public function deposit(amount: number): number {
+        this.balance = this:check(amount) + this.balance
+        return this.balance
+    }
+
+    private function check(amount: number): number {
+        -- A function nested in a method is still inside the class.
+        const positive = (n: number): number => (n > 0 ? n : 0)
+        return positive(amount)
+    }
+
+    static function count(): number {
+        return Account.opened
+    }
+}
+
+class Savings extends Account {
+    function peek(): number {
+        --@tilua-expect-error
+        return this.balance
+    }
+}
+
+const account = new Account("ana")
+account:deposit(10)
+const owner = account.owner
+
+--@tilua-expect-error
+const balance = account.balance
+--@tilua-expect-error
+account:check(1)
+--@tilua-expect-error
+const opened = Account.opened
+
+-- Still names, where a modifier could not go.
+class Flags {
+    private: boolean = false
+    public = true
+}
+const flags = new Flags()
+const shown = flags.private
