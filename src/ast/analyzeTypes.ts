@@ -10,7 +10,7 @@ import type { ScopeAnalysis, BindingId } from "./analyzeScopes"
 import { preludeProgram } from "./prelude"
 import {
     type Type, type ObjectProperty, type ObjectType, type FunctionType, type TypePredicate, type ClassInfo,
-    type GenericRefType,
+    type GenericRefType, type TypeOrigin,
     anyType, unknownType, declaredUnknownType, neverType, nilType, booleanType, numberType, stringType,
     primitive, literal, arrayOf, tuple, objectType, fn, union, intersection, optional,
     typeParam, substitute, unify, containsTypeParam, matchInfer, setAliasExpander, setDeferredBound, difference,
@@ -630,6 +630,9 @@ class TypeAnalyzer {
     private readonly aliases = new AliasMap()
     /** Uninstantiated alias definitions, for `Name<Args>` instantiation. */
     private readonly aliasDefs = new Map<string, AliasDef>()
+    /** Put on every ref to one of `aliasDefs`, so a module that imports the
+     *  type expands the ref here rather than by its name there. */
+    private readonly origin: TypeOrigin = { expand: t => this.expand(t) }
     /** See `resolveClass`. */
     private readonly classTypes = new WeakMap<DeclareClassStatement, ObjectType>()
     /** See `instanceType` — one instance type per `class ... end`. */
@@ -1128,6 +1131,7 @@ class TypeAnalyzer {
             kind: "genericRef",
             name: stmt.name.name,
             typeArguments: params.map(p => typeParam(p.name, p.constraint ? this.resolveType(p.constraint) : undefined)),
+            origin: this.origin,
         }
     }
 
@@ -1802,6 +1806,7 @@ class TypeAnalyzer {
                             kind: "genericRef",
                             name: node.base,
                             typeArguments: node.typeArguments.map(a => this.resolveType(a)),
+                            origin: this.origin,
                         })
                     }
                     const imported = this.importedTypes.get(node.base)
@@ -1817,6 +1822,7 @@ class TypeAnalyzer {
                         kind: "genericRef",
                         name,
                         typeArguments: node.typeArguments.map(a => this.resolveType(a)),
+                        origin: this.origin,
                     })
                 }
                 return {
@@ -4096,6 +4102,8 @@ class TypeAnalyzer {
      *  resolving, which is what breaks re-entry on a recursive alias. */
     private expand(t: Type): Type {
         if (t.kind !== "genericRef") return t
+        // A ref another module made: its name means what it meant there.
+        if (t.origin && t.origin !== this.origin) return t.origin.expand(t)
         const def = this.aliasDefs.get(t.name)
         // A generic type this file imported is not in `aliasDefs` — the module
         // it came from said what it is. A generic class arrives this way

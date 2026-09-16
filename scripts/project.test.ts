@@ -255,6 +255,35 @@ const rel = (path: string | undefined): string | undefined =>
     check("import type: `import type from` is a default import named type",
         analyze(`import type from "./shapes"\nprint(type)`, shapes).errors, [])
 
+    // A recursive alias keeps a ref to itself inside its structure. That ref
+    // means the alias of the module that wrote it, whatever the importer names.
+    const buttons = { "./buttons": [
+        "export type Btn = { SetLocked: (self: Btn, v: boolean) => (), Group?: { Current?: Btn } }",
+        "export type Card = { Button?: Btn }",
+    ].join("\n") }
+    const lockCard = (arg: string) => `function f(card: Card) { if (card.Button) { card.Button:SetLocked(${arg}) } }`
+    check("import type: a recursive alias works without importing its name",
+        analyze(`import type { Card } from "./buttons"\n${lockCard("true")}`, buttons).errors, [])
+    check("import type: and a local type of the same name does not replace it",
+        analyze(`import type { Card } from "./buttons"\ntype Btn = { Other: string }\n${lockCard("true")}`, buttons).errors, [])
+    check("import type: while a real mismatch is still reported",
+        analyze(`import type { Card } from "./buttons"\n${lockCard(`"x"`)}`, buttons).errors,
+        [`Argument of type '"x"' is not assignable to parameter of type 'boolean'`])
+
+    // Widening is for literals a program wrote, not for a type an alias names.
+    const iterate = (loop: string) => analyze([
+        "declare function pairs<T>(t: T): ((t: T, key?: unknown) => (unknown, unknown), T, nil)",
+        `type Btn = { Mode: "A" | "B" }`,
+        "type Card = { Button?: Btn }",
+        "declare cards: { [string]: Card }",
+        "function apply(c: Card) { }",
+        loop,
+    ].join("\n"))
+    check("widening: a value read from a declared table keeps its alias's literals",
+        iterate("for (_, card in pairs(cards)) { apply(card) }").errors, [])
+    check("widening: a fresh literal still widens",
+        iterate(`let fresh = { Mode: "A" }`).bindings.fresh, "{ Mode: string }")
+
     // An indexer is a promise about every key it covers.
     check("indexers: every property must hold the indexer's type", analyze([
         "declare find: () => string | nil",

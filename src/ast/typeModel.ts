@@ -184,7 +184,21 @@ export interface IntersectionType {
 
 /** An unresolved reference: an in-scope generic parameter, or a named type
  *  that couldn't be resolved to an alias in this pass. */
-export interface GenericRefType { kind: "genericRef"; name: string; typeArguments: Type[] }
+export interface GenericRefType {
+    kind: "genericRef"
+    name: string
+    typeArguments: Type[]
+    /** The module whose alias this names. A recursive alias is left as a ref
+     *  inside its own structure, and that ref travels with the type into every
+     *  module that imports it — where `name` may mean nothing, or a different
+     *  type. Expanding through `origin` reads the name where it was written. */
+    origin?: TypeOrigin
+}
+
+/** A module's own alias resolution, handed out on the refs it creates. */
+export interface TypeOrigin {
+    expand(t: GenericRefType): Type
+}
 
 // ------------------------------------------------------------
 // Type-level operators
@@ -441,7 +455,12 @@ export function substitute(t: Type, subst: Map<string, Type>): Type {
             return t.name && r.kind === "intersection" && !r.name ? { ...r, name: t.name } : r
         }
         case "genericRef":
-            return { kind: "genericRef", name: t.name, typeArguments: t.typeArguments.map(a => substitute(a, subst)) }
+            return {
+                kind: "genericRef",
+                name: t.name,
+                typeArguments: t.typeArguments.map(a => substitute(a, subst)),
+                ...(t.origin ? { origin: t.origin } : {}),
+            }
         case "keyof":
             return { kind: "keyof", target: substitute(t.target, subst) }
         case "templateLiteral":
@@ -671,6 +690,10 @@ export function optional(t: Type): Type {
  *  `local x = "foo"` binding, unless `as const` says otherwise). Recurses
  *  into arrays/tuples/objects/unions. */
 export function widen(t: Type): Type {
+    // A type an alias names was written down, not inferred from a literal, so
+    // there is nothing to widen — and widening into it would turn a declared
+    // `Mode: "A" | "B"` into `string` and break the alias it came from.
+    if (isAliasNamed(t)) return t
     switch (t.kind) {
         case "literal":
             return primitive(t.base)
@@ -746,9 +769,10 @@ export function isAssignable(rawA: Type, rawB: Type): boolean {
     if (expandAlias) {
         if (a.kind === "genericRef" && b.kind !== "genericRef") a = expandAlias(a)
         else if (b.kind === "genericRef" && a.kind !== "genericRef") b = expandAlias(b)
-        else if (a.kind === "genericRef" && b.kind === "genericRef" && a.name !== b.name) {
+        else if (a.kind === "genericRef" && b.kind === "genericRef" && !sameRefTarget(a, b)) {
             // Two different names can still be related — `Part` is an
-            // `Instance` — so compare what they stand for.
+            // `Instance` — so compare what they stand for. So can one name
+            // from two modules, which may or may not be the same type.
             a = expandAlias(a)
             b = expandAlias(b)
         }
@@ -902,11 +926,23 @@ function isAssignableInner(a: Type, b: Type): boolean {
     }
     if (b.kind === "typeParam") return false
     if (a.kind === "genericRef" || b.kind === "genericRef") {
-        return a.kind === "genericRef" && b.kind === "genericRef" && a.name === b.name &&
+        return a.kind === "genericRef" && b.kind === "genericRef" && sameRefTarget(a, b) &&
             a.typeArguments.length === b.typeArguments.length &&
             a.typeArguments.every((x, i) => equalTypes(x, b.typeArguments[i]))
     }
     return false
+}
+
+function isAliasNamed(t: Type): boolean {
+    if (t.kind === "object" || t.kind === "intersection") return t.name !== undefined
+    return (t as { alias?: string }).alias !== undefined
+}
+
+/** Do two refs name the same alias? The same name from two different modules
+ *  does not. A ref with no origin (a generic parameter, a name nothing
+ *  declares) is taken at its name, as before. */
+function sameRefTarget(a: GenericRefType, b: GenericRefType): boolean {
+    return a.name === b.name && (!a.origin || !b.origin || a.origin === b.origin)
 }
 
 /** `()` — an empty type pack, produced by `-> ()` and by falling off the end
