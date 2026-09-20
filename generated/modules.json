@@ -770,118 +770,72 @@
                 },
                 {
                   "type": "ReturnStatement",
-                  "arguments": [
-                    {
-                      "type": "CallExpression",
-                      "callee": {
-                        "type": "MemberExpression",
-                        "object": {
-                          "type": "Identifier",
-                          "name": "math",
-                          "line": {
-                            "start": 13,
-                            "end": 13
-                          },
-                          "column": {
-                            "start": 12,
-                            "end": 16
-                          }
-                        },
-                        "property": {
-                          "type": "Identifier",
-                          "name": "sqrt",
-                          "line": {
-                            "start": 13,
-                            "end": 13
-                          },
-                          "column": {
-                            "start": 17,
-                            "end": 21
-                          }
-                        },
+                  "argument": {
+                    "type": "CallExpression",
+                    "callee": {
+                      "type": "MemberExpression",
+                      "object": {
+                        "type": "Identifier",
+                        "name": "math",
                         "line": {
                           "start": 13,
                           "end": 13
                         },
                         "column": {
                           "start": 12,
+                          "end": 16
+                        }
+                      },
+                      "property": {
+                        "type": "Identifier",
+                        "name": "sqrt",
+                        "line": {
+                          "start": 13,
+                          "end": 13
+                        },
+                        "column": {
+                          "start": 17,
                           "end": 21
                         }
                       },
-                      "arguments": [
-                        {
+                      "line": {
+                        "start": 13,
+                        "end": 13
+                      },
+                      "column": {
+                        "start": 12,
+                        "end": 21
+                      }
+                    },
+                    "arguments": [
+                      {
+                        "type": "BinaryExpression",
+                        "operator": "+",
+                        "left": {
                           "type": "BinaryExpression",
-                          "operator": "+",
+                          "operator": "*",
                           "left": {
-                            "type": "BinaryExpression",
-                            "operator": "*",
-                            "left": {
-                              "type": "Identifier",
-                              "name": "dx",
-                              "line": {
-                                "start": 13,
-                                "end": 13
-                              },
-                              "column": {
-                                "start": 22,
-                                "end": 24
-                              }
-                            },
-                            "right": {
-                              "type": "Identifier",
-                              "name": "dx",
-                              "line": {
-                                "start": 13,
-                                "end": 13
-                              },
-                              "column": {
-                                "start": 27,
-                                "end": 29
-                              }
-                            },
+                            "type": "Identifier",
+                            "name": "dx",
                             "line": {
                               "start": 13,
                               "end": 13
                             },
                             "column": {
                               "start": 22,
-                              "end": 29
+                              "end": 24
                             }
                           },
                           "right": {
-                            "type": "BinaryExpression",
-                            "operator": "*",
-                            "left": {
-                              "type": "Identifier",
-                              "name": "dy",
-                              "line": {
-                                "start": 13,
-                                "end": 13
-                              },
-                              "column": {
-                                "start": 32,
-                                "end": 34
-                              }
-                            },
-                            "right": {
-                              "type": "Identifier",
-                              "name": "dy",
-                              "line": {
-                                "start": 13,
-                                "end": 13
-                              },
-                              "column": {
-                                "start": 37,
-                                "end": 39
-                              }
-                            },
+                            "type": "Identifier",
+                            "name": "dx",
                             "line": {
                               "start": 13,
                               "end": 13
                             },
                             "column": {
-                              "start": 32,
-                              "end": 39
+                              "start": 27,
+                              "end": 29
                             }
                           },
                           "line": {
@@ -890,20 +844,64 @@
                           },
                           "column": {
                             "start": 22,
+                            "end": 29
+                          }
+                        },
+                        "right": {
+                          "type": "BinaryExpression",
+                          "operator": "*",
+                          "left": {
+                            "type": "Identifier",
+                            "name": "dy",
+                            "line": {
+                              "start": 13,
+                              "end": 13
+                            },
+                            "column": {
+                              "start": 32,
+                              "end": 34
+                            }
+                          },
+                          "right": {
+                            "type": "Identifier",
+                            "name": "dy",
+                            "line": {
+                              "start": 13,
+                              "end": 13
+                            },
+                            "column": {
+                              "start": 37,
+                              "end": 39
+                            }
+                          },
+                          "line": {
+                            "start": 13,
+                            "end": 13
+                          },
+                          "column": {
+                            "start": 32,
                             "end": 39
                           }
+                        },
+                        "line": {
+                          "start": 13,
+                          "end": 13
+                        },
+                        "column": {
+                          "start": 22,
+                          "end": 39
                         }
-                      ],
-                      "line": {
-                        "start": 13,
-                        "end": 13
-                      },
-                      "column": {
-                        "start": 12,
-                        "end": 40
                       }
+                    ],
+                    "line": {
+                      "start": 13,
+                      "end": 13
+                    },
+                    "column": {
+                      "start": 12,
+                      "end": 40
                     }
-                  ],
+                  },
                   "line": {
                     "start": 13,
                     "end": 13
@@ -1073,147 +1071,145 @@
             "statements": [
               {
                 "type": "ReturnStatement",
-                "arguments": [
-                  {
-                    "type": "CallExpression",
-                    "callee": {
-                      "type": "Identifier",
-                      "name": "helper",
-                      "line": {
-                        "start": 19,
-                        "end": 19
-                      },
-                      "column": {
-                        "start": 12,
-                        "end": 18
-                      }
-                    },
-                    "arguments": [
-                      {
-                        "type": "CallExpression",
-                        "callee": {
-                          "type": "Identifier",
-                          "name": "clamp",
-                          "line": {
-                            "start": 19,
-                            "end": 19
-                          },
-                          "column": {
-                            "start": 19,
-                            "end": 24
-                          }
-                        },
-                        "arguments": [
-                          {
-                            "type": "CallExpression",
-                            "callee": {
-                              "type": "Identifier",
-                              "name": "lerp",
-                              "line": {
-                                "start": 19,
-                                "end": 19
-                              },
-                              "column": {
-                                "start": 25,
-                                "end": 29
-                              }
-                            },
-                            "arguments": [
-                              {
-                                "type": "NumberLiteral",
-                                "value": 0,
-                                "raw": "0",
-                                "line": {
-                                  "start": 19,
-                                  "end": 19
-                                },
-                                "column": {
-                                  "start": 30,
-                                  "end": 31
-                                }
-                              },
-                              {
-                                "type": "NumberLiteral",
-                                "value": 10,
-                                "raw": "10",
-                                "line": {
-                                  "start": 19,
-                                  "end": 19
-                                },
-                                "column": {
-                                  "start": 33,
-                                  "end": 35
-                                }
-                              },
-                              {
-                                "type": "NumberLiteral",
-                                "value": 0.5,
-                                "raw": "0.5",
-                                "line": {
-                                  "start": 19,
-                                  "end": 19
-                                },
-                                "column": {
-                                  "start": 37,
-                                  "end": 40
-                                }
-                              }
-                            ],
-                            "line": {
-                              "start": 19,
-                              "end": 19
-                            },
-                            "column": {
-                              "start": 25,
-                              "end": 41
-                            }
-                          },
-                          {
-                            "type": "NumberLiteral",
-                            "value": 0,
-                            "raw": "0",
-                            "line": {
-                              "start": 19,
-                              "end": 19
-                            },
-                            "column": {
-                              "start": 43,
-                              "end": 44
-                            }
-                          },
-                          {
-                            "type": "Identifier",
-                            "name": "version",
-                            "line": {
-                              "start": 19,
-                              "end": 19
-                            },
-                            "column": {
-                              "start": 46,
-                              "end": 53
-                            }
-                          }
-                        ],
-                        "line": {
-                          "start": 19,
-                          "end": 19
-                        },
-                        "column": {
-                          "start": 19,
-                          "end": 54
-                        }
-                      }
-                    ],
+                "argument": {
+                  "type": "CallExpression",
+                  "callee": {
+                    "type": "Identifier",
+                    "name": "helper",
                     "line": {
                       "start": 19,
                       "end": 19
                     },
                     "column": {
                       "start": 12,
-                      "end": 55
+                      "end": 18
                     }
+                  },
+                  "arguments": [
+                    {
+                      "type": "CallExpression",
+                      "callee": {
+                        "type": "Identifier",
+                        "name": "clamp",
+                        "line": {
+                          "start": 19,
+                          "end": 19
+                        },
+                        "column": {
+                          "start": 19,
+                          "end": 24
+                        }
+                      },
+                      "arguments": [
+                        {
+                          "type": "CallExpression",
+                          "callee": {
+                            "type": "Identifier",
+                            "name": "lerp",
+                            "line": {
+                              "start": 19,
+                              "end": 19
+                            },
+                            "column": {
+                              "start": 25,
+                              "end": 29
+                            }
+                          },
+                          "arguments": [
+                            {
+                              "type": "NumberLiteral",
+                              "value": 0,
+                              "raw": "0",
+                              "line": {
+                                "start": 19,
+                                "end": 19
+                              },
+                              "column": {
+                                "start": 30,
+                                "end": 31
+                              }
+                            },
+                            {
+                              "type": "NumberLiteral",
+                              "value": 10,
+                              "raw": "10",
+                              "line": {
+                                "start": 19,
+                                "end": 19
+                              },
+                              "column": {
+                                "start": 33,
+                                "end": 35
+                              }
+                            },
+                            {
+                              "type": "NumberLiteral",
+                              "value": 0.5,
+                              "raw": "0.5",
+                              "line": {
+                                "start": 19,
+                                "end": 19
+                              },
+                              "column": {
+                                "start": 37,
+                                "end": 40
+                              }
+                            }
+                          ],
+                          "line": {
+                            "start": 19,
+                            "end": 19
+                          },
+                          "column": {
+                            "start": 25,
+                            "end": 41
+                          }
+                        },
+                        {
+                          "type": "NumberLiteral",
+                          "value": 0,
+                          "raw": "0",
+                          "line": {
+                            "start": 19,
+                            "end": 19
+                          },
+                          "column": {
+                            "start": 43,
+                            "end": 44
+                          }
+                        },
+                        {
+                          "type": "Identifier",
+                          "name": "version",
+                          "line": {
+                            "start": 19,
+                            "end": 19
+                          },
+                          "column": {
+                            "start": 46,
+                            "end": 53
+                          }
+                        }
+                      ],
+                      "line": {
+                        "start": 19,
+                        "end": 19
+                      },
+                      "column": {
+                        "start": 19,
+                        "end": 54
+                      }
+                    }
+                  ],
+                  "line": {
+                    "start": 19,
+                    "end": 19
+                  },
+                  "column": {
+                    "start": 12,
+                    "end": 55
                   }
-                ],
+                },
                 "line": {
                   "start": 19,
                   "end": 19

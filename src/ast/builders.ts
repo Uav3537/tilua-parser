@@ -14,18 +14,18 @@ import type {
     BindingTarget, IdentifierPattern, ObjectPattern, ObjectPatternProperty,
     ArrayPattern, ArrayPatternElement, SpreadElement,
     Identifier, NilLiteral, BooleanLiteral, NumberLiteral, StringLiteral,
-    InterpolatedStringExpression, InterpolatedStringPart, VarargExpression,
+    InterpolatedStringExpression, InterpolatedStringPart,
     FunctionExpression, FunctionBody, FunctionParameter,
     TableExpression, TableField, ArrayExpression,
     BinaryExpression, UnaryExpression, MemberExpression, IndexExpression,
     CallExpression, MethodCallExpression, ParenthesizedExpression,
-    ClassDeclaration, ClassExpression, ClassMember, ClassAccessibility, NewExpression, SuperExpression,
+    ClassDeclaration, ClassExpression, ClassMember, ClassAccessibility, SuperExpression,
     TypeAssertionExpression, AsConstExpression, IfElseExpression, ErrorExpression,
     TypeReference, TypeLiteralString, TypeLiteralBoolean, TypeLiteralNumber, TableTypeNode,
     ArrayTypeNode, TupleTypeNode,
     TableTypeProperty, FunctionTypeNode, FunctionTypeParameter,
     UnionTypeNode, IntersectionTypeNode, SatisfiesExpression,
-    ParenthesizedTypeNode, TypeofTypeNode, VariadicTypeNode, TypePackNode,
+    ParenthesizedTypeNode, TypeofTypeNode,
 } from "@ast/nodes"
 
 /** Give a class method its receiver: a real first parameter named `this`,
@@ -33,6 +33,13 @@ import type {
  *  the analyzer knows the class it belongs to, which is the only thing that
  *  works for a generic class (`Box<T>`) and for one written as a value. Every
  *  later pass then sees an ordinary parameter. */
+/** What bare `...` is instead. */
+const NO_DOTS = "tilua has no bare '...': take a rest parameter, '...args: T[]', or 'scriptArgs' for the script's own"
+
+/** Words that can open a class member before what it is. */
+const ACCESSIBILITIES: ReadonlySet<string> = new Set(["public", "private", "protected"])
+const CLASS_MODIFIERS: ReadonlySet<string> = new Set([...ACCESSIBILITIES, "static", "abstract", "override", "readonly"])
+
 function bindThis(func: FunctionBody, at: Span): void {
     bindThisParam(func.params, at)
     func.isMethod = true
@@ -336,13 +343,16 @@ export class Parser {
     }
 
     /** A comma-separated list of values: a `return`'s, a declaration's, an
-     *  assignment's. `...xs` spreads an array into it, as in a call's
-     *  arguments; bare `...` is the vararg pack, as it always was. */
+     *  assignment's. Each is one value; a spread belongs in a call's
+     *  arguments or an array, and is reported here — then read as one, so
+     *  the rest still means something. */
     private expressionListOr(stop: () => boolean): Expression[] {
         const until = (): boolean => stop() || this.checkPunctuator(",")
-        const item = (): Expression => this.checkOperator("...") && this.startsSpread()
-            ? this.parseSpreadArgument(until)
-            : this.expressionOr(until)
+        const item = (): Expression => {
+            if (!(this.checkOperator("...") && this.startsSpread())) return this.expressionOr(until)
+            this.problem("A spread goes in a call's arguments or an array: take values out of an array with a destructuring, 'const [a, b] = xs'")
+            return this.parseSpreadArgument(until)
+        }
         const list = [item()]
         while (this.matchPunctuator(",")) list.push(item())
         return list
@@ -738,8 +748,7 @@ export class Parser {
 
         // `class` is a soft keyword: it only starts a declaration when a name
         // follows it, so `const class = 1` and `t.class` still read as names.
-        if (t.type === "Identifier" && (t as any).value === "class" &&
-            this.peek(1).type === "Identifier") {
+        if (this.startsClassDeclaration()) {
             return this.parseClassDeclaration()
         }
 
@@ -787,8 +796,6 @@ export class Parser {
                 type: "FunctionTypeNode",
                 generics: head.generics,
                 params,
-                hasVarargs: head.hasVarargs,
-                varargType: head.varargTypeAnnotation,
                 returnType: head.returnType ??
                     { type: "TypeReference", base: head.predicate ? "boolean" : "unknown", typeArguments: [], ...spanFrom(start, start) },
                 predicate: head.predicate,
@@ -948,8 +955,7 @@ export class Parser {
             this.advance()
             // `export default class Name ... end` declares `Name` here too,
             // as TypeScript's does; anonymous, it is an ordinary expression.
-            const declaration = this.checkIdentifierValue("class") && this.peek(1).type === "Identifier" &&
-                !this.punctuatorAt(2, ":") && !this.operatorAt(2, "=") && !this.punctuatorAt(2, "(")
+            const declaration = this.startsClassDeclaration()
                 ? this.parseClassDeclaration()
                 : this.parseExpression(0)
             return { type: "ExportDefaultStatement", declaration, ...spanFrom(start, this.previous()) }
@@ -965,7 +971,7 @@ export class Parser {
             return { type: "ExportStatement", declaration, ...spanFrom(start, this.previous()) }
         }
 
-        if (this.checkIdentifierValue("class") && this.peek(1).type === "Identifier") {
+        if (this.startsClassDeclaration()) {
             const declaration = this.parseClassDeclaration()
             return { type: "ExportStatement", declaration, ...spanFrom(start, this.previous()) }
         }
@@ -1101,10 +1107,17 @@ export class Parser {
         // ends it is the `)`.
         this.expectPunctuator("(")
 
+        // `for (const item in source)`: one value each time, named the way
+        // any other value is — `let` when the body assigns to it.
+        const declared = this.checkKeyword("const") || this.checkKeyword("let")
+            ? ((this.advance() as { value: string }).value as "const" | "let")
+            : undefined
         const first = this.parseBindingTarget(true)
 
         const untilDo = (): boolean => this.checkPunctuator(")")
         if (first.type === "IdentifierPattern" && this.matchOperator("=")) {
+            // A counting loop names its own variable: `for (i = 1, 10)`.
+            if (declared) this.problemAt(start, `A counting loop names its variable without '${declared}': 'for (i = 1, 10)'`)
             const from = this.expressionOr(() => untilDo() || this.checkPunctuator(","))
             this.expectPunctuator(",")
             const to = this.expressionOr(() => untilDo() || this.checkPunctuator(","))
@@ -1121,16 +1134,28 @@ export class Parser {
             }
         }
 
-        const variables: BindingTarget[] = [first]
-        while (this.matchPunctuator(",")) {
-            variables.push(this.parseBindingTarget(true))
+        // Luau's `for k, v in ...` takes several values each time; tilua's
+        // loop takes one, and an array is taken apart like any other. That is
+        // the whole of what is wrong with the line, so a missing `const` goes
+        // unsaid here.
+        if (this.checkPunctuator(",")) {
+            this.problemAt(this.current(), "A loop takes one value each time: take its parts with a destructuring, 'for (const [k, v] in pairs(t))'")
+            while (this.matchPunctuator(",")) this.parseBindingTarget(true)
+        } else if (!declared) {
+            this.problemAt(start, "A loop over a source names its value with 'const' or 'let': 'for (const item in source)'")
         }
         this.expectKeyword("in")
-        const iterators = this.expressionListOr(untilDo)
+        const iterator = this.expressionOr(() => untilDo() || this.checkPunctuator(","))
+        // `in f, s, v` is Luau's pack of three; tilua's is one array.
+        if (this.checkPunctuator(",")) {
+            this.problemAt(this.current(), "A loop has one source: an array, a table, an iterator function or an iteration '[step, state, first]'")
+            while (this.matchPunctuator(",")) this.expressionOr(() => untilDo() || this.checkPunctuator(","))
+        }
         const body = this.parseForBody()
         return {
             type: "GenericForStatement",
-            variables, iterators, body,
+            kind: declared ?? "const",
+            variable: first, iterator, body,
             ...spanFrom(start, this.previous()),
         }
     }
@@ -1212,7 +1237,11 @@ export class Parser {
      *  the compiler must not accept it, and recorded inside. The message says
      *  what is wrong on its own — no token is appended. */
     private problem(message: string): void {
-        const t = this.current()
+        this.problemAt(this.current(), message)
+    }
+
+    /** `problem`, pointed at `t` rather than at where parsing has got to. */
+    private problemAt(t: Token, message: string): void {
         const error = new ParseError(message, t.line.start, t.column.start)
         if (!this.recover) throw error
         this.record(error)
@@ -1226,15 +1255,32 @@ export class Parser {
      *  like a function (`function m() ... end`). */
     private parseClassDeclaration(): ClassDeclaration {
         const start = this.current()
+        const isAbstract = this.checkIdentifierValue("abstract")
+        if (isAbstract) this.advance()
         this.advance() // 'class'
         const name = this.parseIdentifier()
         const typeParams = this.checkOperator("<") ? this.parseGenericTypeParameterList() : []
         const { superclass, superArguments } = this.parseExtends()
+        const shapes = this.parseImplements()
         const members = this.parseClassBody(start)
         return {
-            type: "ClassDeclaration", name, typeParams, superclass, superArguments, members,
+            type: "ClassDeclaration", name, typeParams, superclass, superArguments,
+            ...(shapes ? { implements: shapes } : {}),
+            ...(isAbstract ? { isAbstract } : {}),
+            members,
             ...spanFrom(start, this.previous()),
         }
+    }
+
+    /** `class Name` or `abstract class Name` — all three words soft, so a name
+     *  has to follow for either to be a declaration: `class: T`, `class = 1`
+     *  and `abstract(x)` are names. */
+    private startsClassDeclaration(): boolean {
+        const offset = this.checkIdentifierValue("abstract") ? 1 : 0
+        const word = this.peek(offset)
+        if (word.type !== "Identifier" || (word as { value?: unknown }).value !== "class") return false
+        return this.peek(offset + 1).type === "Identifier"
+            && !this.punctuatorAt(offset + 2, ":") && !this.operatorAt(offset + 2, "=") && !this.punctuatorAt(offset + 2, "(")
     }
 
     /** `class ... end` as a value. It may be named — the name is for the class
@@ -1251,8 +1297,22 @@ export class Parser {
             this.error("A class written as a value takes no type parameters: nothing could write the arguments")
         }
         const { superclass, superArguments } = this.parseExtends()
+        const shapes = this.parseImplements()
         const members = this.parseClassBody(start)
-        return { type: "ClassExpression", name, superclass, superArguments, members, ...spanFrom(start, this.previous()) }
+        return {
+            type: "ClassExpression", name, superclass, superArguments,
+            ...(shapes ? { implements: shapes } : {}),
+            members, ...spanFrom(start, this.previous()),
+        }
+    }
+
+    /** `implements Shape, Named` — each a type, checked against the instance. */
+    private parseImplements(): TypeNode[] | undefined {
+        if (!this.checkIdentifierValue("implements")) return undefined
+        this.advance()
+        const shapes = [this.parseType()]
+        while (this.matchPunctuator(",")) shapes.push(this.parseType())
+        return shapes
     }
 
     /** `extends Base` / `extends Box<number>`. */
@@ -1310,30 +1370,72 @@ export class Parser {
 
     private parseClassMember(): ClassMember | undefined {
         const start = this.current()
-        // `public` / `private` are soft keywords as well: `private: boolean`
-        // and `public()` still name a member.
+        // Every modifier is a soft keyword: `private: boolean`, `readonly = 1`
+        // and `static()` still name a member. A word is a modifier only when
+        // the member goes on after it.
         let accessibility: ClassAccessibility | undefined
-        if ((this.checkIdentifierValue("public") || this.checkIdentifierValue("private")) &&
-            !this.punctuatorAt(1, ":") && !this.operatorAt(1, "=") && !this.punctuatorAt(1, "(")) {
-            accessibility = (this.advance() as { value: string }).value as ClassAccessibility
+        const modifiers = new Set<string>()
+        while (this.startsClassModifier()) {
+            const token = this.advance()
+            const word = (token as { value: string }).value
+            if (ACCESSIBILITIES.has(word)) {
+                if (accessibility) this.problemAt(token, `A member has one accessibility: '${accessibility}' is already written`)
+                accessibility = word as ClassAccessibility
+            } else {
+                if (modifiers.has(word)) this.problemAt(token, `'${word}' is written twice`)
+                modifiers.add(word)
+            }
         }
-        const member = this.parseClassMemberAfterAccessibility(start)
-        if (!accessibility || !member) return member
+        const member = this.parseClassMemberAfterModifiers(start, modifiers)
+        if (!member) return member
+        const misplaced = (message: string): void => this.problemAt(start, message)
         if (member.type === "ClassConstructor") {
-            this.problem(`A constructor cannot be '${accessibility}'`)
+            const written = [...(accessibility ? [accessibility] : []), ...modifiers]
+            if (written.length) misplaced(`A constructor cannot be '${written[0]}'`)
             return member
         }
-        return { ...member, accessibility }
+        if (modifiers.has("readonly") && member.type !== "ClassField") misplaced("Only a field can be 'readonly'")
+        if (modifiers.has("abstract") && member.type !== "ClassMethod") misplaced("Only a method can be 'abstract'")
+        if (modifiers.has("abstract") && member.isStatic) misplaced("A static method cannot be 'abstract'")
+        if (modifiers.has("override") && member.isStatic) misplaced("A static member cannot be 'override'")
+        return {
+            ...member,
+            ...(accessibility ? { accessibility } : {}),
+            ...(modifiers.has("readonly") && member.type === "ClassField" ? { isReadonly: true } : {}),
+            ...(modifiers.has("override") ? { isOverride: true } : {}),
+        }
     }
 
-    private parseClassMemberAfterAccessibility(start: Token): ClassMember | undefined {
-        // `static` is a soft keyword — `static: number` is still a field.
-        const isStatic = this.checkIdentifierValue("static") && !this.punctuatorAt(1, ":") && !this.operatorAt(1, "=")
-        if (isStatic) this.advance()
+    /** Is the word here a member modifier, rather than a member's name? */
+    private startsClassModifier(): boolean {
+        const t = this.current()
+        if (t.type !== "Identifier" || !CLASS_MODIFIERS.has((t as { value: string }).value)) return false
+        const next = this.peek(1)
+        return next.type === "Identifier" || (next.type === "Keyword" && (next as { value?: unknown }).value === "function")
+    }
+
+    private parseClassMemberAfterModifiers(start: Token, modifiers: ReadonlySet<string>): ClassMember | undefined {
+        const isStatic = modifiers.has("static")
 
         if (this.checkKeyword("function")) {
             this.advance()
             const memberName = this.parseIdentifier()
+            // `abstract function area(): number` — the head is all there is.
+            if (modifiers.has("abstract")) {
+                const head = this.parseFunctionHead()
+                const func: FunctionBody = {
+                    type: "FunctionBody",
+                    generics: head.generics, params: head.params, hasVarargs: head.hasVarargs,
+                    returnType: head.returnType,
+                    predicate: head.predicate,
+                    body: { type: "Block", statements: [], ...spanFrom(head.start, this.previous()) } as Block,
+                    ...spanFrom(head.start, this.previous()),
+                }
+                if (!isStatic) bindThis(func, start)
+                if (!head.returnType) this.problem("An abstract method has no body to infer from: write its return type")
+                if (this.checkPunctuator("{")) this.problem("An abstract method has no body")
+                return { type: "ClassMethod", name: memberName, isStatic, func, isAbstract: true, ...spanFrom(start, this.previous()) }
+            }
             // Overloads inside a class are written as they are outside one:
             // bodyless heads for the same name, then the implementation.
             const signatures: FunctionSignature[] = []
@@ -1465,12 +1567,19 @@ export class Parser {
     private parseReturnStatement(stopAtNewline = false): ReturnStatement {
         const start = this.current()
         this.expectKeyword("return")
-        let args: Expression[] = []
+        let argument: Expression | undefined
         const pastLine = (): boolean => stopAtNewline && this.current().line.start > start.line.start
         if (!pastLine() && this.isExpressionStart()) {
-            args = this.expressionListOr(pastLine)
+            const values = this.expressionListOr(pastLine)
+            argument = values[0]
+            // A function gives back one value. Several are an array, which
+            // is what the rest of the file is read as once this is reported.
+            if (values.length > 1) {
+                this.problemAt(start, "A function returns one value: return several as an array, 'return [a, b]'")
+                argument = { type: "ArrayExpression", elements: values, ...spanFrom(values[0], values[values.length - 1]) }
+            }
         }
-        return { type: "ReturnStatement", arguments: args, ...spanFrom(start, this.previous()) }
+        return { type: "ReturnStatement", argument, ...spanFrom(start, this.previous()) }
     }
 
     private parseTypeAliasStatement(): TypeAliasStatement {
@@ -1541,8 +1650,7 @@ export class Parser {
             }
         }
 
-        if (first.type === "CallExpression" || first.type === "MethodCallExpression" ||
-            first.type === "NewExpression") {
+        if (first.type === "CallExpression" || first.type === "MethodCallExpression") {
             return { type: "CallStatement", expression: first, ...spanFrom(start, this.previous()) }
         }
 
@@ -1611,6 +1719,17 @@ export class Parser {
             return found
         }
         return false
+    }
+
+    /** A string written straight before a method call — `"a":upper()`, or
+     *  `` `{n}`:rep(2) ``. Luau only takes `("a"):upper()`; the compiler adds
+     *  the parentheses. Anything else after a string (`"a".x`, `"a"(1)`) is
+     *  not a prefix expression here either. */
+    private startsStringMethodCall(): boolean {
+        const t = this.current()
+        const isString = t.type === "InterpolatedString" ||
+            (t.type === "Literal" && (t as { kind?: unknown }).kind === "string")
+        return isString && this.punctuatorAt(1, ":") && this.startsMethodCall(1)
     }
 
     /** Does the next token start right where the current one ends? */
@@ -1828,6 +1947,9 @@ export class Parser {
     private parseAtom(): Expression {
         const t = this.current()
 
+        // `"a":upper()`: Luau wants the string in parentheses; tilua does not.
+        if (this.startsStringMethodCall()) return this.parsePrefixExpression()
+
         if (t.type === "Literal") {
             this.advance()
             const lit = t as any
@@ -1849,8 +1971,9 @@ export class Parser {
         }
 
         if (t.type === "Operator" && (t as any).value === "...") {
+            this.problem(NO_DOTS)
             this.advance()
-            return { type: "VarargExpression", ...spanFrom(t, t) } as VarargExpression
+            return { type: "ErrorExpression", ...spanFrom(t, t) } as ErrorExpression
         }
 
         if (t.type === "Keyword" && (t as any).value === "function") {
@@ -1946,12 +2069,22 @@ export class Parser {
         let base: Expression
 
         if (this.startsNew()) {
-            base = this.parseNewExpression()
-        } else if (this.classDepth > 0 && this.checkIdentifierValue("super") && this.startsSuperUse()) {
+            // Luau builds an instance with the class's own function; tilua
+            // writes it the same way. Reported, then read as the name after it
+            // so the rest of the expression still means something to tooling.
+            this.problem("tilua has no 'new' operator: construct with 'Name.new(...)'")
+            this.advance()
+        }
+        if (this.classDepth > 0 && this.checkIdentifierValue("super") && this.startsSuperUse()) {
             this.advance()
             base = { type: "SuperExpression", ...spanFrom(start, start) }
         } else if (this.checkType("Identifier")) {
             base = this.parseIdentifier()
+        } else if (this.startsStringMethodCall()) {
+            const t = this.advance() as any
+            base = t.type === "InterpolatedString"
+                ? this.buildInterpolatedString(t)
+                : { type: "StringLiteral", value: t.value, raw: t.raw, ...spanFrom(t, t) } as StringLiteral
         } else if (this.matchPunctuator("(")) {
             const inner = this.inBrackets(() => this.parseExpression())
             this.expectPunctuator(")")
@@ -2058,9 +2191,9 @@ export class Parser {
         return base
     }
 
-    /** `new` is a soft keyword: it starts a construction only when a name
-     *  follows it, so a function or field called `new` — `Instance.new(x)`,
-     *  and `Vec.new(1)` itself — is untouched. */
+    /** `new Name(...)`, the way other languages build an instance — only to
+     *  say so. A function or field called `new` — `Instance.new(x)`, and
+     *  `Vec.new(1)` itself — is untouched. */
     private startsNew(): boolean {
         return this.checkIdentifierValue("new") && this.peek(1).type === "Identifier"
     }
@@ -2070,26 +2203,6 @@ export class Parser {
      *  be spelled that way. */
     private startsSuperUse(): boolean {
         return this.punctuatorAt(1, "(") || (this.punctuatorAt(1, ".") && this.peek(2).type === "Identifier")
-    }
-
-    /** `new Name(args)` / `new Module.Name(args)`. The callee is a name, or a
-     *  name reached through a module — never an arbitrary expression, so the
-     *  arguments are unambiguously the constructor's. */
-    private parseNewExpression(): NewExpression {
-        const start = this.current()
-        this.advance() // 'new'
-        let callee: Expression = this.parseIdentifier()
-        while (this.checkPunctuator(".") && this.peek(1).type === "Identifier") {
-            this.advance()
-            const property = this.parseIdentifier()
-            callee = { type: "MemberExpression", object: callee, property, ...spanFrom(start, property) }
-        }
-        const typeArguments = this.tryCallTypeArguments()
-        if (!this.checkPunctuator("(")) {
-            this.error("Expected '(' after the class being constructed: 'new Name(...)'")
-        }
-        const args = this.parseCallArguments()
-        return { type: "NewExpression", callee, arguments: args, typeArguments, ...spanFrom(start, this.previous()) }
     }
 
     /** After `...`, is there something to spread? Nothing following it means
@@ -2134,14 +2247,14 @@ export class Parser {
     /** `f<A, B>(x)` — type arguments, when that is what this is. `a < b > (c)`
      *  is three operators, and only what follows the `>` tells them apart, so
      *  this reads ahead and puts the cursor back when the guess was wrong. */
-    private tryCallTypeArguments(): (TypeNode | TypePackNode)[] | undefined {
+    private tryCallTypeArguments(): TypeNode[] | undefined {
         if (!this.checkOperator("<")) return undefined
         const start = this.cursor
         const errors = this.errors.length
         try {
             this.advance()
-            const list: (TypeNode | TypePackNode)[] = [this.parseTypeArgument()]
-            while (this.matchPunctuator(",") && !this.checkOperator(">")) list.push(this.parseTypeArgument())
+            const list: TypeNode[] = [this.parseType()]
+            while (this.matchPunctuator(",") && !this.checkOperator(">")) list.push(this.parseType())
             this.expectOperator(">")
             if (!this.startsCallArguments()) throw new ParseRecover("not a call")
             return list
@@ -2295,10 +2408,9 @@ export class Parser {
         while (!this.checkPunctuator("]")) {
             if (this.checkOperator("...")) {
                 const dots = this.advance()
-                // `[...]` is the varargs themselves, as Lua's `{...}` is —
-                // nothing follows the dots to spread. `[...xs]` spreads `xs`.
+                // `[...xs]` spreads `xs`; `[...]` spreads nothing tilua has.
                 if (this.checkPunctuator("]") || this.checkPunctuator(",")) {
-                    elements.push({ type: "VarargExpression", ...spanFrom(dots, dots) })
+                    this.problemAt(dots, NO_DOTS)
                 } else {
                     const argument = this.expressionOr(stop)
                     elements.push({ type: "SpreadElement", argument, ...spanFrom(dots, argument) })
@@ -2469,36 +2581,14 @@ export class Parser {
         }
     }
 
-    private parseTypeOrTypePackReference(): TypeNode {
+    /** `T...` written where a type goes: a pack, which tilua does not have. */
+    private rejectPackReference(): void {
         if (this.checkType("Identifier") && this.peek(1).type === "Operator" && (this.peek(1) as any).value === "...") {
-            const start = this.current()
-            const base = this.expectIdentifier().value as string
+            this.problemAt(this.peek(1),
+                "tilua has no type packs: several values are a tuple, '[A, B]', and a varying number an array, 'T[]'")
             this.advance()
-            const packRef: TypeReference = { type: "TypeReference", base, typeArguments: [], ...spanFrom(start, start) }
-            return {
-                type: "TypePackNode",
-                types: [],
-                hasVarargs: true,
-                // Wrap in `VariadicTypeNode`, matching the convention used by
-                // `parseFunctionTypeAfterParen`'s identifier-pack-reference
-                // branch, so the printer can tell `A...` (name-first, this
-                // case) apart from `...T` (dots-first) and append rather
-                // than prepend the `...`.
-                varargType: { type: "VariadicTypeNode", typeAnnotation: packRef, ...spanFrom(start, this.previous()) } as VariadicTypeNode,
-                ...spanFrom(start, this.previous()),
-            } as TypePackNode
+            this.advance()
         }
-        return this.parseType()
-    }
-
-    private parseTypeArgument(): TypeNode | TypePackNode {
-        if (this.checkOperator("...")) {
-            return this.parseTypePack()
-        }
-        if (this.checkType("Identifier") && this.peek(1).type === "Operator" && (this.peek(1) as any).value === "...") {
-            return this.parseTypeOrTypePackReference()
-        }
-        return this.parseType()
     }
 
     /** The part shared by a real function body and an overload signature:
@@ -2508,7 +2598,6 @@ export class Parser {
         generics: GenericTypeParameter[]
         params: FunctionParameter[]
         hasVarargs: boolean
-        varargTypeAnnotation?: TypeNode
         returnType?: TypeNode
         predicate?: TypePredicateNode
     } {
@@ -2521,7 +2610,6 @@ export class Parser {
         this.expectPunctuator("(")
         const params: FunctionParameter[] = []
         let hasVarargs = false
-        let varargTypeAnnotation: TypeNode | undefined
 
         if (!this.checkPunctuator(")")) {
             while (true) {
@@ -2529,8 +2617,8 @@ export class Parser {
                     const dots = this.advance()
                     hasVarargs = true
                     // `...rest: T[]` — JavaScript's rest parameter: everything
-                    // from here on, as an array. Bare `...` and `...: T` stay
-                    // Lua's pack, which `const a, b = ...` reads.
+                    // from here on, as an array. It is the only way to take a
+                    // varying number of arguments.
                     if (this.checkType("Identifier")) {
                         const nameTok = this.expectIdentifier()
                         let typeAnnotation: TypeNode | undefined
@@ -2548,9 +2636,19 @@ export class Parser {
                         }
                         break
                     }
+                    // `...` or `...: T`: reported, and read as the rest
+                    // parameter it would be — `...args: T[]`.
+                    this.problemAt(dots, NO_DOTS)
+                    let typeAnnotation: TypeNode | undefined
                     if (this.matchPunctuator(":")) {
-                        varargTypeAnnotation = this.parseTypeOrTypePackReference()
+                        this.rejectPackReference()
+                        const element = this.parseType()
+                        typeAnnotation = { type: "ArrayTypeNode", element, ...spanFrom(element, element) } as TypeNode
                     }
+                    params.push({
+                        type: "FunctionParameter", name: "args", typeAnnotation, rest: true,
+                        ...spanFrom(dots, this.previous()),
+                    })
                     break
                 }
                 const paramStart = this.current()
@@ -2593,11 +2691,18 @@ export class Parser {
         if (this.matchPunctuator(":")) {
             predicate = this.tryParseTypePredicate()
             if (!predicate) {
-                returnType = this.attempt<TypeNode | undefined>(() => this.parseTypeOrTypePackReference(), () => false, () => undefined)
+                returnType = this.attempt<TypeNode | undefined>(() => this.parseReturnType(), () => false, () => undefined)
             }
         }
 
-        return { start, generics, params, hasVarargs, varargTypeAnnotation, returnType, predicate }
+        return { start, generics, params, hasVarargs, returnType, predicate }
+    }
+
+    /** What a function returns: one type. `T...` is reported as the pack it
+     *  is, and the type after it read. */
+    private parseReturnType(): TypeNode {
+        this.rejectPackReference()
+        return this.parseType()
     }
 
     /** TypeScript-style type-guard return annotations, in return position only:
@@ -2671,7 +2776,6 @@ export class Parser {
                     generics: [] as GenericTypeParameter[],
                     params: [{ type: "FunctionParameter", name: name.value as string, ...spanFrom(name, name) } as FunctionParameter],
                     hasVarargs: false,
-                    varargTypeAnnotation: undefined as TypeNode | undefined,
                     returnType: undefined as TypeNode | undefined,
                     predicate: undefined as TypePredicateNode | undefined,
                 }
@@ -2684,7 +2788,7 @@ export class Parser {
         const func: FunctionBody = {
             type: "FunctionBody",
             generics: head.generics, params: head.params, hasVarargs: head.hasVarargs,
-            varargTypeAnnotation: head.varargTypeAnnotation, returnType: head.returnType,
+            returnType: head.returnType,
             predicate: head.predicate, body,
             ...spanFrom(start, this.previous()),
         }
@@ -2694,7 +2798,7 @@ export class Parser {
     /** A one-expression body: the value is what the function returns. */
     private returnOf(expression: Expression): Block {
         const statement: ReturnStatement = {
-            type: "ReturnStatement", arguments: [expression], ...spanFrom(expression, expression),
+            type: "ReturnStatement", argument: expression, ...spanFrom(expression, expression),
         }
         return { type: "Block", statements: [statement], ...spanFrom(expression, expression) }
     }
@@ -2705,7 +2809,7 @@ export class Parser {
         return {
             type: "FunctionBody",
             generics: head.generics, params: head.params, hasVarargs: head.hasVarargs,
-            varargTypeAnnotation: head.varargTypeAnnotation, returnType: head.returnType,
+            returnType: head.returnType,
             predicate: head.predicate, body,
             ...spanFrom(head.start, this.previous()),
         }
@@ -2715,7 +2819,7 @@ export class Parser {
         return {
             type: "FunctionSignature",
             generics: head.generics, params: head.params, hasVarargs: head.hasVarargs,
-            varargTypeAnnotation: head.varargTypeAnnotation, returnType: head.returnType,
+            returnType: head.returnType,
             predicate: head.predicate,
             ...spanFrom(head.start, this.previous()),
         }
@@ -2732,7 +2836,7 @@ export class Parser {
         return {
             type: "FunctionBody",
             generics: head.generics, params: head.params, hasVarargs: head.hasVarargs,
-            varargTypeAnnotation: head.varargTypeAnnotation, returnType: head.returnType,
+            returnType: head.returnType,
             predicate: head.predicate, body,
             ...spanFrom(head.start, this.previous()),
         }
@@ -2887,26 +2991,38 @@ export class Parser {
         }
 
         if (t.type === "Operator" && (t as any).value === "...") {
+            // Reported, and read as the array it would be.
+            this.problem("'...' in a type goes before a rest parameter, '...args: T[]', or at the end of a tuple, '[A, ...B[]]'")
             this.advance()
-            const inner = this.parseType()
-            return { type: "VariadicTypeNode", typeAnnotation: inner, ...spanFrom(t, this.previous()) }
+            const element = this.parseType()
+            return { type: "ArrayTypeNode", element, ...spanFrom(t, this.previous()) } as TypeNode
         }
 
         if (t.type === "Punctuator" && (t as any).value === "{") {
             return this.parseTableType()
         }
 
-        // `[number, string]` — tuple type.
+        // `[number, string]` — tuple type; `[string, ...number[]]` ends in a
+        // rest of as many as there are.
         if (t.type === "Punctuator" && (t as any).value === "[") {
             this.advance()
             const elements: TypeNode[] = []
+            let rest: TypeNode | undefined
             while (!this.checkPunctuator("]")) {
+                if (this.matchOperator("...")) {
+                    rest = this.parseType()
+                    if (rest.type !== "ArrayTypeNode" && !(rest.type === "TypeReference" && rest.base !== "nil")) {
+                        this.problem("The rest of a tuple is an array type: '...T[]'")
+                    }
+                    this.matchPunctuator(",")
+                    break
+                }
                 elements.push(this.parseType())
                 if (this.matchPunctuator(",")) continue
                 break
             }
             this.expectPunctuator("]")
-            return { type: "TupleTypeNode", elements, ...spanFrom(t, this.previous()) } as TupleTypeNode
+            return { type: "TupleTypeNode", elements, ...(rest ? { rest } : {}), ...spanFrom(t, this.previous()) } as TupleTypeNode
         }
 
         if (t.type === "Identifier" && (t as any).value === "typeof" && this.peek(1).type === "Punctuator" && (this.peek(1) as any).value === "(") {
@@ -2959,13 +3075,13 @@ export class Parser {
                 namespace = base
                 base = this.expectIdentifier().value as string
             }
-            const typeArguments: (TypeNode | TypePackNode)[] = []
+            const typeArguments: TypeNode[] = []
             if (this.checkOperator("<")) {
                 this.advance()
                 if (!this.checkOperator(">")) {
-                    typeArguments.push(this.parseTypeArgument())
+                    typeArguments.push(this.parseType())
                     while (this.matchPunctuator(",") && !this.checkOperator(">")) {
-                        typeArguments.push(this.parseTypeArgument())
+                        typeArguments.push(this.parseType())
                     }
                 }
                 this.expectOperator(">")
@@ -2978,16 +3094,15 @@ export class Parser {
 
     private parseFunctionTypeAfterParen(start: Token, generics: GenericTypeParameter[]): TypeNode {
         const params: FunctionTypeParameter[] = []
-        let hasVarargs = false
-        let varargType: TypeNode | undefined
+        let rested = false
 
         if (!this.checkPunctuator(")")) {
             while (true) {
                 if (this.checkOperator("...")) {
                     const dots = this.advance()
-                    hasVarargs = true
-                    // `(...rest: T[]) -> R`: the same call signature as
-                    // `(...T) -> R`, written the way the body receives it.
+                    rested = true
+                    // `(...rest: T[]) => R` — the only way a function type
+                    // takes a varying number of arguments.
                     if (this.checkType("Identifier") && this.punctuatorAt(1, ":")) {
                         const nameTok = this.expectIdentifier()
                         this.advance() // ':'
@@ -3001,17 +3116,21 @@ export class Parser {
                         })
                         break
                     }
-                    varargType = this.parseType()
+                    // `(...T)`: reported, and read as `(...args: T[])`.
+                    this.problemAt(dots, "A function type takes the rest of its arguments as an array: '(...args: T[]) => R'")
+                    this.rejectPackReference()
+                    const element = this.parseType()
+                    params.push({
+                        type: "FunctionTypeParameter", name: "args", rest: true,
+                        typeAnnotation: { type: "ArrayTypeNode", element, ...spanFrom(element, element) } as TypeNode,
+                        ...spanFrom(dots, this.previous()),
+                    })
                     break
                 }
 
                 if (this.checkType("Identifier") && this.peek(1).type === "Operator" && (this.peek(1) as any).value === "...") {
-                    const packStart = this.current()
-                    const packRef = this.parseType()
-                    this.advance()
-                    hasVarargs = true
-                    varargType = { type: "VariadicTypeNode", typeAnnotation: packRef, ...spanFrom(packStart, this.previous()) } as VariadicTypeNode
-                    break
+                    this.rejectPackReference()
+                    continue
                 }
 
                 let name: string | undefined
@@ -3053,15 +3172,15 @@ export class Parser {
             const predicate = this.tryParseTypePredicate()
             const returnType: TypeNode = predicate
                 ? { type: "TypeReference", base: "boolean", typeArguments: [], ...spanFrom(start, this.previous()) }
-                : this.parseTypeOrTypePackReference()
+                : this.parseReturnType()
             return {
                 type: "FunctionTypeNode",
-                generics, params, hasVarargs, varargType, returnType, predicate,
+                generics, params, returnType, predicate,
                 ...spanFrom(start, this.previous()),
             } as FunctionTypeNode
         }
 
-        if (params.length === 1 && !params[0].name && !hasVarargs) {
+        if (params.length === 1 && !params[0].name && !rested) {
             return {
                 type: "ParenthesizedTypeNode",
                 typeAnnotation: params[0].typeAnnotation,
@@ -3073,12 +3192,18 @@ export class Parser {
             this.error("Expected '=>' for function type")
         }
 
+        // `()` and `(A, B)` are packs, which tilua does not have: nothing is
+        // `nil`, and several values are a tuple. Reported, and read as that.
+        if (!params.length) {
+            this.problemAt(start, "'()' is not a type: a function that returns nothing returns 'nil'")
+            return { type: "TypeReference", base: "nil", typeArguments: [], ...spanFrom(start, this.previous()) } as TypeReference
+        }
+        this.problemAt(start, "Several types in parentheses are a pack, which tilua does not have: write a tuple, '[A, B]'")
         return {
-            type: "TypePackNode",
-            types: params.map(p => p.typeAnnotation),
-            hasVarargs, varargType,
+            type: "TupleTypeNode",
+            elements: params.map(p => p.typeAnnotation),
             ...spanFrom(start, this.previous()),
-        } as TypePackNode
+        } as TupleTypeNode
     }
 
     /** Could this token begin a type? Used to keep `keyof` a soft keyword. */
@@ -3228,32 +3353,6 @@ export class Parser {
         return { type: "TableTypeNode", properties, ...spanFrom(start, this.previous()) }
     }
 
-    private parseTypePack(): TypePackNode {
-        const start = this.current()
-        if (this.matchOperator("...")) {
-            const varargType = this.parseType()
-            return { type: "TypePackNode", types: [], hasVarargs: true, varargType, ...spanFrom(start, this.previous()) }
-        }
-        this.expectPunctuator("(")
-        const types: TypeNode[] = []
-        let hasVarargs = false
-        let varargType: TypeNode | undefined
-        if (!(this.current().type === "Punctuator" && (this.current() as any).value === ")")) {
-            while (true) {
-                if (this.matchOperator("...")) {
-                    hasVarargs = true
-                    varargType = this.parseType()
-                    break
-                }
-                types.push(this.parseType())
-                if (this.matchPunctuator(",")) continue
-                break
-            }
-        }
-        this.expectPunctuator(")")
-        return { type: "TypePackNode", types, hasVarargs, varargType, ...spanFrom(start, this.previous()) }
-    }
-
     private parseGenericTypeParameterList(): GenericTypeParameter[] {
         const list: GenericTypeParameter[] = []
         this.expectOperator("<")
@@ -3262,28 +3361,26 @@ export class Parser {
             // parameter cannot itself be named `const`.
             const isConst = this.matchKeyword("const")
             const nameTok = this.expectIdentifier()
-            let isPack = false
-            if (this.matchOperator("...")) {
-                isPack = true
+            // `T...`: a pack parameter. The arguments it stood for are a
+            // tuple type now — `<T extends unknown[]>`, taken by `...args: T`.
+            const dots = this.checkOperator("...") ? this.advance() : undefined
+            if (dots) {
+                this.problemAt(dots, "tilua has no pack parameters: write '<T extends unknown[]>', and take it as '...args: T'")
             }
             let constraint: TypeNode | undefined
             if (this.checkIdentifierValue("extends")) {
                 this.advance()
                 constraint = this.parseType()
             }
-            let def: TypeNode | TypePackNode | undefined
+            let def: TypeNode | undefined
             if (this.matchOperator("=")) {
-                if (isPack) {
-                    def = this.parseTypePack()
-                } else {
-                    def = this.parseType()
-                }
+                this.rejectPackReference()
+                def = this.parseType()
             }
             list.push({
                 type: "GenericTypeParameter",
                 name: nameTok.value as string,
                 id: tokenIdentifier(nameTok),
-                isPack,
                 isConst: isConst || undefined,
                 constraint,
                 default: def,

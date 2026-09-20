@@ -409,78 +409,33 @@
             "statements": [
               {
                 "type": "ReturnStatement",
-                "arguments": [
-                  {
-                    "type": "BinaryExpression",
-                    "operator": "*",
-                    "left": {
-                      "type": "MemberExpression",
-                      "object": {
-                        "type": "Identifier",
-                        "name": "s",
-                        "line": {
-                          "start": 15,
-                          "end": 15
-                        },
-                        "column": {
-                          "start": 12,
-                          "end": 13
-                        }
-                      },
-                      "property": {
-                        "type": "Identifier",
-                        "name": "w",
-                        "line": {
-                          "start": 15,
-                          "end": 15
-                        },
-                        "column": {
-                          "start": 14,
-                          "end": 15
-                        }
-                      },
+                "argument": {
+                  "type": "BinaryExpression",
+                  "operator": "*",
+                  "left": {
+                    "type": "MemberExpression",
+                    "object": {
+                      "type": "Identifier",
+                      "name": "s",
                       "line": {
                         "start": 15,
                         "end": 15
                       },
                       "column": {
                         "start": 12,
-                        "end": 15
+                        "end": 13
                       }
                     },
-                    "right": {
-                      "type": "MemberExpression",
-                      "object": {
-                        "type": "Identifier",
-                        "name": "s",
-                        "line": {
-                          "start": 15,
-                          "end": 15
-                        },
-                        "column": {
-                          "start": 18,
-                          "end": 19
-                        }
-                      },
-                      "property": {
-                        "type": "Identifier",
-                        "name": "h",
-                        "line": {
-                          "start": 15,
-                          "end": 15
-                        },
-                        "column": {
-                          "start": 20,
-                          "end": 21
-                        }
-                      },
+                    "property": {
+                      "type": "Identifier",
+                      "name": "w",
                       "line": {
                         "start": 15,
                         "end": 15
                       },
                       "column": {
-                        "start": 18,
-                        "end": 21
+                        "start": 14,
+                        "end": 15
                       }
                     },
                     "line": {
@@ -489,10 +444,53 @@
                     },
                     "column": {
                       "start": 12,
+                      "end": 15
+                    }
+                  },
+                  "right": {
+                    "type": "MemberExpression",
+                    "object": {
+                      "type": "Identifier",
+                      "name": "s",
+                      "line": {
+                        "start": 15,
+                        "end": 15
+                      },
+                      "column": {
+                        "start": 18,
+                        "end": 19
+                      }
+                    },
+                    "property": {
+                      "type": "Identifier",
+                      "name": "h",
+                      "line": {
+                        "start": 15,
+                        "end": 15
+                      },
+                      "column": {
+                        "start": 20,
+                        "end": 21
+                      }
+                    },
+                    "line": {
+                      "start": 15,
+                      "end": 15
+                    },
+                    "column": {
+                      "start": 18,
                       "end": 21
                     }
+                  },
+                  "line": {
+                    "start": 15,
+                    "end": 15
+                  },
+                  "column": {
+                    "start": 12,
+                    "end": 21
                   }
-                ],
+                },
                 "line": {
                   "start": 15,
                   "end": 15

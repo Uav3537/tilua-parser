@@ -1,8 +1,8 @@
-c1: number | nil
-c2: number | nil
+c1: (number | nil)[]
+c2: (number | nil)[]
 c3: number | nil
-choose: (flag: boolean, o: Counter, other: Counter) => (Counter, number)
-connect: (host: string, timeout: number | nil, port: number | nil) => (number | nil, number | nil)
+choose: (flag: boolean, o: Counter, other: Counter) => (Counter | number)[]
+connect: (host: string, timeout: number | nil, port: number | nil) => (number | nil)[]
 describe: (n: number, flag: boolean) => string
 flag: boolean
 flag: boolean

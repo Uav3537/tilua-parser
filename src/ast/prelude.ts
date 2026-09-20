@@ -33,8 +33,8 @@ type Exclude<T, U> = T - U
 type Extract<T, U> = T extends U ? T : never
 type NonNullable<T> = T - nil
 
-type ReturnType<T> = T extends (...unknown) => infer R ? R : never
-type Parameters<T> = T extends (...infer P) => unknown ? P : never
+type ReturnType<T> = T extends (...args: unknown[]) => infer R ? R : never
+type Parameters<T> = T extends (...args: infer P) => unknown ? P : never
 
 type Partial<T> = { [K in keyof T]?: T[K] }
 type Required<T> = { [K in keyof T]-?: T[K] }

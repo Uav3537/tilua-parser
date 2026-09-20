@@ -60,14 +60,10 @@ export interface LiteralType {
 /** `T[]` */
 export interface ArrayType { kind: "array"; element: Type; alias?: string }
 
-/** `[A, B, C]` — fixed length.
- *
- *  `isPack` marks the other thing this shape is used for: a *type pack*, the
- *  several values a Lua function returns (`(number, string)`). The two are
- *  structurally identical but behave differently in an expression list — a
- *  pack spreads across several names, a tuple is one value — so they have to
- *  be told apart. */
-export interface TupleType { kind: "tuple"; elements: Type[]; isPack?: boolean; alias?: string }
+/** `[A, B, C]` — fixed length; `[A, ...B[]]` — at least that, then any
+ *  number of `B`. `rest` is the element type of that tail. A tuple is an
+ *  array, a table like any other: several results are one of these. */
+export interface TupleType { kind: "tuple"; elements: Type[]; rest?: Type; alias?: string }
 
 export interface ObjectProperty {
     type: Type
@@ -75,8 +71,12 @@ export interface ObjectProperty {
     readonly?: boolean
     /** A class member written `private`: reachable only from inside the class
      *  that declared it. `owner` is that class's node, compared by identity;
-     *  `className` is how a diagnostic names it. Checked, never lowered. */
-    private?: { owner: object; className: string }
+     *  `className` is how a diagnostic names it. Checked, never lowered.
+     *  `protected` widens that to the classes extending it. */
+    private?: { owner: object; className: string; protected?: boolean }
+    /** An `abstract` class member: declared, with nothing behind it until a
+     *  class extending this one writes it. */
+    abstract?: boolean
 }
 export interface ObjectType {
     kind: "object"
@@ -150,8 +150,14 @@ export interface TypePredicate {
 export interface FunctionType {
     kind: "function"
     params: FunctionParam[]
+    /** The type of each argument a rest parameter (`...args: T[]`) collects —
+     *  or, with `restIsWhole`, the rest parameter's own type. */
     varargs?: Type
-    /** A tuple when the function returns multiple values. */
+    /** `...args: A` where `A` is a tuple, or a type parameter standing for
+     *  one (`<A extends unknown[]>`): `varargs` is `A` itself, and once `A`
+     *  is known its elements are the parameters. */
+    restIsWhole?: boolean
+    /** What the function returns: one value — several are an array. */
     returns: Type
     /** Names of the function's own generic parameters (`function f<T>(...)`).
      *  `params` / `returns` may contain `typeParam` nodes for these. */
@@ -366,8 +372,13 @@ export function arrayOf(element: Type): ArrayType {
     return { kind: "array", element }
 }
 
-export function tuple(elements: Type[], isPack?: boolean): TupleType {
-    return { kind: "tuple", elements, isPack }
+export function tuple(elements: Type[], rest?: Type): TupleType {
+    return rest ? { kind: "tuple", elements, rest } : { kind: "tuple", elements }
+}
+
+/** Every element type a tuple can hold, the rest's included. */
+export function tupleMembers(t: TupleType): Type[] {
+    return t.rest ? [...t.elements, t.rest] : t.elements
 }
 
 export function objectType(
@@ -408,7 +419,7 @@ export function substitute(t: Type, subst: Map<string, Type>): Type {
         case "array":
             return arrayOf(substitute(t.element, subst))
         case "tuple":
-            return tuple(t.elements.map(e => substitute(e, subst)), t.isPack)
+            return tuple(t.elements.map(e => substitute(e, subst)), t.rest && substitute(t.rest, subst))
         case "object": {
             const entries: [string, ObjectProperty][] = []
             for (const [k, v] of t.properties) entries.push([k, { ...v, type: substitute(v.type, subst) }])
@@ -437,16 +448,23 @@ export function substitute(t: Type, subst: Map<string, Type>): Type {
                 : subst
             let params = t.params.map(p => ({ ...p, type: substitute(p.type, inner) }))
             let varargs = t.varargs && substitute(t.varargs, inner)
-            // `(T...) -> ()` with `T` bound to a pack: the pack's values are the
-            // parameters.
-            if (varargs?.kind === "tuple" && varargs.isPack) {
+            let restIsWhole = t.restIsWhole
+            // `(...args: A) => R` with `A` now known: a tuple's elements are
+            // the parameters, and its rest (or an array's element) is what
+            // the rest parameter still collects.
+            if (restIsWhole && varargs?.kind === "tuple") {
                 params = [...params, ...varargs.elements.map(type => ({ type }))]
-                varargs = undefined
+                varargs = varargs.rest
+                restIsWhole = undefined
+            } else if (restIsWhole && varargs?.kind === "array") {
+                varargs = varargs.element
+                restIsWhole = undefined
             }
             return {
                 kind: "function",
                 params,
                 varargs,
+                ...(restIsWhole ? { restIsWhole } : {}),
                 returns: substitute(t.returns, inner),
                 typeParams: t.typeParams,
                 typeParamDefaults: t.typeParamDefaults,
@@ -549,11 +567,19 @@ export function unify(param: Type, arg: Type, vars: Set<string>, out: Map<string
     switch (param.kind) {
         case "array":
             if (arg.kind === "array") unify(param.element, arg.element, vars, out)
-            else if (arg.kind === "tuple") for (const e of arg.elements) unify(param.element, e, vars, out)
+            else if (arg.kind === "tuple") for (const e of tupleMembers(arg)) unify(param.element, e, vars, out)
             return
         case "tuple":
-            if (arg.kind === "tuple") param.elements.forEach((p, i) => arg.elements[i] && unify(p, arg.elements[i], vars, out))
-            else if (arg.kind === "array") for (const p of param.elements) unify(p, arg.element, vars, out)
+            if (arg.kind === "tuple") {
+                param.elements.forEach((p, i) => {
+                    const a = arg.elements[i] ?? arg.rest
+                    if (a) unify(p, a, vars, out)
+                })
+                if (param.rest) for (const a of arg.elements.slice(param.elements.length)) unify(param.rest, a, vars, out)
+                if (param.rest && arg.rest) unify(param.rest, arg.rest, vars, out)
+            } else if (arg.kind === "array") {
+                for (const p of tupleMembers(param)) unify(p, arg.element, vars, out)
+            }
             return
         case "function":
             if (arg.kind === "function") {
@@ -708,7 +734,7 @@ export function widen(t: Type): Type {
         case "array":
             return arrayOf(widen(t.element))
         case "tuple":
-            return tuple(t.elements.map(widen), t.isPack)
+            return tuple(t.elements.map(widen), t.rest && widen(t.rest))
         case "object": {
             if (t.frozen || t.class) return t
             const entries: [string, ObjectProperty][] = []
@@ -880,14 +906,20 @@ function isAssignableInner(a: Type, b: Type): boolean {
 
     if (a.kind === "array") {
         if (b.kind === "array") return isAssignable(a.element, b.element)
+        if (b.kind === "tuple") return b.elements.length === 0 && !!b.rest && isAssignable(a.element, b.rest)
         return false
     }
     if (a.kind === "tuple") {
         if (b.kind === "tuple") {
-            return a.elements.length === b.elements.length &&
-                a.elements.every((t, i) => isAssignable(t, b.elements[i]))
+            // Each of `b`'s fixed places has to be filled by one of `a`'s;
+            // what `a` has beyond them goes in `b`'s rest, if it has one.
+            if (a.elements.length < b.elements.length) return false
+            if (!b.elements.every((t, i) => isAssignable(a.elements[i], t))) return false
+            const extra = [...a.elements.slice(b.elements.length), ...(a.rest ? [a.rest] : [])]
+            if (!b.rest) return extra.length === 0
+            return extra.every(t => isAssignable(t, b.rest!))
         }
-        if (b.kind === "array") return a.elements.every(t => isAssignable(t, b.element))
+        if (b.kind === "array") return tupleMembers(a).every(t => isAssignable(t, b.element))
         return false
     }
     if (a.kind === "object") {
@@ -953,10 +985,9 @@ function sameRefTarget(a: GenericRefType, b: GenericRefType): boolean {
     return a.name === b.name && (!a.origin || !b.origin || a.origin === b.origin)
 }
 
-/** `()` — an empty type pack, produced by `-> ()` and by falling off the end
- *  of a function. */
+/** `[]` — no values at all. A function that returns nothing returns `nil`. */
 function isNoValue(t: Type): boolean {
-    return t.kind === "tuple" && t.elements.length === 0
+    return t.kind === "tuple" && t.elements.length === 0 && !t.rest
 }
 
 export function equalTypes(a: Type, b: Type): boolean {
@@ -1116,7 +1147,7 @@ function containsFreeTypeParam(t: Type, seen: Set<Type>, bound: Set<string>): bo
         case "typeParam": return !bound.has(t.name)
         case "infer": return !bound.has(t.name)
         case "array": return containsTypeParam(t.element, seen, bound)
-        case "tuple": return t.elements.some(e => containsTypeParam(e, seen, bound))
+        case "tuple": return tupleMembers(t).some(e => containsTypeParam(e, seen, bound))
         case "union":
         case "intersection": return t.types.some(m => containsTypeParam(m, seen, bound))
         case "object":
@@ -1185,17 +1216,19 @@ export function matchInfer(arg: Type, pattern: Type, out: Map<string, Type>): bo
     switch (pattern.kind) {
         case "array":
             if (arg.kind === "array") return matchInfer(arg.element, pattern.element, out)
-            if (arg.kind === "tuple") return matchInfer(union(arg.elements), pattern.element, out)
+            if (arg.kind === "tuple") return matchInfer(union(tupleMembers(arg)), pattern.element, out)
             return false
         case "tuple":
             if (arg.kind !== "tuple" || arg.elements.length !== pattern.elements.length) return false
+            if (pattern.rest && !matchInfer(arg.rest ?? neverType, pattern.rest, out)) return false
             return pattern.elements.every((pt, i) => matchInfer(arg.elements[i], pt, out))
         case "function": {
             if (arg.kind !== "function") return false
-            // `(...infer P) -> R` collects the whole parameter list as a tuple —
-            // this is how `Parameters<T>` is expressed.
+            // `(...args: infer P) => R` collects the whole parameter list as a
+            // tuple — this is how `Parameters<T>` is expressed.
             if (pattern.varargs?.kind === "infer" && !pattern.params.length) {
-                out.set(pattern.varargs.name, tuple(arg.params.map(p => p.type)))
+                out.set(pattern.varargs.name, tuple(arg.params.map(p => p.type),
+                    arg.varargs && !arg.restIsWhole ? arg.varargs : undefined))
             } else {
                 for (let i = 0; i < pattern.params.length; i++) {
                     if (!arg.params[i]) return false
@@ -1289,7 +1322,7 @@ function collectTypeParams(t: Type | undefined, out: Map<string, Type>, seen = n
             collectTypeParams(t.constraint, out, seen)
             return
         case "array": collectTypeParams(t.element, out, seen); return
-        case "tuple": for (const e of t.elements) collectTypeParams(e, out, seen); return
+        case "tuple": for (const e of tupleMembers(t)) collectTypeParams(e, out, seen); return
         case "union":
         case "intersection": for (const m of t.types) collectTypeParams(m, out, seen); return
         case "keyof": collectTypeParams(t.target, out, seen); return
@@ -1327,10 +1360,8 @@ function formatTypeUncached(t: Type): string {
         case "literal": return t.base === "string" ? JSON.stringify(t.value) : String(t.value)
         case "array": return `${formatAtom(t.element)}[]`
         case "tuple": {
-            if (!t.elements.length) return "()"
-            const inner = t.elements.map(formatType).join(", ")
-            // A pack prints the way it is written: `(number, string)`.
-            return t.isPack ? `(${inner})` : `[${inner}]`
+            const inner = [...t.elements.map(formatType), ...(t.rest ? [`...${formatAtom(t.rest)}[]`] : [])]
+            return `[${inner.join(", ")}]`
         }
         case "object": {
             if (t.name) {
@@ -1363,7 +1394,8 @@ function formatTypeUncached(t: Type): string {
                 }).join(", ")}>`
                 : ""
             const ps = t.params.map(p => `${p.name ? p.name + ": " : ""}${formatType(p.type)}`)
-            if (t.varargs) ps.push(`...${formatType(t.varargs)}`)
+            // Written the one way a rest parameter is: as the array it collects.
+            if (t.varargs) ps.push(t.restIsWhole ? `...args: ${formatType(t.varargs)}` : `...args: ${formatAtom(t.varargs)}[]`)
             return `${gen}(${ps.join(", ")}) => ${formatPredicate(t) ?? formatType(t.returns)}`
         }
         case "typeParam": return t.name

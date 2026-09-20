@@ -162,20 +162,18 @@
                         "statements": [
                           {
                             "type": "ReturnStatement",
-                            "arguments": [
-                              {
-                                "type": "Identifier",
-                                "name": "lo",
-                                "line": {
-                                  "start": 4,
-                                  "end": 4
-                                },
-                                "column": {
-                                  "start": 26,
-                                  "end": 28
-                                }
+                            "argument": {
+                              "type": "Identifier",
+                              "name": "lo",
+                              "line": {
+                                "start": 4,
+                                "end": 4
+                              },
+                              "column": {
+                                "start": 26,
+                                "end": 28
                               }
-                            ],
+                            },
                             "line": {
                               "start": 4,
                               "end": 4
@@ -260,20 +258,18 @@
                         "statements": [
                           {
                             "type": "ReturnStatement",
-                            "arguments": [
-                              {
-                                "type": "Identifier",
-                                "name": "hi",
-                                "line": {
-                                  "start": 5,
-                                  "end": 5
-                                },
-                                "column": {
-                                  "start": 26,
-                                  "end": 28
-                                }
+                            "argument": {
+                              "type": "Identifier",
+                              "name": "hi",
+                              "line": {
+                                "start": 5,
+                                "end": 5
+                              },
+                              "column": {
+                                "start": 26,
+                                "end": 28
                               }
-                            ],
+                            },
                             "line": {
                               "start": 5,
                               "end": 5
@@ -314,20 +310,18 @@
                 },
                 {
                   "type": "ReturnStatement",
-                  "arguments": [
-                    {
-                      "type": "Identifier",
-                      "name": "x",
-                      "line": {
-                        "start": 6,
-                        "end": 6
-                      },
-                      "column": {
-                        "start": 12,
-                        "end": 13
-                      }
+                  "argument": {
+                    "type": "Identifier",
+                    "name": "x",
+                    "line": {
+                      "start": 6,
+                      "end": 6
+                    },
+                    "column": {
+                      "start": 12,
+                      "end": 13
                     }
-                  ],
+                  },
                   "line": {
                     "start": 6,
                     "end": 6
@@ -489,60 +483,50 @@
               "statements": [
                 {
                   "type": "ReturnStatement",
-                  "arguments": [
-                    {
-                      "type": "BinaryExpression",
-                      "operator": "+",
-                      "left": {
-                        "type": "Identifier",
-                        "name": "a",
-                        "line": {
-                          "start": 10,
-                          "end": 10
-                        },
-                        "column": {
-                          "start": 12,
-                          "end": 13
-                        }
+                  "argument": {
+                    "type": "BinaryExpression",
+                    "operator": "+",
+                    "left": {
+                      "type": "Identifier",
+                      "name": "a",
+                      "line": {
+                        "start": 10,
+                        "end": 10
                       },
-                      "right": {
-                        "type": "BinaryExpression",
-                        "operator": "*",
-                        "left": {
-                          "type": "ParenthesizedExpression",
-                          "expression": {
-                            "type": "BinaryExpression",
-                            "operator": "-",
-                            "left": {
-                              "type": "Identifier",
-                              "name": "b",
-                              "line": {
-                                "start": 10,
-                                "end": 10
-                              },
-                              "column": {
-                                "start": 17,
-                                "end": 18
-                              }
-                            },
-                            "right": {
-                              "type": "Identifier",
-                              "name": "a",
-                              "line": {
-                                "start": 10,
-                                "end": 10
-                              },
-                              "column": {
-                                "start": 21,
-                                "end": 22
-                              }
-                            },
+                      "column": {
+                        "start": 12,
+                        "end": 13
+                      }
+                    },
+                    "right": {
+                      "type": "BinaryExpression",
+                      "operator": "*",
+                      "left": {
+                        "type": "ParenthesizedExpression",
+                        "expression": {
+                          "type": "BinaryExpression",
+                          "operator": "-",
+                          "left": {
+                            "type": "Identifier",
+                            "name": "b",
                             "line": {
                               "start": 10,
                               "end": 10
                             },
                             "column": {
                               "start": 17,
+                              "end": 18
+                            }
+                          },
+                          "right": {
+                            "type": "Identifier",
+                            "name": "a",
+                            "line": {
+                              "start": 10,
+                              "end": 10
+                            },
+                            "column": {
+                              "start": 21,
                               "end": 22
                             }
                           },
@@ -551,20 +535,8 @@
                             "end": 10
                           },
                           "column": {
-                            "start": 16,
-                            "end": 23
-                          }
-                        },
-                        "right": {
-                          "type": "Identifier",
-                          "name": "t",
-                          "line": {
-                            "start": 10,
-                            "end": 10
-                          },
-                          "column": {
-                            "start": 26,
-                            "end": 27
+                            "start": 17,
+                            "end": 22
                           }
                         },
                         "line": {
@@ -573,6 +545,18 @@
                         },
                         "column": {
                           "start": 16,
+                          "end": 23
+                        }
+                      },
+                      "right": {
+                        "type": "Identifier",
+                        "name": "t",
+                        "line": {
+                          "start": 10,
+                          "end": 10
+                        },
+                        "column": {
+                          "start": 26,
                           "end": 27
                         }
                       },
@@ -581,11 +565,19 @@
                         "end": 10
                       },
                       "column": {
-                        "start": 12,
+                        "start": 16,
                         "end": 27
                       }
+                    },
+                    "line": {
+                      "start": 10,
+                      "end": 10
+                    },
+                    "column": {
+                      "start": 12,
+                      "end": 27
                     }
-                  ],
+                  },
                   "line": {
                     "start": 10,
                     "end": 10

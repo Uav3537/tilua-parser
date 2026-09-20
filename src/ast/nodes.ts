@@ -256,8 +256,8 @@ export interface FunctionSignature extends BaseNode {
     name?: Identifier
     generics: GenericTypeParameter[]
     params: FunctionParameter[]
+    /** The last parameter is a rest parameter (`...rest: T[]`). */
     hasVarargs: boolean
-    varargTypeAnnotation?: TypeNode
     returnType?: TypeNode
     /** `: v is T` / `: asserts v` instead of a plain return type. */
     predicate?: TypePredicateNode
@@ -292,6 +292,12 @@ export interface ClassDeclaration extends BaseNode {
     superclass?: Identifier
     /** The arguments `extends Box<number>` was written with. */
     superArguments?: TypeNode[]
+    /** `implements Shape, Named` — shapes the instances are checked against.
+     *  Nothing at run time. */
+    implements?: TypeNode[]
+    /** `abstract class` — has no `new`; a class extending it does, once it
+     *  has written every `abstract` member. */
+    isAbstract?: boolean
     members: ClassMember[]
 }
 
@@ -304,6 +310,8 @@ export interface ClassExpression extends BaseNode {
     name?: Identifier
     superclass?: Identifier
     superArguments?: TypeNode[]
+    implements?: TypeNode[]
+    isAbstract?: boolean
     members: ClassMember[]
 }
 
@@ -313,9 +321,10 @@ export type ClassMember = ClassField | ClassMethod | ClassAccessor | ClassConstr
  *  alike: only the name and the type parameters differ. */
 export type ClassLike = ClassDeclaration | ClassExpression
 
-/** `public` / `private` written before a member. Only the type checker reads
- *  it: a private member is still an ordinary key at runtime. */
-export type ClassAccessibility = "public" | "private"
+/** `public` / `private` / `protected` written before a member. Only the type
+ *  checker reads it: a private member is still an ordinary key at runtime.
+ *  `protected` is reachable from the class and the classes extending it. */
+export type ClassAccessibility = "public" | "private" | "protected"
 
 /** `x: number` / `x = 1` / `static count = 0`. An instance field is assigned
  *  when the instance is built, before the constructor body runs; a `static`
@@ -326,6 +335,11 @@ export interface ClassField extends BaseNode {
     accessibility?: ClassAccessibility
     name: Identifier
     isStatic: boolean
+    /** `readonly` — assigned where it is declared or in the constructor of
+     *  its own class, and nowhere else. */
+    isReadonly?: boolean
+    /** `override` — the class it extends has a member of this name. */
+    isOverride?: boolean
     typeAnnotation?: TypeNode
     init?: Expression
 }
@@ -341,6 +355,11 @@ export interface ClassMethod extends BaseNode {
     func: FunctionBody
     /** TS-style overload signatures preceding the implementation. */
     signatures?: FunctionSignature[]
+    /** `abstract function area(): number` — a head with no body, which every
+     *  class extending this one that is not abstract itself has to write. */
+    isAbstract?: boolean
+    /** `override` — the class it extends has a member of this name. */
+    isOverride?: boolean
 }
 
 /** `get name(): T ... end` / `set name(v: T) ... end` — read and written as a
@@ -353,6 +372,8 @@ export interface ClassAccessor extends BaseNode {
     name: Identifier
     isStatic: boolean
     func: FunctionBody
+    /** `override` — the class it extends has a member of this name. */
+    isOverride?: boolean
 }
 
 /** `constructor(...) ... end` — runs on a fresh instance. A class that
@@ -360,15 +381,6 @@ export interface ClassAccessor extends BaseNode {
 export interface ClassConstructor extends BaseNode {
     type: "ClassConstructor"
     func: FunctionBody
-}
-
-/** `new Name(args)` — builds an instance. Lowers to the class's own
- *  `Name.new(args)`, which is also callable by hand. */
-export interface NewExpression extends BaseNode {
-    type: "NewExpression"
-    callee: Expression
-    arguments: Expression[]
-    typeArguments?: (TypeNode | TypePackNode)[]
 }
 
 /** `super` — only inside a class that extends another: `super(...)` in the
@@ -393,7 +405,7 @@ export interface CompoundAssignmentStatement extends BaseNode {
 
 export interface CallStatement extends BaseNode {
     type: "CallStatement"
-    expression: CallExpression | MethodCallExpression | NewExpression
+    expression: CallExpression | MethodCallExpression
 }
 
 /** An expression written as a statement, where Lua would want a call or an
@@ -447,16 +459,22 @@ export interface NumericForStatement extends BaseNode {
     body: Block
 }
 
+/** `for (const item in source)`. One value each time — several are an
+ *  array, taken apart with a pattern: `for (const [k, v] in pairs(t))`.
+ *  `let` instead of `const` when the body assigns to the name. */
 export interface GenericForStatement extends BaseNode {
     type: "GenericForStatement"
-    variables: BindingTarget[]
-    iterators: Expression[]
+    kind: "const" | "let"
+    variable: BindingTarget
+    iterator: Expression
     body: Block
 }
 
+/** `return` / `return value`. A function gives back one value; several are
+ *  an array — `return [a, b]`, a table. */
 export interface ReturnStatement extends BaseNode {
     type: "ReturnStatement"
-    arguments: Expression[]
+    argument?: Expression
 }
 
 export interface BreakStatement extends BaseNode {
@@ -484,13 +502,12 @@ export interface GenericTypeParameter extends BaseNode {
     name: string
     /** The name as a node. Absent on parameters the analyzer synthesizes. */
     id?: Identifier
-    isPack?: boolean
     /** `<const T>` — infer the argument at its narrowest instead of widening
      *  it: literals stay literal and array literals become tuples. */
     isConst?: boolean
     /** `<T extends C>` upper bound (TS style). */
     constraint?: TypeNode
-    default?: TypeNode | TypePackNode
+    default?: TypeNode
 }
 
 // ============================================================
@@ -504,7 +521,6 @@ export type Expression =
     | NumberLiteral
     | StringLiteral
     | InterpolatedStringExpression
-    | VarargExpression
     | FunctionExpression
     | TableExpression
     | ArrayExpression
@@ -514,7 +530,6 @@ export type Expression =
     | IndexExpression
     | CallExpression
     | MethodCallExpression
-    | NewExpression
     | SuperExpression
     | ClassExpression
     | SpreadElement
@@ -575,16 +590,12 @@ export interface InterpolatedStringExpression extends BaseNode {
     parts: InterpolatedStringPart[]
 }
 
-export interface VarargExpression extends BaseNode {
-    type: "VarargExpression"
-}
-
 export interface FunctionParameter extends BaseNode {
     type: "FunctionParameter"
     /** `...rest: T[]` — every argument from this position on, as an array,
-     *  the way JavaScript's rest parameter collects them. It is always last,
-     *  and the function is a vararg function: `...` still means Lua's pack
-     *  (`const a, b = ...`), and this is the array of it. */
+     *  the way JavaScript's rest parameter collects them. It is always last.
+     *  It is the only way a function takes a varying number of arguments:
+     *  tilua has no bare `...`. */
     rest?: boolean
     /** `name?: T` — the argument may be omitted, and its type admits `nil`. */
     optional?: boolean
@@ -601,8 +612,9 @@ export interface FunctionBody extends BaseNode {
     type: "FunctionBody"
     generics: GenericTypeParameter[]
     params: FunctionParameter[]
+    /** The last parameter is a rest parameter (`...rest: T[]`): the Lua
+     *  function takes varargs, and the body sees them as that array. */
     hasVarargs: boolean
-    varargTypeAnnotation?: TypeNode
     returnType?: TypeNode
     /** `: v is T` / `: asserts v` instead of a plain return type. */
     predicate?: TypePredicateNode
@@ -697,7 +709,7 @@ export interface CallExpression extends BaseNode {
     callee: Expression
     arguments: Expression[]
     /** `f<T>(x)` — type arguments written out rather than inferred. */
-    typeArguments?: (TypeNode | TypePackNode)[]
+    typeArguments?: TypeNode[]
     /** `f?.(...)` — see `MemberExpression.optional`. The call does not happen,
      *  and the arguments are not evaluated, when `callee` is nil. */
     optional?: boolean
@@ -718,7 +730,7 @@ export interface MethodCallExpression extends BaseNode {
     method: Identifier
     arguments: Expression[]
     /** `obj:m<T>(x)` — see `CallExpression.typeArguments`. */
-    typeArguments?: (TypeNode | TypePackNode)[]
+    typeArguments?: TypeNode[]
     /** `object?:method(...)` — see `MemberExpression.optional`. The
      *  arguments are not evaluated when `object` is nil. */
     optional?: boolean
@@ -773,8 +785,6 @@ export type TypeNode =
     | IntersectionTypeNode
     | ParenthesizedTypeNode
     | TypeofTypeNode
-    | VariadicTypeNode
-    | TypePackNode
     | KeyofTypeNode
     | IndexedAccessTypeNode
     | ConditionalTypeNode
@@ -879,18 +889,11 @@ export interface TypePredicateNode extends BaseNode {
     typeAnnotation?: TypeNode
 }
 
-export interface TypePackNode extends BaseNode {
-    type: "TypePackNode"
-    types: TypeNode[]
-    hasVarargs: boolean
-    varargType?: TypeNode
-}
-
 export interface TypeReference extends BaseNode {
     type: "TypeReference"
     base: string
     namespace?: string
-    typeArguments: (TypeNode | TypePackNode)[]
+    typeArguments: TypeNode[]
 }
 
 export interface TypeLiteralString extends BaseNode {
@@ -928,10 +931,13 @@ export interface ArrayTypeNode extends BaseNode {
     element: TypeNode
 }
 
-/** `[number, string]` — fixed-length tuple type. */
+/** `[number, string]` — a tuple type; `[string, ...number[]]` ends in a rest
+ *  of as many more as there are. */
 export interface TupleTypeNode extends BaseNode {
     type: "TupleTypeNode"
     elements: TypeNode[]
+    /** `...number[]` at the end: the array type the rest of it is. */
+    rest?: TypeNode
 }
 
 export interface FunctionTypeParameter extends BaseNode {
@@ -950,8 +956,6 @@ export interface FunctionTypeNode extends BaseNode {
     type: "FunctionTypeNode"
     generics: GenericTypeParameter[]
     params: FunctionTypeParameter[]
-    hasVarargs: boolean
-    varargType?: TypeNode
     returnType: TypeNode
     /** `(v: unknown) -> v is string` — a guard written as a function *type*. */
     predicate?: TypePredicateNode
@@ -977,11 +981,6 @@ export interface ParenthesizedTypeNode extends BaseNode {
 export interface TypeofTypeNode extends BaseNode {
     type: "TypeofTypeNode"
     expression: Expression
-}
-
-export interface VariadicTypeNode extends BaseNode {
-    type: "VariadicTypeNode"
-    typeAnnotation: TypeNode
 }
 
 export type Node =

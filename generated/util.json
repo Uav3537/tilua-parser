@@ -120,20 +120,18 @@
               "statements": [
                 {
                   "type": "ReturnStatement",
-                  "arguments": [
-                    {
-                      "type": "Identifier",
-                      "name": "x",
-                      "line": {
-                        "start": 6,
-                        "end": 6
-                      },
-                      "column": {
-                        "start": 12,
-                        "end": 13
-                      }
+                  "argument": {
+                    "type": "Identifier",
+                    "name": "x",
+                    "line": {
+                      "start": 6,
+                      "end": 6
+                    },
+                    "column": {
+                      "start": 12,
+                      "end": 13
                     }
-                  ],
+                  },
                   "line": {
                     "start": 6,
                     "end": 6

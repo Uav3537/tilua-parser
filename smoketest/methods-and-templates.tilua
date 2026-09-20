@@ -54,7 +54,7 @@ const upper: Capitalize<"click"> = "Click"
 const lower: Uncapitalize<"Click"> = "click"
 
 -- Together with key remapping this gives derived object types.
-type Handlers<T> = { [K in keyof T as `on${Capitalize<K>}`]: (value: T[K]) => () }
+type Handlers<T> = { [K in keyof T as `on${Capitalize<K>}`]: (value: T[K]) => nil }
 const handlers: Handlers<{ click: number, hover: string }> = {
     onClick: function(value: number) { },
     onHover: function(value: string) { },

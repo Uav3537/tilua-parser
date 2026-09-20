@@ -1,9 +1,13 @@
+counter: (limit: number) => () => number | nil
 deep: number
 entry: (string | number)[]
 i: number
 i: number
 i: number
 key: "x"
+limit: number
+n: number
+n: number
 pairsList: (string | number)[][]
 record: { id: number, label: string }
 records: { id: number, label: string }[]

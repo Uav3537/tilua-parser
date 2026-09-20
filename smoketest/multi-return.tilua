@@ -1,29 +1,32 @@
--- Lua's multi-value adjustment.
+-- Several results are an array.
 --
--- In an expression list every expression but the last yields exactly one
--- value; the last yields all of its values if it is a call or `...`.
--- Parentheses truncate back to one. That rule is what makes `pcall`,
--- `string.find` and `next` usable, so the checker follows it rather than
--- treating a multi-return as a single tuple value.
+-- A function gives back one value. Several are an array — a tuple, when their
+-- number and types are known — and the names are taken out of it with a
+-- destructuring. An array is a table: `return [1, "a"]` is `return { 1, "a" }`.
 
-function two(): (number, string) {
-    return 1, "a"
+function two(): [number, string] {
+    return [1, "a"]
 }
 
--- The last expression expands to fill the remaining names…
-const first: number, second: string = two()
+-- Taken apart where it is received…
+const [first, second] = two()
+const firstIsNumber: number = first
+const secondIsString: string = second
 
--- …and a name with nothing left to take is nil-ish rather than a value.
-const a: number, b: string, spare: unknown = two()
+-- …or kept whole, as the array it is.
+const both: [number, string] = two()
+const fromBoth: string = both[2]
 
--- In a single-value position only the first value survives.
-const justFirst: number = two()
+-- A tuple can end in a rest: at least the named ones, then any number more.
+function atLeastOne(): [string, ...number[]] {
+    return ["label", 1, 2, 3]
+}
+const [label, ...values] = atLeastOne()
+const labelIsString: string = label
+const valuesAreNumbers: number[] = values
 
--- Earlier positions contribute one value each; only the last expands.
-const one: 1, expanded: number = 1, two()
-
--- Parentheses truncate.
-const truncated: number = (two())
+-- Names paired with values stay what they were: one value each.
+const x: number, y: string = 1, "b"
 
 -- A `while` exits when its condition fails, so what the condition ruled out
 -- holds afterwards — unless a `break` can skip that.
@@ -44,5 +47,5 @@ function mightBreak(v: string | nil) {
     return unsettled
 }
 
-print(first, second, a, b, spare, justFirst, one, expanded, truncated,
+print(firstIsNumber, secondIsString, fromBoth, labelIsString, valuesAreNumbers, x, y,
       firstNonNil(nil), mightBreak(nil))

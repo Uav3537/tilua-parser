@@ -917,45 +917,43 @@
                       "statements": [
                         {
                           "type": "ReturnStatement",
-                          "arguments": [
-                            {
-                              "type": "BinaryExpression",
-                              "operator": "*",
-                              "left": {
-                                "type": "Identifier",
-                                "name": "dmg",
-                                "line": {
-                                  "start": 19,
-                                  "end": 19
-                                },
-                                "column": {
-                                  "start": 16,
-                                  "end": 19
-                                }
-                              },
-                              "right": {
-                                "type": "NumberLiteral",
-                                "value": 2,
-                                "raw": "2",
-                                "line": {
-                                  "start": 19,
-                                  "end": 19
-                                },
-                                "column": {
-                                  "start": 22,
-                                  "end": 23
-                                }
-                              },
+                          "argument": {
+                            "type": "BinaryExpression",
+                            "operator": "*",
+                            "left": {
+                              "type": "Identifier",
+                              "name": "dmg",
                               "line": {
                                 "start": 19,
                                 "end": 19
                               },
                               "column": {
                                 "start": 16,
+                                "end": 19
+                              }
+                            },
+                            "right": {
+                              "type": "NumberLiteral",
+                              "value": 2,
+                              "raw": "2",
+                              "line": {
+                                "start": 19,
+                                "end": 19
+                              },
+                              "column": {
+                                "start": 22,
                                 "end": 23
                               }
+                            },
+                            "line": {
+                              "start": 19,
+                              "end": 19
+                            },
+                            "column": {
+                              "start": 16,
+                              "end": 23
                             }
-                          ],
+                          },
                           "line": {
                             "start": 19,
                             "end": 19

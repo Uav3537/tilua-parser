@@ -28,7 +28,7 @@ function connect(host: string, timeout: number | nil, port?: number) {
     -- an optional parameter's type includes nil
     const p: number | nil = port
     const t: number | nil = timeout
-    return p, t
+    return [p, t]
 }
 
 -- `timeout` must be written even though it may be nil; `port` may be omitted.
@@ -63,7 +63,7 @@ type Counter = { m: (self: Counter) => number }
 function choose(flag: boolean, o: Counter, other: Counter) {
     const t4: Counter = flag ? o : other
     const t5: number = flag ? o:m() : 0
-    return t4, t5
+    return [t4, t5]
 }
 
 print(full, minimal, c1, c2, c3, describe(1, true), orElse(nil), choose)

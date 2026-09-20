@@ -35,22 +35,19 @@ print(makeEnemy({ name: "bat" }), sum([1, 2]), applyN(1, [2, 3]), greet("world")
 -- Rest parameters
 -- ============================================================
 
--- `...` on its own is Lua's pack: `const a, b = ...` reads it, and `[...]`
--- puts it in an array.
-function firstTwo(...: number): (number, number) {
-    const a, b = ...
-    return a, b
+-- `...rest: T[]` is JavaScript's rest parameter: everything from here on, as
+-- an array. It is the one way to take a varying number of arguments.
+function firstTwo(...numbers: number[]): [number, number] {
+    return [numbers[1], numbers[2]]
 }
 
--- `...rest: T[]` is JavaScript's rest parameter: everything from here on, as
--- an array. The call signature is the same either way.
 function join(separator: string, ...parts: string[]): string {
     return table.concat(parts, separator)
 }
 
 function total(...numbers: number[]): number {
     let sum = 0
-    for (_, n in numbers) {
+    for (const n in numbers) {
         sum += n
     }
     return sum
@@ -61,37 +58,36 @@ function firstOf<T>(...items: T[]): T | nil {
     return items[1]
 }
 
-const two: number = firstTwo(1, 2)
+const [two] = firstTwo(1, 2)
 const joined: string = join("-", "a", "b", "c")
 const summed: number = total(1, 2, 3)
 const picked: number | nil = firstOf(1, 2)
 const written: string | nil = firstOf("a")
 
 -- A type can be written with one too.
-type Reporter = (level: string, ...lines: string[]) => ()
+type Reporter = (level: string, ...lines: string[]) => nil
 
--- `f(...xs)` spreads an array into the arguments, as JavaScript does. Bare
--- `f(...)` is unchanged: that is the pack being passed on.
+-- `f(...xs)` spreads an array into the arguments, as JavaScript does.
 const names: string[] = ["a", "b", "c"]
 
 const spread: string = join("-", ...names)
 const around: string = join("-", ...names, "z")
 const twice: string = join("-", ...names, ...names)
 
-function forward(...: string): string {
-    return join("-", ...)
+function forward(...parts: string[]): string {
+    return join("-", ...parts)
 }
 
--- A list of values takes one too: a `return`'s, a declaration's, an
--- assignment's. What is declared says how much room there is.
-function threeNames(): (string, string, string) {
-    return ...names
+-- An array literal takes a spread too; a function's several results are an
+-- array, and a destructuring takes them apart again.
+function threeNames(): [string, string, string] {
+    return [names[1], names[2], names[3]]
 }
 
-const firstName, secondName, thirdName = ...names
+const [firstName, secondName, thirdName] = threeNames()
 
-function alsoForward(...: string): (string, string) {
-    return ...
+function alsoForward(...parts: string[]): string[] {
+    return [...parts]
 }
 
 -- ============================================================
@@ -108,7 +104,7 @@ const nothing = () => 0
 const shown = (n: number): string => tostring(n)
 
 -- One parameter needs no parentheses.
-declare function each(f: (n: number) => ()): ()
+declare function each(f: (n: number) => nil): nil
 each(n => print(n))
 
 -- A block body is a block, so an object is parenthesized to be returned.

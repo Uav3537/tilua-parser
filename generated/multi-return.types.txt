@@ -1,16 +1,20 @@
-a: number
-b: string
-expanded: number
+atLeastOne: () => [string, ...number[]]
+both: [number, string]
 first: number
+firstIsNumber: number
 firstNonNil: (v: string | nil) => string
-justFirst: number
+fromBoth: string
+label: string
+labelIsString: string
 mightBreak: (v: string | nil) => string | nil
-one: 1
 second: string
+secondIsString: string
 settled: string
-spare: unknown
-truncated: number
-two: () => (number, string)
+two: () => [number, string]
 unsettled: string | nil
 v: string | nil
 v: string | nil
+values: number[]
+valuesAreNumbers: number[]
+x: number
+y: string

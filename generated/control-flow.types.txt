@@ -1,6 +1,3 @@
-_: number
-_: number
-_: number
 absent: nil
 bareContinue: (items: (string | nil)[]) => number
 bareReturn: (v: string | nil) => string

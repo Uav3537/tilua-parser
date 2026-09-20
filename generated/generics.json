@@ -33,7 +33,6 @@
                 "end": 11
               }
             },
-            "isPack": false,
             "line": {
               "start": 3,
               "end": 3
@@ -134,7 +133,6 @@
                 "end": 12
               }
             },
-            "isPack": false,
             "line": {
               "start": 4,
               "end": 4
@@ -159,7 +157,6 @@
                 "end": 15
               }
             },
-            "isPack": false,
             "line": {
               "start": 4,
               "end": 4
@@ -298,7 +295,6 @@
                 "end": 12
               }
             },
-            "isPack": false,
             "line": {
               "start": 5,
               "end": 5
@@ -398,7 +394,6 @@
                 "end": 14
               }
             },
-            "isPack": false,
             "line": {
               "start": 6,
               "end": 6
@@ -423,7 +418,6 @@
                 "end": 17
               }
             },
-            "isPack": false,
             "default": {
               "type": "TypeReference",
               "base": "string",
@@ -1157,7 +1151,6 @@
                   "end": 20
                 }
               },
-              "isPack": false,
               "line": {
                 "start": 14,
                 "end": 14
@@ -1214,20 +1207,18 @@
             "statements": [
               {
                 "type": "ReturnStatement",
-                "arguments": [
-                  {
-                    "type": "Identifier",
-                    "name": "x",
-                    "line": {
-                      "start": 15,
-                      "end": 15
-                    },
-                    "column": {
-                      "start": 12,
-                      "end": 13
-                    }
+                "argument": {
+                  "type": "Identifier",
+                  "name": "x",
+                  "line": {
+                    "start": 15,
+                    "end": 15
+                  },
+                  "column": {
+                    "start": 12,
+                    "end": 13
                   }
-                ],
+                },
                 "line": {
                   "start": 15,
                   "end": 15
@@ -1297,7 +1288,6 @@
                   "end": 17
                 }
               },
-              "isPack": false,
               "line": {
                 "start": 18,
                 "end": 18
@@ -1365,44 +1355,42 @@
             "statements": [
               {
                 "type": "ReturnStatement",
-                "arguments": [
-                  {
-                    "type": "IndexExpression",
-                    "object": {
-                      "type": "Identifier",
-                      "name": "xs",
-                      "line": {
-                        "start": 19,
-                        "end": 19
-                      },
-                      "column": {
-                        "start": 12,
-                        "end": 14
-                      }
-                    },
-                    "index": {
-                      "type": "NumberLiteral",
-                      "value": 1,
-                      "raw": "1",
-                      "line": {
-                        "start": 19,
-                        "end": 19
-                      },
-                      "column": {
-                        "start": 15,
-                        "end": 16
-                      }
-                    },
+                "argument": {
+                  "type": "IndexExpression",
+                  "object": {
+                    "type": "Identifier",
+                    "name": "xs",
                     "line": {
                       "start": 19,
                       "end": 19
                     },
                     "column": {
                       "start": 12,
-                      "end": 17
+                      "end": 14
                     }
+                  },
+                  "index": {
+                    "type": "NumberLiteral",
+                    "value": 1,
+                    "raw": "1",
+                    "line": {
+                      "start": 19,
+                      "end": 19
+                    },
+                    "column": {
+                      "start": 15,
+                      "end": 16
+                    }
+                  },
+                  "line": {
+                    "start": 19,
+                    "end": 19
+                  },
+                  "column": {
+                    "start": 12,
+                    "end": 17
                   }
-                ],
+                },
                 "line": {
                   "start": 19,
                   "end": 19
@@ -1472,7 +1460,6 @@
                   "end": 16
                 }
               },
-              "isPack": false,
               "line": {
                 "start": 22,
                 "end": 22
@@ -1497,7 +1484,6 @@
                   "end": 19
                 }
               },
-              "isPack": false,
               "line": {
                 "start": 22,
                 "end": 22
@@ -1606,75 +1592,73 @@
             "statements": [
               {
                 "type": "ReturnStatement",
-                "arguments": [
-                  {
-                    "type": "TableExpression",
-                    "fields": [
-                      {
-                        "type": "TableFieldNamed",
-                        "key": {
-                          "type": "Identifier",
-                          "name": "first",
-                          "line": {
-                            "start": 23,
-                            "end": 23
-                          },
-                          "column": {
-                            "start": 14,
-                            "end": 19
-                          }
+                "argument": {
+                  "type": "TableExpression",
+                  "fields": [
+                    {
+                      "type": "TableFieldNamed",
+                      "key": {
+                        "type": "Identifier",
+                        "name": "first",
+                        "line": {
+                          "start": 23,
+                          "end": 23
                         },
-                        "value": {
-                          "type": "Identifier",
-                          "name": "a",
-                          "line": {
-                            "start": 23,
-                            "end": 23
-                          },
-                          "column": {
-                            "start": 21,
-                            "end": 22
-                          }
+                        "column": {
+                          "start": 14,
+                          "end": 19
                         }
                       },
-                      {
-                        "type": "TableFieldNamed",
-                        "key": {
-                          "type": "Identifier",
-                          "name": "second",
-                          "line": {
-                            "start": 23,
-                            "end": 23
-                          },
-                          "column": {
-                            "start": 24,
-                            "end": 30
-                          }
+                      "value": {
+                        "type": "Identifier",
+                        "name": "a",
+                        "line": {
+                          "start": 23,
+                          "end": 23
                         },
-                        "value": {
-                          "type": "Identifier",
-                          "name": "b",
-                          "line": {
-                            "start": 23,
-                            "end": 23
-                          },
-                          "column": {
-                            "start": 32,
-                            "end": 33
-                          }
+                        "column": {
+                          "start": 21,
+                          "end": 22
                         }
                       }
-                    ],
-                    "line": {
-                      "start": 23,
-                      "end": 23
                     },
-                    "column": {
-                      "start": 12,
-                      "end": 35
+                    {
+                      "type": "TableFieldNamed",
+                      "key": {
+                        "type": "Identifier",
+                        "name": "second",
+                        "line": {
+                          "start": 23,
+                          "end": 23
+                        },
+                        "column": {
+                          "start": 24,
+                          "end": 30
+                        }
+                      },
+                      "value": {
+                        "type": "Identifier",
+                        "name": "b",
+                        "line": {
+                          "start": 23,
+                          "end": 23
+                        },
+                        "column": {
+                          "start": 32,
+                          "end": 33
+                        }
+                      }
                     }
+                  ],
+                  "line": {
+                    "start": 23,
+                    "end": 23
+                  },
+                  "column": {
+                    "start": 12,
+                    "end": 35
                   }
-                ],
+                },
                 "line": {
                   "start": 23,
                   "end": 23

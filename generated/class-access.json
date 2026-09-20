@@ -554,43 +554,41 @@
                   },
                   {
                     "type": "ReturnStatement",
-                    "arguments": [
-                      {
-                        "type": "MemberExpression",
-                        "object": {
-                          "type": "Identifier",
-                          "name": "this",
-                          "line": {
-                            "start": 17,
-                            "end": 17
-                          },
-                          "column": {
-                            "start": 16,
-                            "end": 20
-                          }
-                        },
-                        "property": {
-                          "type": "Identifier",
-                          "name": "balance",
-                          "line": {
-                            "start": 17,
-                            "end": 17
-                          },
-                          "column": {
-                            "start": 21,
-                            "end": 28
-                          }
-                        },
+                    "argument": {
+                      "type": "MemberExpression",
+                      "object": {
+                        "type": "Identifier",
+                        "name": "this",
                         "line": {
                           "start": 17,
                           "end": 17
                         },
                         "column": {
                           "start": 16,
+                          "end": 20
+                        }
+                      },
+                      "property": {
+                        "type": "Identifier",
+                        "name": "balance",
+                        "line": {
+                          "start": 17,
+                          "end": 17
+                        },
+                        "column": {
+                          "start": 21,
                           "end": 28
                         }
+                      },
+                      "line": {
+                        "start": 17,
+                        "end": 17
+                      },
+                      "column": {
+                        "start": 16,
+                        "end": 28
                       }
-                    ],
+                    },
                     "line": {
                       "start": 17,
                       "end": 17
@@ -773,51 +771,16 @@
                             "statements": [
                               {
                                 "type": "ReturnStatement",
-                                "arguments": [
-                                  {
-                                    "type": "ParenthesizedExpression",
-                                    "expression": {
-                                      "type": "IfElseExpression",
-                                      "clauses": [
-                                        {
-                                          "condition": {
-                                            "type": "BinaryExpression",
-                                            "operator": ">",
-                                            "left": {
-                                              "type": "Identifier",
-                                              "name": "n",
-                                              "line": {
-                                                "start": 22,
-                                                "end": 22
-                                              },
-                                              "column": {
-                                                "start": 50,
-                                                "end": 51
-                                              }
-                                            },
-                                            "right": {
-                                              "type": "NumberLiteral",
-                                              "value": 0,
-                                              "raw": "0",
-                                              "line": {
-                                                "start": 22,
-                                                "end": 22
-                                              },
-                                              "column": {
-                                                "start": 54,
-                                                "end": 55
-                                              }
-                                            },
-                                            "line": {
-                                              "start": 22,
-                                              "end": 22
-                                            },
-                                            "column": {
-                                              "start": 50,
-                                              "end": 55
-                                            }
-                                          },
-                                          "body": {
+                                "argument": {
+                                  "type": "ParenthesizedExpression",
+                                  "expression": {
+                                    "type": "IfElseExpression",
+                                    "clauses": [
+                                      {
+                                        "condition": {
+                                          "type": "BinaryExpression",
+                                          "operator": ">",
+                                          "left": {
                                             "type": "Identifier",
                                             "name": "n",
                                             "line": {
@@ -825,31 +788,56 @@
                                               "end": 22
                                             },
                                             "column": {
-                                              "start": 58,
-                                              "end": 59
+                                              "start": 50,
+                                              "end": 51
                                             }
+                                          },
+                                          "right": {
+                                            "type": "NumberLiteral",
+                                            "value": 0,
+                                            "raw": "0",
+                                            "line": {
+                                              "start": 22,
+                                              "end": 22
+                                            },
+                                            "column": {
+                                              "start": 54,
+                                              "end": 55
+                                            }
+                                          },
+                                          "line": {
+                                            "start": 22,
+                                            "end": 22
+                                          },
+                                          "column": {
+                                            "start": 50,
+                                            "end": 55
+                                          }
+                                        },
+                                        "body": {
+                                          "type": "Identifier",
+                                          "name": "n",
+                                          "line": {
+                                            "start": 22,
+                                            "end": 22
+                                          },
+                                          "column": {
+                                            "start": 58,
+                                            "end": 59
                                           }
                                         }
-                                      ],
-                                      "alternate": {
-                                        "type": "NumberLiteral",
-                                        "value": 0,
-                                        "raw": "0",
-                                        "line": {
-                                          "start": 22,
-                                          "end": 22
-                                        },
-                                        "column": {
-                                          "start": 62,
-                                          "end": 63
-                                        }
-                                      },
+                                      }
+                                    ],
+                                    "alternate": {
+                                      "type": "NumberLiteral",
+                                      "value": 0,
+                                      "raw": "0",
                                       "line": {
                                         "start": 22,
                                         "end": 22
                                       },
                                       "column": {
-                                        "start": 50,
+                                        "start": 62,
                                         "end": 63
                                       }
                                     },
@@ -858,11 +846,19 @@
                                       "end": 22
                                     },
                                     "column": {
-                                      "start": 49,
-                                      "end": 64
+                                      "start": 50,
+                                      "end": 63
                                     }
+                                  },
+                                  "line": {
+                                    "start": 22,
+                                    "end": 22
+                                  },
+                                  "column": {
+                                    "start": 49,
+                                    "end": 64
                                   }
-                                ],
+                                },
                                 "line": {
                                   "start": 22,
                                   "end": 22
@@ -912,45 +908,43 @@
                   },
                   {
                     "type": "ReturnStatement",
-                    "arguments": [
-                      {
-                        "type": "CallExpression",
-                        "callee": {
-                          "type": "Identifier",
-                          "name": "positive",
-                          "line": {
-                            "start": 23,
-                            "end": 23
-                          },
-                          "column": {
-                            "start": 16,
-                            "end": 24
-                          }
-                        },
-                        "arguments": [
-                          {
-                            "type": "Identifier",
-                            "name": "amount",
-                            "line": {
-                              "start": 23,
-                              "end": 23
-                            },
-                            "column": {
-                              "start": 25,
-                              "end": 31
-                            }
-                          }
-                        ],
+                    "argument": {
+                      "type": "CallExpression",
+                      "callee": {
+                        "type": "Identifier",
+                        "name": "positive",
                         "line": {
                           "start": 23,
                           "end": 23
                         },
                         "column": {
                           "start": 16,
-                          "end": 32
+                          "end": 24
                         }
+                      },
+                      "arguments": [
+                        {
+                          "type": "Identifier",
+                          "name": "amount",
+                          "line": {
+                            "start": 23,
+                            "end": 23
+                          },
+                          "column": {
+                            "start": 25,
+                            "end": 31
+                          }
+                        }
+                      ],
+                      "line": {
+                        "start": 23,
+                        "end": 23
+                      },
+                      "column": {
+                        "start": 16,
+                        "end": 32
                       }
-                    ],
+                    },
                     "line": {
                       "start": 23,
                       "end": 23
@@ -1028,43 +1022,41 @@
                 "statements": [
                   {
                     "type": "ReturnStatement",
-                    "arguments": [
-                      {
-                        "type": "MemberExpression",
-                        "object": {
-                          "type": "Identifier",
-                          "name": "Account",
-                          "line": {
-                            "start": 27,
-                            "end": 27
-                          },
-                          "column": {
-                            "start": 16,
-                            "end": 23
-                          }
-                        },
-                        "property": {
-                          "type": "Identifier",
-                          "name": "opened",
-                          "line": {
-                            "start": 27,
-                            "end": 27
-                          },
-                          "column": {
-                            "start": 24,
-                            "end": 30
-                          }
-                        },
+                    "argument": {
+                      "type": "MemberExpression",
+                      "object": {
+                        "type": "Identifier",
+                        "name": "Account",
                         "line": {
                           "start": 27,
                           "end": 27
                         },
                         "column": {
                           "start": 16,
+                          "end": 23
+                        }
+                      },
+                      "property": {
+                        "type": "Identifier",
+                        "name": "opened",
+                        "line": {
+                          "start": 27,
+                          "end": 27
+                        },
+                        "column": {
+                          "start": 24,
                           "end": 30
                         }
+                      },
+                      "line": {
+                        "start": 27,
+                        "end": 27
+                      },
+                      "column": {
+                        "start": 16,
+                        "end": 30
                       }
-                    ],
+                    },
                     "line": {
                       "start": 27,
                       "end": 27
@@ -1191,43 +1183,41 @@
                 "statements": [
                   {
                     "type": "ReturnStatement",
-                    "arguments": [
-                      {
-                        "type": "MemberExpression",
-                        "object": {
-                          "type": "Identifier",
-                          "name": "this",
-                          "line": {
-                            "start": 34,
-                            "end": 34
-                          },
-                          "column": {
-                            "start": 16,
-                            "end": 20
-                          }
-                        },
-                        "property": {
-                          "type": "Identifier",
-                          "name": "balance",
-                          "line": {
-                            "start": 34,
-                            "end": 34
-                          },
-                          "column": {
-                            "start": 21,
-                            "end": 28
-                          }
-                        },
+                    "argument": {
+                      "type": "MemberExpression",
+                      "object": {
+                        "type": "Identifier",
+                        "name": "this",
                         "line": {
                           "start": 34,
                           "end": 34
                         },
                         "column": {
                           "start": 16,
+                          "end": 20
+                        }
+                      },
+                      "property": {
+                        "type": "Identifier",
+                        "name": "balance",
+                        "line": {
+                          "start": 34,
+                          "end": 34
+                        },
+                        "column": {
+                          "start": 21,
                           "end": 28
                         }
+                      },
+                      "line": {
+                        "start": 34,
+                        "end": 34
+                      },
+                      "column": {
+                        "start": 16,
+                        "end": 28
                       }
-                    ],
+                    },
                     "line": {
                       "start": 34,
                       "end": 34
@@ -1295,16 +1285,39 @@
         ],
         "init": [
           {
-            "type": "NewExpression",
+            "type": "CallExpression",
             "callee": {
-              "type": "Identifier",
-              "name": "Account",
+              "type": "MemberExpression",
+              "object": {
+                "type": "Identifier",
+                "name": "Account",
+                "line": {
+                  "start": 38,
+                  "end": 38
+                },
+                "column": {
+                  "start": 17,
+                  "end": 24
+                }
+              },
+              "property": {
+                "type": "Identifier",
+                "name": "new",
+                "line": {
+                  "start": 38,
+                  "end": 38
+                },
+                "column": {
+                  "start": 25,
+                  "end": 28
+                }
+              },
               "line": {
                 "start": 38,
                 "end": 38
               },
               "column": {
-                "start": 21,
+                "start": 17,
                 "end": 28
               }
             },
@@ -1783,16 +1796,39 @@
         ],
         "init": [
           {
-            "type": "NewExpression",
+            "type": "CallExpression",
             "callee": {
-              "type": "Identifier",
-              "name": "Flags",
+              "type": "MemberExpression",
+              "object": {
+                "type": "Identifier",
+                "name": "Flags",
+                "line": {
+                  "start": 54,
+                  "end": 54
+                },
+                "column": {
+                  "start": 15,
+                  "end": 20
+                }
+              },
+              "property": {
+                "type": "Identifier",
+                "name": "new",
+                "line": {
+                  "start": 54,
+                  "end": 54
+                },
+                "column": {
+                  "start": 21,
+                  "end": 24
+                }
+              },
               "line": {
                 "start": 54,
                 "end": 54
               },
               "column": {
-                "start": 19,
+                "start": 15,
                 "end": 24
               }
             },

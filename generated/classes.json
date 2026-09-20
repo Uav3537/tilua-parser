@@ -382,69 +382,67 @@
                   "statements": [
                     {
                       "type": "ReturnStatement",
-                      "arguments": [
-                        {
-                          "type": "InterpolatedStringExpression",
-                          "parts": [
-                            {
-                              "kind": "string",
-                              "value": "",
-                              "raw": ""
-                            },
-                            {
-                              "kind": "expression",
-                              "expression": {
-                                "type": "MemberExpression",
-                                "object": {
-                                  "type": "Identifier",
-                                  "name": "this",
-                                  "line": {
-                                    "start": 18,
-                                    "end": 18
-                                  },
-                                  "column": {
-                                    "start": 19,
-                                    "end": 23
-                                  }
-                                },
-                                "property": {
-                                  "type": "Identifier",
-                                  "name": "name",
-                                  "line": {
-                                    "start": 18,
-                                    "end": 18
-                                  },
-                                  "column": {
-                                    "start": 24,
-                                    "end": 28
-                                  }
-                                },
+                      "argument": {
+                        "type": "InterpolatedStringExpression",
+                        "parts": [
+                          {
+                            "kind": "string",
+                            "value": "",
+                            "raw": ""
+                          },
+                          {
+                            "kind": "expression",
+                            "expression": {
+                              "type": "MemberExpression",
+                              "object": {
+                                "type": "Identifier",
+                                "name": "this",
                                 "line": {
                                   "start": 18,
                                   "end": 18
                                 },
                                 "column": {
                                   "start": 19,
+                                  "end": 23
+                                }
+                              },
+                              "property": {
+                                "type": "Identifier",
+                                "name": "name",
+                                "line": {
+                                  "start": 18,
+                                  "end": 18
+                                },
+                                "column": {
+                                  "start": 24,
                                   "end": 28
                                 }
+                              },
+                              "line": {
+                                "start": 18,
+                                "end": 18
+                              },
+                              "column": {
+                                "start": 19,
+                                "end": 28
                               }
-                            },
-                            {
-                              "kind": "string",
-                              "value": " makes a sound",
-                              "raw": " makes a sound"
                             }
-                          ],
-                          "line": {
-                            "start": 18,
-                            "end": 18
                           },
-                          "column": {
-                            "start": 16,
-                            "end": 44
+                          {
+                            "kind": "string",
+                            "value": " makes a sound",
+                            "raw": " makes a sound"
                           }
+                        ],
+                        "line": {
+                          "start": 18,
+                          "end": 18
+                        },
+                        "column": {
+                          "start": 16,
+                          "end": 44
                         }
-                      ],
+                      },
                       "line": {
                         "start": 18,
                         "end": 18
@@ -535,69 +533,67 @@
                   "statements": [
                     {
                       "type": "ReturnStatement",
-                      "arguments": [
-                        {
-                          "type": "InterpolatedStringExpression",
-                          "parts": [
-                            {
-                              "kind": "string",
-                              "value": "<",
-                              "raw": "<"
-                            },
-                            {
-                              "kind": "expression",
-                              "expression": {
-                                "type": "MemberExpression",
-                                "object": {
-                                  "type": "Identifier",
-                                  "name": "this",
-                                  "line": {
-                                    "start": 23,
-                                    "end": 23
-                                  },
-                                  "column": {
-                                    "start": 20,
-                                    "end": 24
-                                  }
-                                },
-                                "property": {
-                                  "type": "Identifier",
-                                  "name": "name",
-                                  "line": {
-                                    "start": 23,
-                                    "end": 23
-                                  },
-                                  "column": {
-                                    "start": 25,
-                                    "end": 29
-                                  }
-                                },
+                      "argument": {
+                        "type": "InterpolatedStringExpression",
+                        "parts": [
+                          {
+                            "kind": "string",
+                            "value": "<",
+                            "raw": "<"
+                          },
+                          {
+                            "kind": "expression",
+                            "expression": {
+                              "type": "MemberExpression",
+                              "object": {
+                                "type": "Identifier",
+                                "name": "this",
                                 "line": {
                                   "start": 23,
                                   "end": 23
                                 },
                                 "column": {
                                   "start": 20,
+                                  "end": 24
+                                }
+                              },
+                              "property": {
+                                "type": "Identifier",
+                                "name": "name",
+                                "line": {
+                                  "start": 23,
+                                  "end": 23
+                                },
+                                "column": {
+                                  "start": 25,
                                   "end": 29
                                 }
+                              },
+                              "line": {
+                                "start": 23,
+                                "end": 23
+                              },
+                              "column": {
+                                "start": 20,
+                                "end": 29
                               }
-                            },
-                            {
-                              "kind": "string",
-                              "value": ">",
-                              "raw": ">"
                             }
-                          ],
-                          "line": {
-                            "start": 23,
-                            "end": 23
                           },
-                          "column": {
-                            "start": 16,
-                            "end": 32
+                          {
+                            "kind": "string",
+                            "value": ">",
+                            "raw": ">"
                           }
+                        ],
+                        "line": {
+                          "start": 23,
+                          "end": 23
+                        },
+                        "column": {
+                          "start": 16,
+                          "end": 32
                         }
-                      ],
+                      },
                       "line": {
                         "start": 23,
                         "end": 23
@@ -827,43 +823,41 @@
                   "statements": [
                     {
                       "type": "ReturnStatement",
-                      "arguments": [
-                        {
-                          "type": "MemberExpression",
-                          "object": {
-                            "type": "Identifier",
-                            "name": "Animal",
-                            "line": {
-                              "start": 31,
-                              "end": 31
-                            },
-                            "column": {
-                              "start": 16,
-                              "end": 22
-                            }
-                          },
-                          "property": {
-                            "type": "Identifier",
-                            "name": "count",
-                            "line": {
-                              "start": 31,
-                              "end": 31
-                            },
-                            "column": {
-                              "start": 23,
-                              "end": 28
-                            }
-                          },
+                      "argument": {
+                        "type": "MemberExpression",
+                        "object": {
+                          "type": "Identifier",
+                          "name": "Animal",
                           "line": {
                             "start": 31,
                             "end": 31
                           },
                           "column": {
                             "start": 16,
+                            "end": 22
+                          }
+                        },
+                        "property": {
+                          "type": "Identifier",
+                          "name": "count",
+                          "line": {
+                            "start": 31,
+                            "end": 31
+                          },
+                          "column": {
+                            "start": 23,
                             "end": 28
                           }
+                        },
+                        "line": {
+                          "start": 31,
+                          "end": 31
+                        },
+                        "column": {
+                          "start": 16,
+                          "end": 28
                         }
-                      ],
+                      },
                       "line": {
                         "start": 31,
                         "end": 31
@@ -1249,123 +1243,121 @@
                   "statements": [
                     {
                       "type": "ReturnStatement",
-                      "arguments": [
-                        {
-                          "type": "InterpolatedStringExpression",
-                          "parts": [
-                            {
-                              "kind": "string",
-                              "value": "",
-                              "raw": ""
-                            },
-                            {
-                              "kind": "expression",
-                              "expression": {
-                                "type": "CallExpression",
-                                "callee": {
-                                  "type": "MemberExpression",
-                                  "object": {
-                                    "type": "SuperExpression",
-                                    "line": {
-                                      "start": 44,
-                                      "end": 44
-                                    },
-                                    "column": {
-                                      "start": 19,
-                                      "end": 24
-                                    }
-                                  },
-                                  "property": {
-                                    "type": "Identifier",
-                                    "name": "speak",
-                                    "line": {
-                                      "start": 44,
-                                      "end": 44
-                                    },
-                                    "column": {
-                                      "start": 25,
-                                      "end": 30
-                                    }
-                                  },
+                      "argument": {
+                        "type": "InterpolatedStringExpression",
+                        "parts": [
+                          {
+                            "kind": "string",
+                            "value": "",
+                            "raw": ""
+                          },
+                          {
+                            "kind": "expression",
+                            "expression": {
+                              "type": "CallExpression",
+                              "callee": {
+                                "type": "MemberExpression",
+                                "object": {
+                                  "type": "SuperExpression",
                                   "line": {
                                     "start": 44,
                                     "end": 44
                                   },
                                   "column": {
                                     "start": 19,
+                                    "end": 24
+                                  }
+                                },
+                                "property": {
+                                  "type": "Identifier",
+                                  "name": "speak",
+                                  "line": {
+                                    "start": 44,
+                                    "end": 44
+                                  },
+                                  "column": {
+                                    "start": 25,
                                     "end": 30
                                   }
                                 },
-                                "arguments": [],
                                 "line": {
                                   "start": 44,
                                   "end": 44
                                 },
                                 "column": {
                                   "start": 19,
-                                  "end": 32
+                                  "end": 30
                                 }
+                              },
+                              "arguments": [],
+                              "line": {
+                                "start": 44,
+                                "end": 44
+                              },
+                              "column": {
+                                "start": 19,
+                                "end": 32
                               }
-                            },
-                            {
-                              "kind": "string",
-                              "value": " (woof, ",
-                              "raw": " (woof, "
-                            },
-                            {
-                              "kind": "expression",
-                              "expression": {
-                                "type": "MemberExpression",
-                                "object": {
-                                  "type": "Identifier",
-                                  "name": "this",
-                                  "line": {
-                                    "start": 44,
-                                    "end": 44
-                                  },
-                                  "column": {
-                                    "start": 43,
-                                    "end": 47
-                                  }
-                                },
-                                "property": {
-                                  "type": "Identifier",
-                                  "name": "breed",
-                                  "line": {
-                                    "start": 44,
-                                    "end": 44
-                                  },
-                                  "column": {
-                                    "start": 48,
-                                    "end": 53
-                                  }
-                                },
+                            }
+                          },
+                          {
+                            "kind": "string",
+                            "value": " (woof, ",
+                            "raw": " (woof, "
+                          },
+                          {
+                            "kind": "expression",
+                            "expression": {
+                              "type": "MemberExpression",
+                              "object": {
+                                "type": "Identifier",
+                                "name": "this",
                                 "line": {
                                   "start": 44,
                                   "end": 44
                                 },
                                 "column": {
                                   "start": 43,
+                                  "end": 47
+                                }
+                              },
+                              "property": {
+                                "type": "Identifier",
+                                "name": "breed",
+                                "line": {
+                                  "start": 44,
+                                  "end": 44
+                                },
+                                "column": {
+                                  "start": 48,
                                   "end": 53
                                 }
+                              },
+                              "line": {
+                                "start": 44,
+                                "end": 44
+                              },
+                              "column": {
+                                "start": 43,
+                                "end": 53
                               }
-                            },
-                            {
-                              "kind": "string",
-                              "value": ")",
-                              "raw": ")"
                             }
-                          ],
-                          "line": {
-                            "start": 44,
-                            "end": 44
                           },
-                          "column": {
-                            "start": 16,
-                            "end": 56
+                          {
+                            "kind": "string",
+                            "value": ")",
+                            "raw": ")"
                           }
+                        ],
+                        "line": {
+                          "start": 44,
+                          "end": 44
+                        },
+                        "column": {
+                          "start": 16,
+                          "end": 56
                         }
-                      ],
+                      },
                       "line": {
                         "start": 44,
                         "end": 44
@@ -1480,89 +1472,87 @@
                   "statements": [
                     {
                       "type": "ReturnStatement",
-                      "arguments": [
-                        {
-                          "type": "InterpolatedStringExpression",
-                          "parts": [
-                            {
-                              "kind": "string",
-                              "value": "",
-                              "raw": ""
-                            },
-                            {
-                              "kind": "expression",
-                              "expression": {
-                                "type": "MemberExpression",
-                                "object": {
-                                  "type": "Identifier",
-                                  "name": "this",
-                                  "line": {
-                                    "start": 48,
-                                    "end": 48
-                                  },
-                                  "column": {
-                                    "start": 19,
-                                    "end": 23
-                                  }
-                                },
-                                "property": {
-                                  "type": "Identifier",
-                                  "name": "name",
-                                  "line": {
-                                    "start": 48,
-                                    "end": 48
-                                  },
-                                  "column": {
-                                    "start": 24,
-                                    "end": 28
-                                  }
-                                },
+                      "argument": {
+                        "type": "InterpolatedStringExpression",
+                        "parts": [
+                          {
+                            "kind": "string",
+                            "value": "",
+                            "raw": ""
+                          },
+                          {
+                            "kind": "expression",
+                            "expression": {
+                              "type": "MemberExpression",
+                              "object": {
+                                "type": "Identifier",
+                                "name": "this",
                                 "line": {
                                   "start": 48,
                                   "end": 48
                                 },
                                 "column": {
                                   "start": 19,
-                                  "end": 28
+                                  "end": 23
                                 }
-                              }
-                            },
-                            {
-                              "kind": "string",
-                              "value": " fetched ",
-                              "raw": " fetched "
-                            },
-                            {
-                              "kind": "expression",
-                              "expression": {
+                              },
+                              "property": {
                                 "type": "Identifier",
-                                "name": "item",
+                                "name": "name",
                                 "line": {
                                   "start": 48,
                                   "end": 48
                                 },
                                 "column": {
-                                  "start": 40,
-                                  "end": 44
+                                  "start": 24,
+                                  "end": 28
                                 }
+                              },
+                              "line": {
+                                "start": 48,
+                                "end": 48
+                              },
+                              "column": {
+                                "start": 19,
+                                "end": 28
                               }
-                            },
-                            {
-                              "kind": "string",
-                              "value": "",
-                              "raw": ""
                             }
-                          ],
-                          "line": {
-                            "start": 48,
-                            "end": 48
                           },
-                          "column": {
-                            "start": 16,
-                            "end": 46
+                          {
+                            "kind": "string",
+                            "value": " fetched ",
+                            "raw": " fetched "
+                          },
+                          {
+                            "kind": "expression",
+                            "expression": {
+                              "type": "Identifier",
+                              "name": "item",
+                              "line": {
+                                "start": 48,
+                                "end": 48
+                              },
+                              "column": {
+                                "start": 40,
+                                "end": 44
+                              }
+                            }
+                          },
+                          {
+                            "kind": "string",
+                            "value": "",
+                            "raw": ""
                           }
+                        ],
+                        "line": {
+                          "start": 48,
+                          "end": 48
+                        },
+                        "column": {
+                          "start": 16,
+                          "end": 46
                         }
-                      ],
+                      },
                       "line": {
                         "start": 48,
                         "end": 48
@@ -1701,80 +1691,78 @@
                   "statements": [
                     {
                       "type": "ReturnStatement",
-                      "arguments": [
-                        {
-                          "type": "InterpolatedStringExpression",
-                          "parts": [
-                            {
-                              "kind": "string",
-                              "value": "",
-                              "raw": ""
-                            },
-                            {
-                              "kind": "expression",
-                              "expression": {
-                                "type": "CallExpression",
-                                "callee": {
-                                  "type": "MemberExpression",
-                                  "object": {
-                                    "type": "SuperExpression",
-                                    "line": {
-                                      "start": 55,
-                                      "end": 55
-                                    },
-                                    "column": {
-                                      "start": 19,
-                                      "end": 24
-                                    }
-                                  },
-                                  "property": {
-                                    "type": "Identifier",
-                                    "name": "speak",
-                                    "line": {
-                                      "start": 55,
-                                      "end": 55
-                                    },
-                                    "column": {
-                                      "start": 25,
-                                      "end": 30
-                                    }
-                                  },
+                      "argument": {
+                        "type": "InterpolatedStringExpression",
+                        "parts": [
+                          {
+                            "kind": "string",
+                            "value": "",
+                            "raw": ""
+                          },
+                          {
+                            "kind": "expression",
+                            "expression": {
+                              "type": "CallExpression",
+                              "callee": {
+                                "type": "MemberExpression",
+                                "object": {
+                                  "type": "SuperExpression",
                                   "line": {
                                     "start": 55,
                                     "end": 55
                                   },
                                   "column": {
                                     "start": 19,
+                                    "end": 24
+                                  }
+                                },
+                                "property": {
+                                  "type": "Identifier",
+                                  "name": "speak",
+                                  "line": {
+                                    "start": 55,
+                                    "end": 55
+                                  },
+                                  "column": {
+                                    "start": 25,
                                     "end": 30
                                   }
                                 },
-                                "arguments": [],
                                 "line": {
                                   "start": 55,
                                   "end": 55
                                 },
                                 "column": {
                                   "start": 19,
-                                  "end": 32
+                                  "end": 30
                                 }
+                              },
+                              "arguments": [],
+                              "line": {
+                                "start": 55,
+                                "end": 55
+                              },
+                              "column": {
+                                "start": 19,
+                                "end": 32
                               }
-                            },
-                            {
-                              "kind": "string",
-                              "value": "!",
-                              "raw": "!"
                             }
-                          ],
-                          "line": {
-                            "start": 55,
-                            "end": 55
                           },
-                          "column": {
-                            "start": 16,
-                            "end": 35
+                          {
+                            "kind": "string",
+                            "value": "!",
+                            "raw": "!"
                           }
+                        ],
+                        "line": {
+                          "start": 55,
+                          "end": 55
+                        },
+                        "column": {
+                          "start": 16,
+                          "end": 35
                         }
-                      ],
+                      },
                       "line": {
                         "start": 55,
                         "end": 55
@@ -1851,16 +1839,39 @@
         ],
         "init": [
           {
-            "type": "NewExpression",
+            "type": "CallExpression",
             "callee": {
-              "type": "Identifier",
-              "name": "Dog",
+              "type": "MemberExpression",
+              "object": {
+                "type": "Identifier",
+                "name": "Dog",
+                "line": {
+                  "start": 59,
+                  "end": 59
+                },
+                "column": {
+                  "start": 13,
+                  "end": 16
+                }
+              },
+              "property": {
+                "type": "Identifier",
+                "name": "new",
+                "line": {
+                  "start": 59,
+                  "end": 59
+                },
+                "column": {
+                  "start": 17,
+                  "end": 20
+                }
+              },
               "line": {
                 "start": 59,
                 "end": 59
               },
               "column": {
-                "start": 17,
+                "start": 13,
                 "end": 20
               }
             },
@@ -2275,16 +2286,39 @@
         ],
         "init": [
           {
-            "type": "NewExpression",
+            "type": "CallExpression",
             "callee": {
-              "type": "Identifier",
-              "name": "Puppy",
+              "type": "MemberExpression",
+              "object": {
+                "type": "Identifier",
+                "name": "Puppy",
+                "line": {
+                  "start": 67,
+                  "end": 67
+                },
+                "column": {
+                  "start": 13,
+                  "end": 18
+                }
+              },
+              "property": {
+                "type": "Identifier",
+                "name": "new",
+                "line": {
+                  "start": 67,
+                  "end": 67
+                },
+                "column": {
+                  "start": 19,
+                  "end": 22
+                }
+              },
               "line": {
                 "start": 67,
                 "end": 67
               },
               "column": {
-                "start": 17,
+                "start": 13,
                 "end": 22
               }
             },
@@ -2690,7 +2724,6 @@
                     }
                   }
                 ],
-                "hasVarargs": false,
                 "returnType": {
                   "type": "TypeReference",
                   "base": "Dog",
@@ -2742,59 +2775,57 @@
             "statements": [
               {
                 "type": "ReturnStatement",
-                "arguments": [
-                  {
-                    "type": "CallExpression",
-                    "callee": {
-                      "type": "Identifier",
-                      "name": "make",
-                      "line": {
-                        "start": 75,
-                        "end": 75
-                      },
-                      "column": {
-                        "start": 12,
-                        "end": 16
-                      }
-                    },
-                    "arguments": [
-                      {
-                        "type": "StringLiteral",
-                        "value": "Spot",
-                        "raw": "\"Spot\"",
-                        "line": {
-                          "start": 75,
-                          "end": 75
-                        },
-                        "column": {
-                          "start": 17,
-                          "end": 23
-                        }
-                      },
-                      {
-                        "type": "StringLiteral",
-                        "value": "beagle",
-                        "raw": "\"beagle\"",
-                        "line": {
-                          "start": 75,
-                          "end": 75
-                        },
-                        "column": {
-                          "start": 25,
-                          "end": 33
-                        }
-                      }
-                    ],
+                "argument": {
+                  "type": "CallExpression",
+                  "callee": {
+                    "type": "Identifier",
+                    "name": "make",
                     "line": {
                       "start": 75,
                       "end": 75
                     },
                     "column": {
                       "start": 12,
-                      "end": 34
+                      "end": 16
                     }
+                  },
+                  "arguments": [
+                    {
+                      "type": "StringLiteral",
+                      "value": "Spot",
+                      "raw": "\"Spot\"",
+                      "line": {
+                        "start": 75,
+                        "end": 75
+                      },
+                      "column": {
+                        "start": 17,
+                        "end": 23
+                      }
+                    },
+                    {
+                      "type": "StringLiteral",
+                      "value": "beagle",
+                      "raw": "\"beagle\"",
+                      "line": {
+                        "start": 75,
+                        "end": 75
+                      },
+                      "column": {
+                        "start": 25,
+                        "end": 33
+                      }
+                    }
+                  ],
+                  "line": {
+                    "start": 75,
+                    "end": 75
+                  },
+                  "column": {
+                    "start": 12,
+                    "end": 34
                   }
-                ],
+                },
                 "line": {
                   "start": 75,
                   "end": 75
@@ -2965,7 +2996,6 @@
                   "end": 19
                 }
               },
-              "isPack": false,
               "line": {
                 "start": 82,
                 "end": 82
@@ -3204,43 +3234,41 @@
                   "statements": [
                     {
                       "type": "ReturnStatement",
-                      "arguments": [
-                        {
-                          "type": "MemberExpression",
-                          "object": {
-                            "type": "Identifier",
-                            "name": "this",
-                            "line": {
-                              "start": 90,
-                              "end": 90
-                            },
-                            "column": {
-                              "start": 16,
-                              "end": 20
-                            }
-                          },
-                          "property": {
-                            "type": "Identifier",
-                            "name": "value",
-                            "line": {
-                              "start": 90,
-                              "end": 90
-                            },
-                            "column": {
-                              "start": 21,
-                              "end": 26
-                            }
-                          },
+                      "argument": {
+                        "type": "MemberExpression",
+                        "object": {
+                          "type": "Identifier",
+                          "name": "this",
                           "line": {
                             "start": 90,
                             "end": 90
                           },
                           "column": {
                             "start": 16,
+                            "end": 20
+                          }
+                        },
+                        "property": {
+                          "type": "Identifier",
+                          "name": "value",
+                          "line": {
+                            "start": 90,
+                            "end": 90
+                          },
+                          "column": {
+                            "start": 21,
                             "end": 26
                           }
+                        },
+                        "line": {
+                          "start": 90,
+                          "end": 90
+                        },
+                        "column": {
+                          "start": 16,
+                          "end": 26
                         }
-                      ],
+                      },
                       "line": {
                         "start": 90,
                         "end": 90
@@ -3312,7 +3340,6 @@
                         "end": 19
                       }
                     },
-                    "isPack": false,
                     "line": {
                       "start": 93,
                       "end": 93
@@ -3381,7 +3408,6 @@
                           }
                         }
                       ],
-                      "hasVarargs": false,
                       "returnType": {
                         "type": "TypeReference",
                         "base": "R",
@@ -3447,12 +3473,25 @@
                   "statements": [
                     {
                       "type": "ReturnStatement",
-                      "arguments": [
-                        {
-                          "type": "NewExpression",
-                          "callee": {
+                      "argument": {
+                        "type": "CallExpression",
+                        "callee": {
+                          "type": "MemberExpression",
+                          "object": {
                             "type": "Identifier",
                             "name": "Box",
+                            "line": {
+                              "start": 94,
+                              "end": 94
+                            },
+                            "column": {
+                              "start": 16,
+                              "end": 19
+                            }
+                          },
+                          "property": {
+                            "type": "Identifier",
+                            "name": "new",
                             "line": {
                               "start": 94,
                               "end": 94
@@ -3462,78 +3501,86 @@
                               "end": 23
                             }
                           },
-                          "arguments": [
-                            {
-                              "type": "CallExpression",
-                              "callee": {
-                                "type": "Identifier",
-                                "name": "f",
-                                "line": {
-                                  "start": 94,
-                                  "end": 94
-                                },
-                                "column": {
-                                  "start": 24,
-                                  "end": 25
-                                }
-                              },
-                              "arguments": [
-                                {
-                                  "type": "MemberExpression",
-                                  "object": {
-                                    "type": "Identifier",
-                                    "name": "this",
-                                    "line": {
-                                      "start": 94,
-                                      "end": 94
-                                    },
-                                    "column": {
-                                      "start": 26,
-                                      "end": 30
-                                    }
-                                  },
-                                  "property": {
-                                    "type": "Identifier",
-                                    "name": "value",
-                                    "line": {
-                                      "start": 94,
-                                      "end": 94
-                                    },
-                                    "column": {
-                                      "start": 31,
-                                      "end": 36
-                                    }
-                                  },
-                                  "line": {
-                                    "start": 94,
-                                    "end": 94
-                                  },
-                                  "column": {
-                                    "start": 26,
-                                    "end": 36
-                                  }
-                                }
-                              ],
-                              "line": {
-                                "start": 94,
-                                "end": 94
-                              },
-                              "column": {
-                                "start": 24,
-                                "end": 37
-                              }
-                            }
-                          ],
                           "line": {
                             "start": 94,
                             "end": 94
                           },
                           "column": {
                             "start": 16,
-                            "end": 38
+                            "end": 23
                           }
+                        },
+                        "arguments": [
+                          {
+                            "type": "CallExpression",
+                            "callee": {
+                              "type": "Identifier",
+                              "name": "f",
+                              "line": {
+                                "start": 94,
+                                "end": 94
+                              },
+                              "column": {
+                                "start": 24,
+                                "end": 25
+                              }
+                            },
+                            "arguments": [
+                              {
+                                "type": "MemberExpression",
+                                "object": {
+                                  "type": "Identifier",
+                                  "name": "this",
+                                  "line": {
+                                    "start": 94,
+                                    "end": 94
+                                  },
+                                  "column": {
+                                    "start": 26,
+                                    "end": 30
+                                  }
+                                },
+                                "property": {
+                                  "type": "Identifier",
+                                  "name": "value",
+                                  "line": {
+                                    "start": 94,
+                                    "end": 94
+                                  },
+                                  "column": {
+                                    "start": 31,
+                                    "end": 36
+                                  }
+                                },
+                                "line": {
+                                  "start": 94,
+                                  "end": 94
+                                },
+                                "column": {
+                                  "start": 26,
+                                  "end": 36
+                                }
+                              }
+                            ],
+                            "line": {
+                              "start": 94,
+                              "end": 94
+                            },
+                            "column": {
+                              "start": 24,
+                              "end": 37
+                            }
+                          }
+                        ],
+                        "line": {
+                          "start": 94,
+                          "end": 94
+                        },
+                        "column": {
+                          "start": 16,
+                          "end": 38
                         }
-                      ],
+                      },
                       "line": {
                         "start": 94,
                         "end": 94
@@ -3637,16 +3684,39 @@
         ],
         "init": [
           {
-            "type": "NewExpression",
+            "type": "CallExpression",
             "callee": {
-              "type": "Identifier",
-              "name": "Box",
+              "type": "MemberExpression",
+              "object": {
+                "type": "Identifier",
+                "name": "Box",
+                "line": {
+                  "start": 98,
+                  "end": 98
+                },
+                "column": {
+                  "start": 31,
+                  "end": 34
+                }
+              },
+              "property": {
+                "type": "Identifier",
+                "name": "new",
+                "line": {
+                  "start": 98,
+                  "end": 98
+                },
+                "column": {
+                  "start": 35,
+                  "end": 38
+                }
+              },
               "line": {
                 "start": 98,
                 "end": 98
               },
               "column": {
-                "start": 35,
+                "start": 31,
                 "end": 38
               }
             },
@@ -3781,45 +3851,43 @@
                     "statements": [
                       {
                         "type": "ReturnStatement",
-                        "arguments": [
-                          {
-                            "type": "CallExpression",
-                            "callee": {
-                              "type": "Identifier",
-                              "name": "tostring",
-                              "line": {
-                                "start": 99,
-                                "end": 99
-                              },
-                              "column": {
-                                "start": 65,
-                                "end": 73
-                              }
-                            },
-                            "arguments": [
-                              {
-                                "type": "Identifier",
-                                "name": "n",
-                                "line": {
-                                  "start": 99,
-                                  "end": 99
-                                },
-                                "column": {
-                                  "start": 74,
-                                  "end": 75
-                                }
-                              }
-                            ],
+                        "argument": {
+                          "type": "CallExpression",
+                          "callee": {
+                            "type": "Identifier",
+                            "name": "tostring",
                             "line": {
                               "start": 99,
                               "end": 99
                             },
                             "column": {
                               "start": 65,
-                              "end": 76
+                              "end": 73
                             }
+                          },
+                          "arguments": [
+                            {
+                              "type": "Identifier",
+                              "name": "n",
+                              "line": {
+                                "start": 99,
+                                "end": 99
+                              },
+                              "column": {
+                                "start": 74,
+                                "end": 75
+                              }
+                            }
+                          ],
+                          "line": {
+                            "start": 99,
+                            "end": 99
+                          },
+                          "column": {
+                            "start": 65,
+                            "end": 76
                           }
-                        ],
+                        },
                         "line": {
                           "start": 99,
                           "end": 99
@@ -4174,69 +4242,67 @@
                   "statements": [
                     {
                       "type": "ReturnStatement",
-                      "arguments": [
-                        {
-                          "type": "BinaryExpression",
-                          "operator": "*",
-                          "left": {
-                            "type": "MethodCallExpression",
-                            "object": {
-                              "type": "Identifier",
-                              "name": "this",
-                              "line": {
-                                "start": 109,
-                                "end": 109
-                              },
-                              "column": {
-                                "start": 16,
-                                "end": 20
-                              }
-                            },
-                            "method": {
-                              "type": "Identifier",
-                              "name": "get",
-                              "line": {
-                                "start": 109,
-                                "end": 109
-                              },
-                              "column": {
-                                "start": 21,
-                                "end": 24
-                              }
-                            },
-                            "arguments": [],
+                      "argument": {
+                        "type": "BinaryExpression",
+                        "operator": "*",
+                        "left": {
+                          "type": "MethodCallExpression",
+                          "object": {
+                            "type": "Identifier",
+                            "name": "this",
                             "line": {
                               "start": 109,
                               "end": 109
                             },
                             "column": {
                               "start": 16,
-                              "end": 26
+                              "end": 20
                             }
                           },
-                          "right": {
-                            "type": "NumberLiteral",
-                            "value": 2,
-                            "raw": "2",
+                          "method": {
+                            "type": "Identifier",
+                            "name": "get",
                             "line": {
                               "start": 109,
                               "end": 109
                             },
                             "column": {
-                              "start": 29,
-                              "end": 30
+                              "start": 21,
+                              "end": 24
                             }
                           },
+                          "arguments": [],
                           "line": {
                             "start": 109,
                             "end": 109
                           },
                           "column": {
                             "start": 16,
+                            "end": 26
+                          }
+                        },
+                        "right": {
+                          "type": "NumberLiteral",
+                          "value": 2,
+                          "raw": "2",
+                          "line": {
+                            "start": 109,
+                            "end": 109
+                          },
+                          "column": {
+                            "start": 29,
                             "end": 30
                           }
+                        },
+                        "line": {
+                          "start": 109,
+                          "end": 109
+                        },
+                        "column": {
+                          "start": 16,
+                          "end": 30
                         }
-                      ],
+                      },
                       "line": {
                         "start": 109,
                         "end": 109
@@ -4463,43 +4529,41 @@
                       },
                       {
                         "type": "ReturnStatement",
-                        "arguments": [
-                          {
-                            "type": "MemberExpression",
-                            "object": {
-                              "type": "Identifier",
-                              "name": "this",
-                              "line": {
-                                "start": 119,
-                                "end": 119
-                              },
-                              "column": {
-                                "start": 16,
-                                "end": 20
-                              }
-                            },
-                            "property": {
-                              "type": "Identifier",
-                              "name": "n",
-                              "line": {
-                                "start": 119,
-                                "end": 119
-                              },
-                              "column": {
-                                "start": 21,
-                                "end": 22
-                              }
-                            },
+                        "argument": {
+                          "type": "MemberExpression",
+                          "object": {
+                            "type": "Identifier",
+                            "name": "this",
                             "line": {
                               "start": 119,
                               "end": 119
                             },
                             "column": {
                               "start": 16,
+                              "end": 20
+                            }
+                          },
+                          "property": {
+                            "type": "Identifier",
+                            "name": "n",
+                            "line": {
+                              "start": 119,
+                              "end": 119
+                            },
+                            "column": {
+                              "start": 21,
                               "end": 22
                             }
+                          },
+                          "line": {
+                            "start": 119,
+                            "end": 119
+                          },
+                          "column": {
+                            "start": 16,
+                            "end": 22
                           }
-                        ],
+                        },
                         "line": {
                           "start": 119,
                           "end": 119
@@ -4577,16 +4641,39 @@
         ],
         "init": [
           {
-            "type": "NewExpression",
+            "type": "CallExpression",
             "callee": {
-              "type": "Identifier",
-              "name": "Counter",
+              "type": "MemberExpression",
+              "object": {
+                "type": "Identifier",
+                "name": "Counter",
+                "line": {
+                  "start": 123,
+                  "end": 123
+                },
+                "column": {
+                  "start": 17,
+                  "end": 24
+                }
+              },
+              "property": {
+                "type": "Identifier",
+                "name": "new",
+                "line": {
+                  "start": 123,
+                  "end": 123
+                },
+                "column": {
+                  "start": 25,
+                  "end": 28
+                }
+              },
               "line": {
                 "start": 123,
                 "end": 123
               },
               "column": {
-                "start": 21,
+                "start": 17,
                 "end": 28
               }
             },

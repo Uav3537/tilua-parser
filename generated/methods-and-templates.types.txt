@@ -3,7 +3,7 @@ bumped: number
 by: number
 config: { host: string, port: number }
 counter: Counter & { bump: (self: Counter, by: number) => number } & { peek: (self: Counter & { bump: (self: Counter, by: number) => number }) => number }
-handlers: { onClick: (value: number) => (), onHover: (value: string) => () }
+handlers: { onClick: (value: number) => nil, onHover: (value: string) => nil }
 here: Counter
 host: string
 lower: "click"

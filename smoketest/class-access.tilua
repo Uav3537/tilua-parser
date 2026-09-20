@@ -35,7 +35,7 @@ class Savings extends Account {
     }
 }
 
-const account = new Account("ana")
+const account = Account.new("ana")
 account:deposit(10)
 const owner = account.owner
 
@@ -51,5 +51,5 @@ class Flags {
     private: boolean = false
     public = true
 }
-const flags = new Flags()
+const flags = Flags.new()
 const shown = flags.private

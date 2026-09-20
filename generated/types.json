@@ -758,7 +758,6 @@
               }
             }
           ],
-          "hasVarargs": false,
           "returnType": {
             "type": "TypeReference",
             "base": "boolean",

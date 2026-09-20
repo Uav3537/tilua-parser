@@ -56,7 +56,7 @@ export class Puppy extends Dog {
     }
 }
 
-const rex = new Dog("Rex", "shiba")
+const rex = Dog.new("Rex", "shiba")
 const said: string = rex:speak()
 const shown: string = rex.label
 const legs: number = rex.legs
@@ -64,7 +64,7 @@ const asAnimal: Animal = rex
 
 rex.label = "Max"
 
-const pip = new Puppy("Pip", "pug")
+const pip = Puppy.new("Pip", "pug")
 const fetched: string = pip:fetch("ball")
 const total: number = Animal.count
 const made: number = Dog.made()
@@ -91,11 +91,11 @@ export class Box<T> {
     }
 
     function map<R>(f: (value: T) => R): Box<R> {
-        return new Box(f(this.value))
+        return Box.new(f(this.value))
     }
 }
 
-const ofNumber: Box<number> = new Box(1)
+const ofNumber: Box<number> = Box.new(1)
 const ofString: Box<string> = ofNumber:map(function(n) { return tostring(n) })
 const held: number = ofNumber:get()
 
@@ -120,7 +120,7 @@ const Counter = class {
     }
 }
 
-const counter = new Counter()
+const counter = Counter.new()
 const bumped: number = counter:bump()
 
 -- The links the memory model promises: an instance names its class, a class

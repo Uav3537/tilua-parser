@@ -1,14 +1,11 @@
 T: {} & { configure: (self: {}, { retries?: number, verbose?: boolean }) => nil }
-_: number
-a: number
 a: number
 a: number
 add: Reducer
 addedUp: number
-alsoForward: (...string) => (string, string)
+alsoForward: (...args: string[]) => string[]
 applyN: (n: number, number[]) => number
 around: string
-b: number
 b: number
 b: number
 braces: (x: number) => string
@@ -19,13 +16,13 @@ doubledOnce: number
 dx: number
 dy: number
 firstName: string
-firstOf: <T>(...T) => T | nil
-firstTwo: (...number) => (number, number)
-forward: (...string) => string
+firstOf: <T>(...args: T[]) => T | nil
+firstTwo: (...args: number[]) => [number, number]
+forward: (...args: string[]) => string
 greet: (who: string, punct: string) => string
 hp: number
 items: T[]
-join: (separator: string, ...string) => string
+join: (separator: string, ...args: string[]) => string
 joined: string
 logged: (n: number) => number
 makeEnemy: ({ hp?: number, name: any, pos: { x?: number, y?: number } }) => { hp: number, name: any, x: number, y: number }
@@ -39,6 +36,9 @@ name: any
 names: string[]
 nothing: () => 0
 numbers: number[]
+numbers: number[]
+parts: string[]
+parts: string[]
 parts: string[]
 picked: number | nil
 punct: string
@@ -53,8 +53,8 @@ sum: (number[]) => number
 sum: number
 summed: number
 thirdName: string
-threeNames: () => (string, string, string)
-total: (...number) => number
+threeNames: () => [string, string, string]
+total: (...args: number[]) => number
 twice: string
 two: number
 verbose: boolean

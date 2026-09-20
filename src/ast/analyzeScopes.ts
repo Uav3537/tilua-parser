@@ -1,4 +1,4 @@
-import type { TypeNode, TypePackNode, TypeofTypeNode } from "./nodes"
+import type { TypeNode, TypeofTypeNode } from "./nodes"
 // ============================================================
 // Scope / binding analysis
 // ------------------------------------------------------------
@@ -152,7 +152,9 @@ class Analyzer {
     private readonly globalScope: Scope = { parent: null, declarations: new Map() }
 
     constructor(private readonly options: AnalyzeScopesOptions) {
-        for (const name of options.builtinGlobals ?? []) {
+        // The language's own: what the script was started with. Every file
+        // sees it, library or none.
+        for (const name of [...LANGUAGE_GLOBALS, ...options.builtinGlobals ?? []]) {
             const id = this.getOrCreateGlobalBinding(name)
             this.bindings.get(id)!.isBuiltin = true
         }
@@ -618,15 +620,15 @@ class Analyzer {
             }
 
             case "GenericForStatement": {
-                for (const it of stmt.iterators) this.visitExpression(it, scope)
+                this.visitExpression(stmt.iterator, scope)
                 const bodyScope = childScope(scope)
-                for (const v of stmt.variables) this.declarePattern(bodyScope, v, "for-generic", scope)
+                this.declarePattern(bodyScope, stmt.variable, "for-generic", scope, stmt.kind === "const")
                 this.visitBlock(stmt.body, bodyScope)
                 return
             }
 
             case "ReturnStatement":
-                for (const arg of stmt.arguments) this.visitExpression(arg, scope)
+                if (stmt.argument) this.visitExpression(stmt.argument, scope)
                 return
 
             case "BreakStatement":
@@ -727,7 +729,6 @@ class Analyzer {
                 this.declare(fnScope, param.name, kind, param)
             }
         })
-        this.visitType(func.varargTypeAnnotation, fnScope)
         this.visitType(func.returnType, fnScope)
         this.functionDepth++
         try {
@@ -742,8 +743,8 @@ class Analyzer {
     private visitSignature(
         signature: {
             params: { typeAnnotation?: TypeNode }[]
-            returnType?: TypeNode | TypePackNode
-            generics?: { constraint?: TypeNode; default?: TypeNode | TypePackNode }[]
+            returnType?: TypeNode
+            generics?: { constraint?: TypeNode; default?: TypeNode }[]
         },
         scope: Scope,
     ): void {
@@ -764,6 +765,7 @@ class Analyzer {
             typeParams?: readonly GenericTypeParameter[]
             superclass?: Identifier
             superArguments?: readonly TypeNode[]
+            implements?: readonly TypeNode[]
             members: readonly ClassMember[]
         },
         outer: Scope,
@@ -772,6 +774,7 @@ class Analyzer {
         this.visitGenerics(node.typeParams, scope)
         if (node.superclass) this.reference(outer, node.superclass)
         for (const argument of node.superArguments ?? []) this.visitType(argument, scope)
+        for (const shape of node.implements ?? []) this.visitType(shape, scope)
         for (const member of node.members) {
             switch (member.type) {
                 case "ClassField":
@@ -791,7 +794,7 @@ class Analyzer {
     }
 
     private visitGenerics(
-        generics: readonly { constraint?: TypeNode; default?: TypeNode | TypePackNode }[] | undefined,
+        generics: readonly { constraint?: TypeNode; default?: TypeNode }[] | undefined,
         scope: Scope,
     ): void {
         for (const generic of generics ?? []) {
@@ -803,7 +806,7 @@ class Analyzer {
     /** Resolve the value references inside a type. Only `typeof x` has any —
      *  everything else in a type names types, which live in their own
      *  namespace and are not this pass's business. */
-    private visitType(node: TypeNode | TypePackNode | undefined, scope: Scope): void {
+    private visitType(node: TypeNode | undefined, scope: Scope): void {
         if (!node) return
         const walk = (value: unknown): void => {
             if (!value || typeof value !== "object") return
@@ -840,7 +843,6 @@ class Analyzer {
             case "BooleanLiteral":
             case "NumberLiteral":
             case "StringLiteral":
-            case "VarargExpression":
             case "ErrorExpression":
                 return
 
@@ -890,12 +892,6 @@ class Analyzer {
             case "CallExpression":
                 this.visitExpression(expr.callee, scope)
                 for (const arg of expr.arguments) this.visitExpression(arg, scope)
-                return
-
-            case "NewExpression":
-                this.visitExpression(expr.callee, scope)
-                for (const argument of expr.arguments) this.visitExpression(argument, scope)
-                for (const argument of expr.typeArguments ?? []) this.visitType(argument, scope)
                 return
 
             case "SuperExpression":
@@ -971,6 +967,11 @@ class Analyzer {
 // --------------------------------------------------------
 // Entry point
 // --------------------------------------------------------
+
+/** Globals tilua itself declares, whatever the type libraries do:
+ *  `scriptArgs` is the arguments the script was started with — Lua's
+ *  top-level `...` — as an array. */
+export const LANGUAGE_GLOBALS: readonly string[] = ["scriptArgs"]
 
 export function analyzeScopes(program: Program, options: AnalyzeScopesOptions = {}): ScopeAnalysis {
     return new Analyzer(options).run(program)

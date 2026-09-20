@@ -11,8 +11,8 @@
             "type": "IdentifierPattern",
             "name": "pairsList",
             "line": {
-              "start": 3,
-              "end": 3
+              "start": 4,
+              "end": 4
             },
             "column": {
               "start": 7,
@@ -32,8 +32,8 @@
                     "value": "a",
                     "raw": "\"a\"",
                     "line": {
-                      "start": 3,
-                      "end": 3
+                      "start": 4,
+                      "end": 4
                     },
                     "column": {
                       "start": 21,
@@ -45,8 +45,8 @@
                     "value": 1,
                     "raw": "1",
                     "line": {
-                      "start": 3,
-                      "end": 3
+                      "start": 4,
+                      "end": 4
                     },
                     "column": {
                       "start": 26,
@@ -55,8 +55,8 @@
                   }
                 ],
                 "line": {
-                  "start": 3,
-                  "end": 3
+                  "start": 4,
+                  "end": 4
                 },
                 "column": {
                   "start": 20,
@@ -71,8 +71,8 @@
                     "value": "b",
                     "raw": "\"b\"",
                     "line": {
-                      "start": 3,
-                      "end": 3
+                      "start": 4,
+                      "end": 4
                     },
                     "column": {
                       "start": 31,
@@ -84,8 +84,8 @@
                     "value": 2,
                     "raw": "2",
                     "line": {
-                      "start": 3,
-                      "end": 3
+                      "start": 4,
+                      "end": 4
                     },
                     "column": {
                       "start": 36,
@@ -94,8 +94,8 @@
                   }
                 ],
                 "line": {
-                  "start": 3,
-                  "end": 3
+                  "start": 4,
+                  "end": 4
                 },
                 "column": {
                   "start": 30,
@@ -110,8 +110,8 @@
                     "value": "c",
                     "raw": "\"c\"",
                     "line": {
-                      "start": 3,
-                      "end": 3
+                      "start": 4,
+                      "end": 4
                     },
                     "column": {
                       "start": 41,
@@ -123,8 +123,8 @@
                     "value": 3,
                     "raw": "3",
                     "line": {
-                      "start": 3,
-                      "end": 3
+                      "start": 4,
+                      "end": 4
                     },
                     "column": {
                       "start": 46,
@@ -133,8 +133,8 @@
                   }
                 ],
                 "line": {
-                  "start": 3,
-                  "end": 3
+                  "start": 4,
+                  "end": 4
                 },
                 "column": {
                   "start": 40,
@@ -143,8 +143,8 @@
               }
             ],
             "line": {
-              "start": 3,
-              "end": 3
+              "start": 4,
+              "end": 4
             },
             "column": {
               "start": 19,
@@ -153,8 +153,8 @@
           }
         ],
         "line": {
-          "start": 3,
-          "end": 3
+          "start": 4,
+          "end": 4
         },
         "column": {
           "start": 1,
@@ -169,8 +169,8 @@
             "type": "IdentifierPattern",
             "name": "records",
             "line": {
-              "start": 4,
-              "end": 4
+              "start": 5,
+              "end": 5
             },
             "column": {
               "start": 7,
@@ -191,8 +191,8 @@
                       "type": "Identifier",
                       "name": "id",
                       "line": {
-                        "start": 5,
-                        "end": 5
+                        "start": 6,
+                        "end": 6
                       },
                       "column": {
                         "start": 7,
@@ -204,8 +204,8 @@
                       "value": 1,
                       "raw": "1",
                       "line": {
-                        "start": 5,
-                        "end": 5
+                        "start": 6,
+                        "end": 6
                       },
                       "column": {
                         "start": 11,
@@ -219,8 +219,8 @@
                       "type": "Identifier",
                       "name": "label",
                       "line": {
-                        "start": 5,
-                        "end": 5
+                        "start": 6,
+                        "end": 6
                       },
                       "column": {
                         "start": 14,
@@ -231,75 +231,6 @@
                       "type": "StringLiteral",
                       "value": "one",
                       "raw": "\"one\"",
-                      "line": {
-                        "start": 5,
-                        "end": 5
-                      },
-                      "column": {
-                        "start": 21,
-                        "end": 26
-                      }
-                    }
-                  }
-                ],
-                "line": {
-                  "start": 5,
-                  "end": 5
-                },
-                "column": {
-                  "start": 5,
-                  "end": 28
-                }
-              },
-              {
-                "type": "TableExpression",
-                "fields": [
-                  {
-                    "type": "TableFieldNamed",
-                    "key": {
-                      "type": "Identifier",
-                      "name": "id",
-                      "line": {
-                        "start": 6,
-                        "end": 6
-                      },
-                      "column": {
-                        "start": 7,
-                        "end": 9
-                      }
-                    },
-                    "value": {
-                      "type": "NumberLiteral",
-                      "value": 2,
-                      "raw": "2",
-                      "line": {
-                        "start": 6,
-                        "end": 6
-                      },
-                      "column": {
-                        "start": 11,
-                        "end": 12
-                      }
-                    }
-                  },
-                  {
-                    "type": "TableFieldNamed",
-                    "key": {
-                      "type": "Identifier",
-                      "name": "label",
-                      "line": {
-                        "start": 6,
-                        "end": 6
-                      },
-                      "column": {
-                        "start": 14,
-                        "end": 19
-                      }
-                    },
-                    "value": {
-                      "type": "StringLiteral",
-                      "value": "two",
-                      "raw": "\"two\"",
                       "line": {
                         "start": 6,
                         "end": 6
@@ -319,11 +250,80 @@
                   "start": 5,
                   "end": 28
                 }
+              },
+              {
+                "type": "TableExpression",
+                "fields": [
+                  {
+                    "type": "TableFieldNamed",
+                    "key": {
+                      "type": "Identifier",
+                      "name": "id",
+                      "line": {
+                        "start": 7,
+                        "end": 7
+                      },
+                      "column": {
+                        "start": 7,
+                        "end": 9
+                      }
+                    },
+                    "value": {
+                      "type": "NumberLiteral",
+                      "value": 2,
+                      "raw": "2",
+                      "line": {
+                        "start": 7,
+                        "end": 7
+                      },
+                      "column": {
+                        "start": 11,
+                        "end": 12
+                      }
+                    }
+                  },
+                  {
+                    "type": "TableFieldNamed",
+                    "key": {
+                      "type": "Identifier",
+                      "name": "label",
+                      "line": {
+                        "start": 7,
+                        "end": 7
+                      },
+                      "column": {
+                        "start": 14,
+                        "end": 19
+                      }
+                    },
+                    "value": {
+                      "type": "StringLiteral",
+                      "value": "two",
+                      "raw": "\"two\"",
+                      "line": {
+                        "start": 7,
+                        "end": 7
+                      },
+                      "column": {
+                        "start": 21,
+                        "end": 26
+                      }
+                    }
+                  }
+                ],
+                "line": {
+                  "start": 7,
+                  "end": 7
+                },
+                "column": {
+                  "start": 5,
+                  "end": 28
+                }
               }
             ],
             "line": {
-              "start": 4,
-              "end": 7
+              "start": 5,
+              "end": 8
             },
             "column": {
               "start": 17,
@@ -332,8 +332,8 @@
           }
         ],
         "line": {
-          "start": 4,
-          "end": 7
+          "start": 5,
+          "end": 8
         },
         "column": {
           "start": 1,
@@ -342,71 +342,103 @@
       },
       {
         "type": "GenericForStatement",
-        "variables": [
-          {
-            "type": "IdentifierPattern",
-            "name": "i",
-            "line": {
-              "start": 9,
-              "end": 9
-            },
-            "column": {
-              "start": 6,
-              "end": 7
-            }
-          },
-          {
-            "type": "IdentifierPattern",
-            "name": "entry",
-            "line": {
-              "start": 9,
-              "end": 9
-            },
-            "column": {
-              "start": 9,
-              "end": 14
-            }
-          }
-        ],
-        "iterators": [
-          {
-            "type": "CallExpression",
-            "callee": {
-              "type": "Identifier",
-              "name": "ipairs",
-              "line": {
-                "start": 9,
-                "end": 9
-              },
-              "column": {
-                "start": 18,
-                "end": 24
-              }
-            },
-            "arguments": [
-              {
-                "type": "Identifier",
-                "name": "pairsList",
+        "kind": "const",
+        "variable": {
+          "type": "ArrayPattern",
+          "elements": [
+            {
+              "type": "ArrayPatternElement",
+              "value": {
+                "type": "IdentifierPattern",
+                "name": "i",
                 "line": {
-                  "start": 9,
-                  "end": 9
+                  "start": 11,
+                  "end": 11
                 },
                 "column": {
-                  "start": 25,
-                  "end": 34
+                  "start": 13,
+                  "end": 14
                 }
+              },
+              "line": {
+                "start": 11,
+                "end": 11
+              },
+              "column": {
+                "start": 13,
+                "end": 14
               }
-            ],
+            },
+            {
+              "type": "ArrayPatternElement",
+              "value": {
+                "type": "IdentifierPattern",
+                "name": "entry",
+                "line": {
+                  "start": 11,
+                  "end": 11
+                },
+                "column": {
+                  "start": 16,
+                  "end": 21
+                }
+              },
+              "line": {
+                "start": 11,
+                "end": 11
+              },
+              "column": {
+                "start": 16,
+                "end": 21
+              }
+            }
+          ],
+          "line": {
+            "start": 11,
+            "end": 11
+          },
+          "column": {
+            "start": 12,
+            "end": 22
+          }
+        },
+        "iterator": {
+          "type": "CallExpression",
+          "callee": {
+            "type": "Identifier",
+            "name": "ipairs",
             "line": {
-              "start": 9,
-              "end": 9
+              "start": 11,
+              "end": 11
             },
             "column": {
-              "start": 18,
-              "end": 35
+              "start": 26,
+              "end": 32
             }
+          },
+          "arguments": [
+            {
+              "type": "Identifier",
+              "name": "pairsList",
+              "line": {
+                "start": 11,
+                "end": 11
+              },
+              "column": {
+                "start": 33,
+                "end": 42
+              }
+            }
+          ],
+          "line": {
+            "start": 11,
+            "end": 11
+          },
+          "column": {
+            "start": 26,
+            "end": 43
           }
-        ],
+        },
         "body": {
           "type": "Block",
           "statements": [
@@ -418,8 +450,8 @@
                   "type": "Identifier",
                   "name": "print",
                   "line": {
-                    "start": 10,
-                    "end": 10
+                    "start": 12,
+                    "end": 12
                   },
                   "column": {
                     "start": 5,
@@ -431,8 +463,8 @@
                     "type": "Identifier",
                     "name": "i",
                     "line": {
-                      "start": 10,
-                      "end": 10
+                      "start": 12,
+                      "end": 12
                     },
                     "column": {
                       "start": 11,
@@ -443,8 +475,8 @@
                     "type": "Identifier",
                     "name": "entry",
                     "line": {
-                      "start": 10,
-                      "end": 10
+                      "start": 12,
+                      "end": 12
                     },
                     "column": {
                       "start": 14,
@@ -453,8 +485,8 @@
                   }
                 ],
                 "line": {
-                  "start": 10,
-                  "end": 10
+                  "start": 12,
+                  "end": 12
                 },
                 "column": {
                   "start": 5,
@@ -462,8 +494,8 @@
                 }
               },
               "line": {
-                "start": 10,
-                "end": 10
+                "start": 12,
+                "end": 12
               },
               "column": {
                 "start": 5,
@@ -472,8 +504,8 @@
             }
           ],
           "line": {
-            "start": 10,
-            "end": 10
+            "start": 12,
+            "end": 12
           },
           "column": {
             "start": 5,
@@ -481,8 +513,8 @@
           }
         },
         "line": {
-          "start": 9,
-          "end": 11
+          "start": 11,
+          "end": 13
         },
         "column": {
           "start": 1,
@@ -491,34 +523,31 @@
       },
       {
         "type": "GenericForStatement",
-        "variables": [
-          {
-            "type": "IdentifierPattern",
-            "name": "record",
-            "line": {
-              "start": 14,
-              "end": 14
-            },
-            "column": {
-              "start": 6,
-              "end": 12
-            }
+        "kind": "const",
+        "variable": {
+          "type": "IdentifierPattern",
+          "name": "record",
+          "line": {
+            "start": 16,
+            "end": 16
+          },
+          "column": {
+            "start": 12,
+            "end": 18
           }
-        ],
-        "iterators": [
-          {
-            "type": "Identifier",
-            "name": "records",
-            "line": {
-              "start": 14,
-              "end": 14
-            },
-            "column": {
-              "start": 16,
-              "end": 23
-            }
+        },
+        "iterator": {
+          "type": "Identifier",
+          "name": "records",
+          "line": {
+            "start": 16,
+            "end": 16
+          },
+          "column": {
+            "start": 22,
+            "end": 29
           }
-        ],
+        },
         "body": {
           "type": "Block",
           "statements": [
@@ -530,8 +559,8 @@
                   "type": "Identifier",
                   "name": "print",
                   "line": {
-                    "start": 15,
-                    "end": 15
+                    "start": 17,
+                    "end": 17
                   },
                   "column": {
                     "start": 5,
@@ -545,8 +574,8 @@
                       "type": "Identifier",
                       "name": "record",
                       "line": {
-                        "start": 15,
-                        "end": 15
+                        "start": 17,
+                        "end": 17
                       },
                       "column": {
                         "start": 11,
@@ -557,8 +586,8 @@
                       "type": "Identifier",
                       "name": "id",
                       "line": {
-                        "start": 15,
-                        "end": 15
+                        "start": 17,
+                        "end": 17
                       },
                       "column": {
                         "start": 18,
@@ -566,8 +595,8 @@
                       }
                     },
                     "line": {
-                      "start": 15,
-                      "end": 15
+                      "start": 17,
+                      "end": 17
                     },
                     "column": {
                       "start": 11,
@@ -580,8 +609,8 @@
                       "type": "Identifier",
                       "name": "record",
                       "line": {
-                        "start": 15,
-                        "end": 15
+                        "start": 17,
+                        "end": 17
                       },
                       "column": {
                         "start": 22,
@@ -592,8 +621,8 @@
                       "type": "Identifier",
                       "name": "label",
                       "line": {
-                        "start": 15,
-                        "end": 15
+                        "start": 17,
+                        "end": 17
                       },
                       "column": {
                         "start": 29,
@@ -601,8 +630,8 @@
                       }
                     },
                     "line": {
-                      "start": 15,
-                      "end": 15
+                      "start": 17,
+                      "end": 17
                     },
                     "column": {
                       "start": 22,
@@ -611,8 +640,8 @@
                   }
                 ],
                 "line": {
-                  "start": 15,
-                  "end": 15
+                  "start": 17,
+                  "end": 17
                 },
                 "column": {
                   "start": 5,
@@ -620,8 +649,8 @@
                 }
               },
               "line": {
-                "start": 15,
-                "end": 15
+                "start": 17,
+                "end": 17
               },
               "column": {
                 "start": 5,
@@ -630,8 +659,8 @@
             }
           ],
           "line": {
-            "start": 15,
-            "end": 15
+            "start": 17,
+            "end": 17
           },
           "column": {
             "start": 5,
@@ -639,8 +668,8 @@
           }
         },
         "line": {
-          "start": 14,
-          "end": 16
+          "start": 16,
+          "end": 18
         },
         "column": {
           "start": 1,
@@ -653,8 +682,8 @@
           "type": "TypedIdentifier",
           "name": "i",
           "line": {
-            "start": 18,
-            "end": 18
+            "start": 20,
+            "end": 20
           },
           "column": {
             "start": 6,
@@ -666,8 +695,8 @@
           "value": 1,
           "raw": "1",
           "line": {
-            "start": 18,
-            "end": 18
+            "start": 20,
+            "end": 20
           },
           "column": {
             "start": 10,
@@ -679,8 +708,8 @@
           "value": 10,
           "raw": "10",
           "line": {
-            "start": 18,
-            "end": 18
+            "start": 20,
+            "end": 20
           },
           "column": {
             "start": 13,
@@ -698,8 +727,8 @@
                   "type": "Identifier",
                   "name": "print",
                   "line": {
-                    "start": 19,
-                    "end": 19
+                    "start": 21,
+                    "end": 21
                   },
                   "column": {
                     "start": 5,
@@ -711,8 +740,8 @@
                     "type": "Identifier",
                     "name": "i",
                     "line": {
-                      "start": 19,
-                      "end": 19
+                      "start": 21,
+                      "end": 21
                     },
                     "column": {
                       "start": 11,
@@ -721,8 +750,8 @@
                   }
                 ],
                 "line": {
-                  "start": 19,
-                  "end": 19
+                  "start": 21,
+                  "end": 21
                 },
                 "column": {
                   "start": 5,
@@ -730,8 +759,8 @@
                 }
               },
               "line": {
-                "start": 19,
-                "end": 19
+                "start": 21,
+                "end": 21
               },
               "column": {
                 "start": 5,
@@ -740,8 +769,8 @@
             }
           ],
           "line": {
-            "start": 19,
-            "end": 19
+            "start": 21,
+            "end": 21
           },
           "column": {
             "start": 5,
@@ -749,8 +778,8 @@
           }
         },
         "line": {
-          "start": 18,
-          "end": 20
+          "start": 20,
+          "end": 22
         },
         "column": {
           "start": 1,
@@ -767,8 +796,8 @@
             "base": "number",
             "typeArguments": [],
             "line": {
-              "start": 22,
-              "end": 22
+              "start": 24,
+              "end": 24
             },
             "column": {
               "start": 9,
@@ -776,8 +805,8 @@
             }
           },
           "line": {
-            "start": 22,
-            "end": 22
+            "start": 24,
+            "end": 24
           },
           "column": {
             "start": 6,
@@ -789,8 +818,8 @@
           "value": 10,
           "raw": "10",
           "line": {
-            "start": 22,
-            "end": 22
+            "start": 24,
+            "end": 24
           },
           "column": {
             "start": 18,
@@ -802,8 +831,8 @@
           "value": 1,
           "raw": "1",
           "line": {
-            "start": 22,
-            "end": 22
+            "start": 24,
+            "end": 24
           },
           "column": {
             "start": 22,
@@ -818,8 +847,8 @@
             "value": 1,
             "raw": "1",
             "line": {
-              "start": 22,
-              "end": 22
+              "start": 24,
+              "end": 24
             },
             "column": {
               "start": 26,
@@ -827,8 +856,8 @@
             }
           },
           "line": {
-            "start": 22,
-            "end": 22
+            "start": 24,
+            "end": 24
           },
           "column": {
             "start": 25,
@@ -846,8 +875,8 @@
                   "type": "Identifier",
                   "name": "print",
                   "line": {
-                    "start": 23,
-                    "end": 23
+                    "start": 25,
+                    "end": 25
                   },
                   "column": {
                     "start": 5,
@@ -859,8 +888,8 @@
                     "type": "Identifier",
                     "name": "i",
                     "line": {
-                      "start": 23,
-                      "end": 23
+                      "start": 25,
+                      "end": 25
                     },
                     "column": {
                       "start": 11,
@@ -869,8 +898,8 @@
                   }
                 ],
                 "line": {
-                  "start": 23,
-                  "end": 23
+                  "start": 25,
+                  "end": 25
                 },
                 "column": {
                   "start": 5,
@@ -878,8 +907,8 @@
                 }
               },
               "line": {
-                "start": 23,
-                "end": 23
+                "start": 25,
+                "end": 25
               },
               "column": {
                 "start": 5,
@@ -888,8 +917,8 @@
             }
           ],
           "line": {
-            "start": 23,
-            "end": 23
+            "start": 25,
+            "end": 25
           },
           "column": {
             "start": 5,
@@ -897,8 +926,8 @@
           }
         },
         "line": {
-          "start": 22,
-          "end": 24
+          "start": 24,
+          "end": 26
         },
         "column": {
           "start": 1,
@@ -907,166 +936,198 @@
       },
       {
         "type": "GenericForStatement",
-        "variables": [
-          {
-            "type": "IdentifierPattern",
-            "name": "key",
-            "line": {
-              "start": 26,
-              "end": 26
-            },
-            "column": {
-              "start": 6,
-              "end": 9
-            }
-          },
-          {
-            "type": "ObjectPattern",
-            "properties": [
-              {
-                "type": "ObjectPatternProperty",
-                "key": {
-                  "type": "Identifier",
-                  "name": "deep",
-                  "line": {
-                    "start": 26,
-                    "end": 26
-                  },
-                  "column": {
-                    "start": 13,
-                    "end": 17
-                  }
-                },
-                "computed": false,
-                "value": {
-                  "type": "IdentifierPattern",
-                  "name": "deep",
-                  "line": {
-                    "start": 26,
-                    "end": 26
-                  },
-                  "column": {
-                    "start": 13,
-                    "end": 17
-                  }
-                },
-                "shorthand": true,
+        "kind": "const",
+        "variable": {
+          "type": "ArrayPattern",
+          "elements": [
+            {
+              "type": "ArrayPatternElement",
+              "value": {
+                "type": "IdentifierPattern",
+                "name": "key",
                 "line": {
-                  "start": 26,
-                  "end": 26
+                  "start": 29,
+                  "end": 29
                 },
                 "column": {
                   "start": 13,
-                  "end": 17
+                  "end": 16
                 }
-              }
-            ],
-            "line": {
-              "start": 26,
-              "end": 26
-            },
-            "column": {
-              "start": 11,
-              "end": 19
-            }
-          }
-        ],
-        "iterators": [
-          {
-            "type": "CallExpression",
-            "callee": {
-              "type": "Identifier",
-              "name": "pairs",
+              },
               "line": {
-                "start": 26,
-                "end": 26
+                "start": 29,
+                "end": 29
               },
               "column": {
-                "start": 23,
-                "end": 28
+                "start": 13,
+                "end": 16
               }
             },
-            "arguments": [
-              {
-                "type": "TableExpression",
-                "fields": [
+            {
+              "type": "ArrayPatternElement",
+              "value": {
+                "type": "ObjectPattern",
+                "properties": [
                   {
-                    "type": "TableFieldNamed",
+                    "type": "ObjectPatternProperty",
                     "key": {
                       "type": "Identifier",
-                      "name": "x",
+                      "name": "deep",
                       "line": {
-                        "start": 26,
-                        "end": 26
+                        "start": 29,
+                        "end": 29
                       },
                       "column": {
-                        "start": 31,
-                        "end": 32
+                        "start": 20,
+                        "end": 24
                       }
                     },
+                    "computed": false,
                     "value": {
-                      "type": "TableExpression",
-                      "fields": [
-                        {
-                          "type": "TableFieldNamed",
-                          "key": {
-                            "type": "Identifier",
-                            "name": "deep",
-                            "line": {
-                              "start": 26,
-                              "end": 26
-                            },
-                            "column": {
-                              "start": 36,
-                              "end": 40
-                            }
-                          },
-                          "value": {
-                            "type": "NumberLiteral",
-                            "value": 1,
-                            "raw": "1",
-                            "line": {
-                              "start": 26,
-                              "end": 26
-                            },
-                            "column": {
-                              "start": 42,
-                              "end": 43
-                            }
-                          }
-                        }
-                      ],
+                      "type": "IdentifierPattern",
+                      "name": "deep",
                       "line": {
-                        "start": 26,
-                        "end": 26
+                        "start": 29,
+                        "end": 29
                       },
                       "column": {
-                        "start": 34,
-                        "end": 45
+                        "start": 20,
+                        "end": 24
                       }
+                    },
+                    "shorthand": true,
+                    "line": {
+                      "start": 29,
+                      "end": 29
+                    },
+                    "column": {
+                      "start": 20,
+                      "end": 24
                     }
                   }
                 ],
                 "line": {
-                  "start": 26,
-                  "end": 26
+                  "start": 29,
+                  "end": 29
                 },
                 "column": {
-                  "start": 29,
-                  "end": 47
+                  "start": 18,
+                  "end": 26
                 }
+              },
+              "line": {
+                "start": 29,
+                "end": 29
+              },
+              "column": {
+                "start": 18,
+                "end": 26
               }
-            ],
+            }
+          ],
+          "line": {
+            "start": 29,
+            "end": 29
+          },
+          "column": {
+            "start": 12,
+            "end": 27
+          }
+        },
+        "iterator": {
+          "type": "CallExpression",
+          "callee": {
+            "type": "Identifier",
+            "name": "pairs",
             "line": {
-              "start": 26,
-              "end": 26
+              "start": 29,
+              "end": 29
             },
             "column": {
-              "start": 23,
-              "end": 48
+              "start": 31,
+              "end": 36
             }
+          },
+          "arguments": [
+            {
+              "type": "TableExpression",
+              "fields": [
+                {
+                  "type": "TableFieldNamed",
+                  "key": {
+                    "type": "Identifier",
+                    "name": "x",
+                    "line": {
+                      "start": 29,
+                      "end": 29
+                    },
+                    "column": {
+                      "start": 39,
+                      "end": 40
+                    }
+                  },
+                  "value": {
+                    "type": "TableExpression",
+                    "fields": [
+                      {
+                        "type": "TableFieldNamed",
+                        "key": {
+                          "type": "Identifier",
+                          "name": "deep",
+                          "line": {
+                            "start": 29,
+                            "end": 29
+                          },
+                          "column": {
+                            "start": 44,
+                            "end": 48
+                          }
+                        },
+                        "value": {
+                          "type": "NumberLiteral",
+                          "value": 1,
+                          "raw": "1",
+                          "line": {
+                            "start": 29,
+                            "end": 29
+                          },
+                          "column": {
+                            "start": 50,
+                            "end": 51
+                          }
+                        }
+                      }
+                    ],
+                    "line": {
+                      "start": 29,
+                      "end": 29
+                    },
+                    "column": {
+                      "start": 42,
+                      "end": 53
+                    }
+                  }
+                }
+              ],
+              "line": {
+                "start": 29,
+                "end": 29
+              },
+              "column": {
+                "start": 37,
+                "end": 55
+              }
+            }
+          ],
+          "line": {
+            "start": 29,
+            "end": 29
+          },
+          "column": {
+            "start": 31,
+            "end": 56
           }
-        ],
+        },
         "body": {
           "type": "Block",
           "statements": [
@@ -1078,8 +1139,8 @@
                   "type": "Identifier",
                   "name": "print",
                   "line": {
-                    "start": 27,
-                    "end": 27
+                    "start": 30,
+                    "end": 30
                   },
                   "column": {
                     "start": 5,
@@ -1091,8 +1152,8 @@
                     "type": "Identifier",
                     "name": "key",
                     "line": {
-                      "start": 27,
-                      "end": 27
+                      "start": 30,
+                      "end": 30
                     },
                     "column": {
                       "start": 11,
@@ -1103,8 +1164,8 @@
                     "type": "Identifier",
                     "name": "deep",
                     "line": {
-                      "start": 27,
-                      "end": 27
+                      "start": 30,
+                      "end": 30
                     },
                     "column": {
                       "start": 16,
@@ -1113,8 +1174,8 @@
                   }
                 ],
                 "line": {
-                  "start": 27,
-                  "end": 27
+                  "start": 30,
+                  "end": 30
                 },
                 "column": {
                   "start": 5,
@@ -1122,8 +1183,8 @@
                 }
               },
               "line": {
-                "start": 27,
-                "end": 27
+                "start": 30,
+                "end": 30
               },
               "column": {
                 "start": 5,
@@ -1132,8 +1193,8 @@
             }
           ],
           "line": {
-            "start": 27,
-            "end": 27
+            "start": 30,
+            "end": 30
           },
           "column": {
             "start": 5,
@@ -1141,8 +1202,543 @@
           }
         },
         "line": {
-          "start": 26,
-          "end": 28
+          "start": 29,
+          "end": 31
+        },
+        "column": {
+          "start": 1,
+          "end": 2
+        }
+      },
+      {
+        "type": "FunctionDeclaration",
+        "name": {
+          "type": "Identifier",
+          "name": "counter",
+          "line": {
+            "start": 34,
+            "end": 34
+          },
+          "column": {
+            "start": 10,
+            "end": 17
+          }
+        },
+        "func": {
+          "type": "FunctionBody",
+          "generics": [],
+          "params": [
+            {
+              "type": "FunctionParameter",
+              "name": "limit",
+              "typeAnnotation": {
+                "type": "TypeReference",
+                "base": "number",
+                "typeArguments": [],
+                "line": {
+                  "start": 34,
+                  "end": 34
+                },
+                "column": {
+                  "start": 25,
+                  "end": 31
+                }
+              },
+              "line": {
+                "start": 34,
+                "end": 34
+              },
+              "column": {
+                "start": 18,
+                "end": 31
+              }
+            }
+          ],
+          "hasVarargs": false,
+          "returnType": {
+            "type": "FunctionTypeNode",
+            "generics": [],
+            "params": [],
+            "returnType": {
+              "type": "UnionTypeNode",
+              "types": [
+                {
+                  "type": "TypeReference",
+                  "base": "number",
+                  "typeArguments": [],
+                  "line": {
+                    "start": 34,
+                    "end": 34
+                  },
+                  "column": {
+                    "start": 40,
+                    "end": 46
+                  }
+                },
+                {
+                  "type": "TypeReference",
+                  "base": "nil",
+                  "typeArguments": [],
+                  "line": {
+                    "start": 34,
+                    "end": 34
+                  },
+                  "column": {
+                    "start": 49,
+                    "end": 52
+                  }
+                }
+              ],
+              "line": {
+                "start": 34,
+                "end": 34
+              },
+              "column": {
+                "start": 40,
+                "end": 52
+              }
+            },
+            "line": {
+              "start": 34,
+              "end": 34
+            },
+            "column": {
+              "start": 34,
+              "end": 52
+            }
+          },
+          "body": {
+            "type": "Block",
+            "statements": [
+              {
+                "type": "VariableDeclaration",
+                "kind": "let",
+                "names": [
+                  {
+                    "type": "IdentifierPattern",
+                    "name": "n",
+                    "line": {
+                      "start": 35,
+                      "end": 35
+                    },
+                    "column": {
+                      "start": 9,
+                      "end": 10
+                    }
+                  }
+                ],
+                "init": [
+                  {
+                    "type": "NumberLiteral",
+                    "value": 0,
+                    "raw": "0",
+                    "line": {
+                      "start": 35,
+                      "end": 35
+                    },
+                    "column": {
+                      "start": 13,
+                      "end": 14
+                    }
+                  }
+                ],
+                "line": {
+                  "start": 35,
+                  "end": 35
+                },
+                "column": {
+                  "start": 5,
+                  "end": 14
+                }
+              },
+              {
+                "type": "ReturnStatement",
+                "argument": {
+                  "type": "FunctionExpression",
+                  "func": {
+                    "type": "FunctionBody",
+                    "generics": [],
+                    "params": [],
+                    "hasVarargs": false,
+                    "returnType": {
+                      "type": "UnionTypeNode",
+                      "types": [
+                        {
+                          "type": "TypeReference",
+                          "base": "number",
+                          "typeArguments": [],
+                          "line": {
+                            "start": 36,
+                            "end": 36
+                          },
+                          "column": {
+                            "start": 24,
+                            "end": 30
+                          }
+                        },
+                        {
+                          "type": "TypeReference",
+                          "base": "nil",
+                          "typeArguments": [],
+                          "line": {
+                            "start": 36,
+                            "end": 36
+                          },
+                          "column": {
+                            "start": 33,
+                            "end": 36
+                          }
+                        }
+                      ],
+                      "line": {
+                        "start": 36,
+                        "end": 36
+                      },
+                      "column": {
+                        "start": 24,
+                        "end": 36
+                      }
+                    },
+                    "body": {
+                      "type": "Block",
+                      "statements": [
+                        {
+                          "type": "CompoundAssignmentStatement",
+                          "operator": "+=",
+                          "target": {
+                            "type": "Identifier",
+                            "name": "n",
+                            "line": {
+                              "start": 37,
+                              "end": 37
+                            },
+                            "column": {
+                              "start": 9,
+                              "end": 10
+                            }
+                          },
+                          "value": {
+                            "type": "NumberLiteral",
+                            "value": 1,
+                            "raw": "1",
+                            "line": {
+                              "start": 37,
+                              "end": 37
+                            },
+                            "column": {
+                              "start": 14,
+                              "end": 15
+                            }
+                          },
+                          "line": {
+                            "start": 37,
+                            "end": 37
+                          },
+                          "column": {
+                            "start": 9,
+                            "end": 15
+                          }
+                        },
+                        {
+                          "type": "IfStatement",
+                          "clauses": [
+                            {
+                              "type": "IfClause",
+                              "condition": {
+                                "type": "BinaryExpression",
+                                "operator": ">",
+                                "left": {
+                                  "type": "Identifier",
+                                  "name": "n",
+                                  "line": {
+                                    "start": 38,
+                                    "end": 38
+                                  },
+                                  "column": {
+                                    "start": 13,
+                                    "end": 14
+                                  }
+                                },
+                                "right": {
+                                  "type": "Identifier",
+                                  "name": "limit",
+                                  "line": {
+                                    "start": 38,
+                                    "end": 38
+                                  },
+                                  "column": {
+                                    "start": 17,
+                                    "end": 22
+                                  }
+                                },
+                                "line": {
+                                  "start": 38,
+                                  "end": 38
+                                },
+                                "column": {
+                                  "start": 13,
+                                  "end": 22
+                                }
+                              },
+                              "body": {
+                                "type": "Block",
+                                "statements": [
+                                  {
+                                    "type": "ReturnStatement",
+                                    "argument": {
+                                      "type": "NilLiteral",
+                                      "line": {
+                                        "start": 38,
+                                        "end": 38
+                                      },
+                                      "column": {
+                                        "start": 33,
+                                        "end": 36
+                                      }
+                                    },
+                                    "line": {
+                                      "start": 38,
+                                      "end": 38
+                                    },
+                                    "column": {
+                                      "start": 26,
+                                      "end": 36
+                                    }
+                                  }
+                                ],
+                                "line": {
+                                  "start": 38,
+                                  "end": 38
+                                },
+                                "column": {
+                                  "start": 26,
+                                  "end": 36
+                                }
+                              },
+                              "line": {
+                                "start": 38,
+                                "end": 38
+                              },
+                              "column": {
+                                "start": 12,
+                                "end": 38
+                              }
+                            }
+                          ],
+                          "line": {
+                            "start": 38,
+                            "end": 38
+                          },
+                          "column": {
+                            "start": 9,
+                            "end": 38
+                          }
+                        },
+                        {
+                          "type": "ReturnStatement",
+                          "argument": {
+                            "type": "Identifier",
+                            "name": "n",
+                            "line": {
+                              "start": 39,
+                              "end": 39
+                            },
+                            "column": {
+                              "start": 16,
+                              "end": 17
+                            }
+                          },
+                          "line": {
+                            "start": 39,
+                            "end": 39
+                          },
+                          "column": {
+                            "start": 9,
+                            "end": 17
+                          }
+                        }
+                      ],
+                      "line": {
+                        "start": 37,
+                        "end": 39
+                      },
+                      "column": {
+                        "start": 9,
+                        "end": 17
+                      }
+                    },
+                    "line": {
+                      "start": 36,
+                      "end": 40
+                    },
+                    "column": {
+                      "start": 20,
+                      "end": 6
+                    }
+                  },
+                  "line": {
+                    "start": 36,
+                    "end": 40
+                  },
+                  "column": {
+                    "start": 12,
+                    "end": 6
+                  }
+                },
+                "line": {
+                  "start": 36,
+                  "end": 40
+                },
+                "column": {
+                  "start": 5,
+                  "end": 6
+                }
+              }
+            ],
+            "line": {
+              "start": 35,
+              "end": 40
+            },
+            "column": {
+              "start": 5,
+              "end": 6
+            }
+          },
+          "line": {
+            "start": 34,
+            "end": 41
+          },
+          "column": {
+            "start": 17,
+            "end": 2
+          }
+        },
+        "line": {
+          "start": 34,
+          "end": 41
+        },
+        "column": {
+          "start": 1,
+          "end": 2
+        }
+      },
+      {
+        "type": "GenericForStatement",
+        "kind": "const",
+        "variable": {
+          "type": "IdentifierPattern",
+          "name": "n",
+          "line": {
+            "start": 43,
+            "end": 43
+          },
+          "column": {
+            "start": 12,
+            "end": 13
+          }
+        },
+        "iterator": {
+          "type": "CallExpression",
+          "callee": {
+            "type": "Identifier",
+            "name": "counter",
+            "line": {
+              "start": 43,
+              "end": 43
+            },
+            "column": {
+              "start": 17,
+              "end": 24
+            }
+          },
+          "arguments": [
+            {
+              "type": "NumberLiteral",
+              "value": 3,
+              "raw": "3",
+              "line": {
+                "start": 43,
+                "end": 43
+              },
+              "column": {
+                "start": 25,
+                "end": 26
+              }
+            }
+          ],
+          "line": {
+            "start": 43,
+            "end": 43
+          },
+          "column": {
+            "start": 17,
+            "end": 27
+          }
+        },
+        "body": {
+          "type": "Block",
+          "statements": [
+            {
+              "type": "CallStatement",
+              "expression": {
+                "type": "CallExpression",
+                "callee": {
+                  "type": "Identifier",
+                  "name": "print",
+                  "line": {
+                    "start": 44,
+                    "end": 44
+                  },
+                  "column": {
+                    "start": 5,
+                    "end": 10
+                  }
+                },
+                "arguments": [
+                  {
+                    "type": "Identifier",
+                    "name": "n",
+                    "line": {
+                      "start": 44,
+                      "end": 44
+                    },
+                    "column": {
+                      "start": 11,
+                      "end": 12
+                    }
+                  }
+                ],
+                "line": {
+                  "start": 44,
+                  "end": 44
+                },
+                "column": {
+                  "start": 5,
+                  "end": 13
+                }
+              },
+              "line": {
+                "start": 44,
+                "end": 44
+              },
+              "column": {
+                "start": 5,
+                "end": 13
+              }
+            }
+          ],
+          "line": {
+            "start": 44,
+            "end": 44
+          },
+          "column": {
+            "start": 5,
+            "end": 13
+          }
+        },
+        "line": {
+          "start": 43,
+          "end": 45
         },
         "column": {
           "start": 1,
@@ -1151,8 +1747,8 @@
       }
     ],
     "line": {
-      "start": 3,
-      "end": 28
+      "start": 4,
+      "end": 45
     },
     "column": {
       "start": 1,
@@ -1160,8 +1756,8 @@
     }
   },
   "line": {
-    "start": 3,
-    "end": 28
+    "start": 4,
+    "end": 45
   },
   "column": {
     "start": 1,

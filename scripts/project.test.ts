@@ -4,7 +4,7 @@
  * Each case runs against an in-memory file system, so it states exactly the
  * files it needs. No real type library is involved.
  */
-import { join, resolve } from "node:path"
+import { join, resolve, sep } from "node:path"
 import {
     findConfig, loadConfig, resolveTypeLibraries, resolveModulePath, sourceMapTypes,
     parse, parseWithRecovery, analyzeScopes, analyzeTypes, moduleExports, formatType, applyDirectives,
@@ -27,7 +27,20 @@ function check(name: string, actual: unknown, expected: unknown): void {
 function host(files: Record<string, string>): ProjectHost {
     const key = (path: string): string => resolve(ROOT, path).toLowerCase()
     const map = new Map(Object.entries(files).map(([path, text]) => [key(path), text]))
-    return { readFile: path => map.get(key(path)) }
+    return {
+        readFile: path => map.get(key(path)),
+        // The folders directly inside `path`, from the files under it.
+        readDirectory: path => {
+            const prefix = `${key(path)}${sep}`
+            const names = new Set<string>()
+            for (const file of map.keys()) {
+                if (!file.startsWith(prefix)) continue
+                const rest = file.slice(prefix.length).split(sep)
+                if (rest.length > 1) names.add(rest[0])
+            }
+            return names.size ? [...names] : undefined
+        },
+    }
 }
 
 /** A path under ROOT, as the tests write them. */
@@ -93,10 +106,13 @@ const rel = (path: string | undefined): string | undefined =>
 {
     const files: Record<string, string> = {
         "node_modules/@tilua-types/luau/package.json": JSON.stringify({ name: "@tilua-types/luau", tilua: { types: "index.d.tilua" } }),
-        "node_modules/@tilua-types/luau/index.d.tilua": "declare function print(...: unknown): ()",
+        "node_modules/@tilua-types/luau/index.d.tilua": "declare function print(...: unknown): nil",
         "node_modules/@tilua-types/roblox/package.json": JSON.stringify({ name: "@tilua-types/roblox", dependencies: { "@tilua-types/luau": "^1.0.0" } }),
         "node_modules/@tilua-types/roblox/index.d.tilua": "declare game: unknown",
         "node_modules/plain/index.d.tilua": "declare plain: number",
+        "node_modules/@me/extra/package.json": JSON.stringify({ name: "@me/extra", dependencies: { "@tilua-types/luau": "^1.0.0" } }),
+        "node_modules/@me/extra/index.d.tilua": "declare extra: number",
+        "node_modules/@me/tool/package.json": JSON.stringify({ name: "@me/tool" }),
         "local/types/index.d.tilua": "declare fromFolder: number",
         "local/defs.d.tilua": "declare fromFile: number",
     }
@@ -113,13 +129,23 @@ const rel = (path: string | undefined): string | undefined =>
     check("types: a library brings its dependencies first", libraries(["roblox"]).files, [LUAU, ROBLOX])
     check("types: a library listed twice loads once", libraries(["luau", "roblox"]).files, [LUAU, ROBLOX])
     check("types: a full package name", libraries(["@tilua-types/roblox"]).files, [LUAU, ROBLOX])
-    check("types: a name is only looked for under @tilua", libraries(["plain"]),
-        { files: [], problems: ["Cannot find type library '@tilua-types/plain'. Install it with: npm i -D @tilua-types/plain"] })
+    check("types: a name that is not one of @tilua-types is the package of that name", libraries(["plain"]).files,
+        ["node_modules/plain/index.d.tilua"])
+    check("types: a scoped name of anyone's, dependencies first", libraries(["@me/extra"]).files,
+        [LUAU, "node_modules/@me/extra/index.d.tilua"])
+    check("types: `@tilua-types/*` is every one installed, each after what it needs", libraries(["@tilua-types/*"]).files,
+        [LUAU, ROBLOX])
+    check("types: a pattern passes over packages that are not type libraries", libraries(["@me/*", "plain"]).files,
+        [LUAU, "node_modules/@me/extra/index.d.tilua", "node_modules/plain/index.d.tilua"])
+    check("types: a pattern nothing matches says so", libraries(["@nobody/*"]).problems,
+        ["No installed type library matches '@nobody/*'"])
     check("types: a folder and a file by relative path",
         libraries(["./local/types", "./local/defs.d.tilua"]).files, ["local/types/index.d.tilua", "local/defs.d.tilua"])
     check("types: node_modules is searched upward from a nested config", libraries(["luau"], "nested/").files, [LUAU])
     check("types: a missing library says how to install it", libraries(["nope"]),
-        { files: [], problems: ["Cannot find type library '@tilua-types/nope'. Install it with: npm i -D @tilua-types/nope"] })
+        { files: [], problems: ["Cannot find type library '@tilua-types/nope' or 'nope'. Install it with: npm i -D @tilua-types/nope"] })
+    check("types: a missing scoped one, by its own name", libraries(["@me/gone"]).problems,
+        ["Cannot find type library '@me/gone'. Install it with: npm i -D @me/gone"])
 }
 
 // --- import paths -----------------------------------------------------------
@@ -174,6 +200,25 @@ const rel = (path: string | undefined): string | undefined =>
         types!.scriptFor(join(ROOT, "src/shared/Util.tilua")) !== undefined, true)
     check("sourcemap: an unmapped file has no `script` of its own",
         types!.scriptFor(join(ROOT, "src/other.tilua")), undefined)
+    // A library may type a service as a member of `DataModel`; the service in
+    // the tree still takes that member over, so `game.ReplicatedStorage.Shared`
+    // is typed. Any other child a member already names is left out.
+    const roblox = parse([
+        "declare class Instance { Name: string }",
+        "declare class Folder extends Instance { }",
+        "declare class ModuleScript extends Instance { }",
+        "declare class Part extends Instance { }",
+        "declare class ReplicatedStorage extends Instance { }",
+        "declare class Workspace extends Instance { }",
+        "declare class DataModel extends Instance { ReplicatedStorage: ReplicatedStorage, Workspace: Workspace }",
+    ].join("\n"))
+    const withServices = sourceMapTypes(JSON.stringify(tree), join(ROOT, "sourcemap.json"), {
+        classes,
+        membersOf: className => new Set(className === "DataModel" ? ["Name", "ReplicatedStorage", "Workspace"] : ["Name"]),
+    }).types!
+    const reads = parse("const remotes: Folder = game.ReplicatedStorage.Shared.Remotes")
+    check("sourcemap: a service child takes over the member of the same name",
+        analyzeTypes(reads, analyzeScopes(reads), { libs: [roblox, withServices.program] }).diagnostics.map(d => d.message), [])
     check("sourcemap: invalid JSON is reported",
         sourceMapTypes("{ nope", join(ROOT, "sourcemap.json"), { classes }).problem?.startsWith("Invalid sourcemap"), true)
 }
@@ -258,7 +303,7 @@ const rel = (path: string | undefined): string | undefined =>
     // A recursive alias keeps a ref to itself inside its structure. That ref
     // means the alias of the module that wrote it, whatever the importer names.
     const buttons = { "./buttons": [
-        "export type Btn = { SetLocked: (self: Btn, v: boolean) => (), Group?: { Current?: Btn } }",
+        "export type Btn = { SetLocked: (self: Btn, v: boolean) => nil, Group?: { Current?: Btn } }",
         "export type Card = { Button?: Btn }",
     ].join("\n") }
     const lockCard = (arg: string) => `function f(card: Card) { if (card.Button) { card.Button:SetLocked(${arg}) } }`
@@ -272,7 +317,7 @@ const rel = (path: string | undefined): string | undefined =>
 
     // Widening is for literals a program wrote, not for a type an alias names.
     const iterate = (loop: string) => analyze([
-        "declare function pairs<T>(t: T): ((t: T, key?: unknown) => (unknown, unknown), T, nil)",
+        "declare function pairs<K, V>(t: { [K]: V }): [(t: { [K]: V }, previous: [K, V] | nil) => [K, V] | nil, { [K]: V }, nil]",
         `type Btn = { Mode: "A" | "B" }`,
         "type Card = { Button?: Btn }",
         "declare cards: { [string]: Card }",
@@ -280,7 +325,7 @@ const rel = (path: string | undefined): string | undefined =>
         loop,
     ].join("\n"))
     check("widening: a value read from a declared table keeps its alias's literals",
-        iterate("for (_, card in pairs(cards)) { apply(card) }").errors, [])
+        iterate("for (const [_, card] in pairs(cards)) { apply(card) }").errors, [])
     check("widening: a fresh literal still widens",
         iterate(`let fresh = { Mode: "A" }`).bindings.fresh, "{ Mode: string }")
 
@@ -297,7 +342,7 @@ const rel = (path: string | undefined): string | undefined =>
         "type Func = { kind: \"function\" }",
         "declare remotes: { Char: Event, Settings: Func, Maybe: Event | nil }",
         "function scan() {",
-        "    for (name, remote in pairs(remotes)) {",
+        "    for (const [name, remote] in pairs(remotes)) {",
         "        const anyName = name",
         "        if (remote == nil) { return }",
         "        if (name == \"Settings\") {",
@@ -444,7 +489,7 @@ const rel = (path: string | undefined): string | undefined =>
             "Unexpected token in expression",
             "Expected ')'",
             "Unexpected token in expression",
-        ], ["print", "a", "b", "part", "n", "c", "s", "d"]])
+        ], ["scriptArgs", "print", "a", "b", "part", "n", "c", "s", "d"]])
     }
 
     // `satisfies`: checked against the contract, typed as the value.
@@ -518,28 +563,49 @@ const rel = (path: string | undefined): string | undefined =>
         [generics.errors, generics.bindings.char, generics.bindings.telek, generics.bindings.signature],
         [[], "number", "string", `<K extends "Char" | "Telek">(name: K) => RemoteMap[K]`])
 
-    // `...` is what the function declared it takes.
-    const varargs = analyze([
-        "function f(...: number) {",
-        "    const first = ...",
-        "    return ...",
-        "}",
-        "function g(...: string) {",
-        "    const s = ...",
-        "    function inner() {",
-        "        return 1",
-        "    }",
-        "    return s",
-        "}",
-        "function plain(...) {",
-        "    const anything = ...",
-        "}",
-        "",
-        "",
-    ].join("\n"))
-    check("varargs: `...` has the declared type, per function",
-        [varargs.bindings.first, varargs.bindings.f, varargs.bindings.s, varargs.bindings.anything],
-        ["number", "(...number) => number", "string", "any"])
+    // Packs are gone: nothing is `nil`, several values are a tuple, and a
+    // function returns one value.
+    check("packs: `()`, `(A, B)`, `T...` and `return a, b` say what to write instead", [
+        "type F = () => ()",
+        "type G = () => (number, string)",
+        "type S<T...> = T",
+        "function f(): [number, number] {\n    return 1, 2\n}",
+    ].map(code => parseWithRecovery(code).errors.map(e => e.message)), [
+        ["'()' is not a type: a function that returns nothing returns 'nil' (1:16)"],
+        ["Several types in parentheses are a pack, which tilua does not have: write a tuple, '[A, B]' (1:16)"],
+        ["tilua has no pack parameters: write '<T extends unknown[]>', and take it as '...args: T' (1:9)"],
+        ["A function returns one value: return several as an array, 'return [a, b]' (2:5)"],
+    ])
+
+    // Bare `...` is gone: a function takes a rest parameter, and what a script
+    // was started with is `scriptArgs`.
+    check("varargs: bare `...` is a syntax error that says what to write", [
+        parseWithRecovery("function f(...) {}").errors.map(e => e.message),
+        parseWithRecovery("function f(...: number) {}\nconst x = ...").errors.map(e => e.message),
+        analyze("const first = scriptArgs[1]").bindings.scriptArgs,
+    ], [
+        ["tilua has no bare '...': take a rest parameter, '...args: T[]', or 'scriptArgs' for the script's own (1:12)"],
+        ["tilua has no bare '...': take a rest parameter, '...args: T[]', or 'scriptArgs' for the script's own (1:12)", "tilua has no bare '...': take a rest parameter, '...args: T[]', or 'scriptArgs' for the script's own (2:11)"],
+        "unknown[]",
+    ])
+
+    // A loop takes one value each time: Luau's `for k, v in ...` and its
+    // triplet `in f, s, v` are both packs, and say what to write instead.
+    check("loops: a loop names one value, and has one source", [
+        parseWithRecovery("for (k, v in pairs(t)) { }").errors.map(e => e.message),
+        parseWithRecovery("for (item in items) { }").errors.map(e => e.message),
+        parseWithRecovery("for (const i = 1, 10) { }").errors.map(e => e.message),
+        analyze("declare names: string[]\nfor (let name in names) { name = name .. \"!\" }\nfor (const other in names) { other = \"x\" }").errors,
+        parseWithRecovery("for (const x in f, s, v) { }").errors.map(e => e.message),
+        analyze("declare n: number\nfor (const x in n) { }").errors,
+    ], [
+        ["A loop takes one value each time: take its parts with a destructuring, 'for (const [k, v] in pairs(t))' (1:7)"],
+        ["A loop over a source names its value with 'const' or 'let': 'for (const item in source)' (1:1)"],
+        ["A counting loop names its variable without 'const': 'for (i = 1, 10)' (1:1)"],
+        ["Cannot assign to 'other' — it is a const"],
+        ["A loop has one source: an array, a table, an iterator function or an iteration '[step, state, first]' (1:18)"],
+        ["Cannot loop over 'number': a loop walks an array, a table, an iterator function or an iteration such as 'pairs(t)'"],
+    ])
 
     // A closure written inside a value can read the name that value is bound
     // to — it runs later, as in JavaScript.
@@ -609,7 +675,7 @@ const rel = (path: string | undefined): string | undefined =>
 
     // What a function returns is checked against what it declared.
     const returns = analyze([
-        "declare function print(v: unknown): ()",
+        "declare function print(v: unknown): nil",
         "declare function error(message: string): never",
         "function wrong(): boolean {",
         "    return \"\"",
@@ -620,8 +686,8 @@ const rel = (path: string | undefined): string | undefined =>
         "function never(): boolean {",
         "    print(1)",
         "}",
-        "function pack(): (boolean, string) {",
-        "    return true, 2",
+        "function pack(): [boolean, string] {",
+        "    return [true, 2]",
         "}",
         "function fine(): boolean {",
         "    if (true) { return true } else { return false }",
@@ -644,7 +710,7 @@ const rel = (path: string | undefined): string | undefined =>
         `Type '""' is not assignable to 'boolean'`,
         "Type 'nil' is not assignable to 'boolean'",
         "A function that returns 'boolean' must return a value",
-        "Type '(true, 2)' is not assignable to '(boolean, string)'",
+        "Type '[boolean, number]' is not assignable to '[boolean, string]'",
     ])
 
     // A type name nothing declares, when asked for.
@@ -694,15 +760,75 @@ const rel = (path: string | undefined): string | undefined =>
         "declare i: 1 | 2",
         "const element = xs[i]",
     ].join("\n"))
-    check("indexing: a key that is one of several reads each, and a missing key is nil", [
-        indexed.bindings.both, indexed.bindings.some, indexed.bindings.one, indexed.bindings.none, indexed.bindings.element,
+    check("indexing: a key that is one of several reads each, and one that may miss reads nil", [
+        indexed.bindings.both, indexed.bindings.some, indexed.bindings.one, indexed.bindings.element,
     ], [
         `["Blocking"] | ["Health"]`,
         `["Blocking"] | nil`,
         `["Health"]`,
-        "nil",
         "number",
     ])
+    check("indexing: a key that certainly is not there is an error, as `.Nope` would be",
+        [indexed.errors, indexed.bindings.none], [["Property 'Nope' does not exist on type '{ readonly Blocking: [\"Blocking\"], readonly BlockingTick: [\"Blocking\", \"Tick\"], readonly Health: [\"Health\"] }'"], "any"])
+
+    // A key that cannot be a key of the table is an error, not an `unknown`.
+    const badKeys = analyze([
+        "declare record: { a: number, b: string }",
+        "declare map: { [string]: number }",
+        "declare xs: number[]",
+        "declare u: unknown",
+        "declare n: number",
+        "declare s: string",
+        "declare anything: any",
+        "declare missing: \"x\" | \"y\"",
+        "const r1 = record[u]",
+        "const r2 = record[n]",
+        "const r3 = record[missing]",
+        "const m1 = map[u]",
+        "const m2 = map[n]",
+        "const x1 = xs[s]",
+        "const x2 = xs[u]",
+        "const ok1 = record[s]",
+        "const ok2 = map[s]",
+        "const ok3 = xs[n]",
+        "const ok4 = record[anything]",
+        "const ok5 = anything[u]",
+        "const t = {}",
+        "const ok6 = t[u]",
+    ].join("\n"))
+    check("indexing: `unknown`, the wrong kind of key, or only names that are not there", badKeys.errors, [
+        "Type 'unknown' cannot be used to index type '{ a: number, b: string }'",
+        "Type 'number' cannot be used to index type '{ a: number, b: string }'",
+        "None of \"x\" | \"y\" is a property of type '{ a: number, b: string }'",
+        "Type 'unknown' cannot be used to index type '{ [string]: number }'",
+        "Type 'number' cannot be used to index type '{ [string]: number }'",
+        "Type 'string' cannot be used to index type 'number[]'",
+        "Type 'unknown' cannot be used to index type 'number[]'",
+    ])
+    check("indexing: and the read is `any` after the error, a string into a record is a value or nil",
+        [badKeys.bindings.r1, badKeys.bindings.ok1, badKeys.bindings.ok2, badKeys.bindings.ok3, badKeys.bindings.ok4, badKeys.bindings.ok5],
+        ["any", "number | string | nil", "number", "number", "any", "any"])
+
+    // What keeps those errors to real ones.
+    const settled = analyze([
+        "declare xs: number[]",
+        "declare find: () => number | nil",
+        "declare function assert<T>(value: T, message?: string): asserts value",
+        "function asserted(): number {",
+        "    const i = find()",
+        "    assert(i ~= nil, \"missing\")",
+        "    const kept = i",
+        "    return xs[i]",
+        "}",
+        "declare options: { headers?: { [string]: string } }",
+        "const headers = options.headers or {}",
+        "const copy: { [string]: string } = {}",
+        "for (const [key, value] in pairs(headers)) {",
+        "    copy[key] = value",
+        "}",
+    ].join("\n"))
+    check("indexing: `assert` on a condition narrows by it, and `or {}` keeps the map's keys",
+        [settled.errors, settled.bindings.kept, settled.bindings.headers], [[], "number", "{ [string]: string }"])
 
     // `f?.()` — call it only when it is there.
     const optionalCall = analyze([
@@ -719,14 +845,14 @@ const rel = (path: string | undefined): string | undefined =>
     // `for x in it`: an iterator function says what the loop holds.
     {
         const lib = parse([
-            "declare function gmatch(s: string, pattern: string): () => ...string",
-            "declare function rows(): () => (string, number)",
+            "declare function gmatch(s: string, pattern: string): () => [string, ...string[]] | nil",
+            "declare function rows(): () => [string, number] | nil",
         ].join("\n"))
         const program = parse([
-            "for (part in gmatch(\"a/b\", \"[^/]+\")) {",
+            "for (const [part] in gmatch(\"a/b\", \"[^/]+\")) {",
             "    const word = part",
             "}",
-            "for (name, count in rows()) {",
+            "for (const [name, count] in rows()) {",
             "    const who = name",
             "    const many = count",
             "}",
@@ -737,45 +863,45 @@ const rel = (path: string | undefined): string | undefined =>
         const types = analyzeTypes(program, scopes, { libs: [lib] })
         const bindings: Record<string, string> = {}
         for (const [id, type] of types.bindingType) bindings[scopes.bindings.get(id)!.name] = formatType(type)
-        check("generic for: the loop variables come from the iterator",
+        check("generic for: the item comes from the iterator function",
             [bindings.word, bindings.who, bindings.many], ["string", "string", "number"])
     }
 
-    // Which loops bind their one variable to the *value*. Lowering reads this
-    // to decide where a key variable goes, so the name a loop binds and the
-    // type inferred for it come from one decision rather than two.
+    // How each loop walks its source. Lowering reads this, so the code a
+    // loop becomes and the type inferred for its item come from one decision
+    // rather than two.
     {
         const program = parse([
-            "declare function gmatch(s: string, pattern: string): () => ...string",
+            "declare function gmatch(s: string, pattern: string): () => [string, ...string[]] | nil",
             "declare list: number[]",
             "declare map: { [string]: number }",
-            "for (v in list) { print(v) }",
-            "for (v in map) { print(v) }",
-            "for (k in pairs(map)) { print(k) }",
-            "for (i in ipairs(list)) { print(i) }",
-            "for (c in gmatch(\"ab\", \"%a\")) { print(c) }",
-            "for (k, v in pairs(map)) { print(k, v) }",
-            "for (k, v in map) { print(k, v) }",
+            "declare walk: [(s: number[], previous: [number, number] | nil) => [number, number] | nil, number[], nil]",
+            "for (const v in list) { print(v) }",
+            "for (const v in map) { print(v) }",
+            "for (const [k, v] in pairs(map)) { print(k, v) }",
+            "for (const [i, n] in ipairs(list)) { print(i, n) }",
+            "for (const c in gmatch(\"ab\", \"%a\")) { print(c) }",
+            "for (const [i, n] in walk) { print(i, n) }",
             "",
             "",
         ].join("\n"))
         const types = analyzeTypes(program, analyzeScopes(program))
         const loops = program.body.statements
             .filter((s): s is GenericForStatement => s.type === "GenericForStatement")
-        check("iteratesValues: only a table walked directly, with one variable",
-            loops.map(loop => types.iteratesValues.has(loop)),
-            [true, true, false, false, false, false, false])
+        check("loops: values walked directly, an iterator function, an iteration",
+            loops.map(loop => types.loops.get(loop)?.walks),
+            ["values", "values", "iteration", "iteration", "function", "iteration"])
     }
 
     // `unknown - nil` is itself, whichever way round the union is written.
     check("subtraction: one fits another that removes no more", [
         analyze([
             `declare value: unknown`,
-            "declare function take(v: string | (unknown - (nil | false))): ()",
+            "declare function take(v: string | (unknown - (nil | false))): nil",
             "if (value) { take(value) }",
         ].join("\n")).errors,
         analyze([
-            "declare function takeString(v: string): ()",
+            "declare function takeString(v: string): nil",
             `declare value: unknown`,
             "if (value) { takeString(value) }",
         ].join("\n")).errors.length,
@@ -869,6 +995,101 @@ const a: A = { p: 1 }`).errors.length,
         ])
     }
 
+    // `"a":upper()` needs no parentheses, the way `("a"):upper()` does in Luau.
+    {
+        const methods = parse("type StringMethods = { upper: (self: string) => string }")
+        const shape = (code: string): unknown => {
+            const statement = (parse(code).body.statements.at(-1) ?? {}) as unknown as Record<string, unknown>
+            const node = statement.type === "VariableDeclaration" ? (statement.init as unknown[])[0]
+                : statement.type === "CallStatement" ? statement.expression
+                : statement
+            const describe = (e: any): string =>
+                e.type === "MethodCallExpression" ? `${describe(e.object)}:${e.method.name}()`
+                : e.type === "IfElseExpression" ? `${describe(e.clauses[0].condition)} ? ${describe(e.clauses[0].body)} : ${describe(e.alternate)}`
+                : e.type === "CallExpression" ? `${describe(e.callee)}()`
+                : e.type === "StringLiteral" ? e.raw
+                : e.type === "InterpolatedStringExpression" ? "`...`"
+                : e.type === "Identifier" ? e.name
+                : e.type
+            return describe(node)
+        }
+        const program = parse(`const shout = "a":upper()\nconst wrong = "a":nope()`)
+        const types = analyzeTypes(program, analyzeScopes(program), { libs: [methods] })
+        check("string method calls: a bare string, a statement, a template, and a ternary's `:`", [
+            shape(`const a = "a":upper():lower()`),
+            shape(`"a":upper()`),
+            shape("const b = `x${1}`:upper()"),
+            shape(`const c = cond ? "a" : f()`),
+            shape(`const d = cond ? "a":upper() : "b":lower()`),
+            types.diagnostics.map(d => d.message),
+        ], [
+            `"a":upper():lower()`,
+            `"a":upper()`,
+            "`...`:upper()",
+            `cond ? "a" : f()`,
+            `cond ? "a":upper() : "b":lower()`,
+            ["'nope' does not exist on a string"],
+        ])
+    }
+
+    // A member a fully known table does not have is an error, not `unknown`.
+    {
+        const program = parse([
+            "declare game: { GetService: (name: string) => number }",
+            "const ok = game.GetService",
+            "const wrong = game.any",
+            "declare either: { a: number } | { b: number }",
+            "const partly = either.a",
+            "declare map: { [string]: number }",
+            "const indexed = map.foo",
+            "const t = {}",
+            "t.x = 1",
+            "const filled = t.x",
+        ].join("\n"))
+        const types = analyzeTypes(program, analyzeScopes(program))
+        check("missing members: reported on a known table, not on an indexer or an empty one",
+            types.diagnostics.map(d => d.message), [
+                "Property 'any' does not exist on type '{ GetService: (name: string) => number }'",
+                "Property 'a' does not exist on type '{ a: number } | { b: number }'",
+            ])
+
+        // A number has no members; an array's come from a library.
+        const arrays = parse("type ArrayMethods<T> = { size: (self: T[]) => number }")
+        const scalar = (code: string, libs = [arrays]) => {
+            const p = parse(code)
+            return analyzeTypes(p, analyzeScopes(p), { libs }).diagnostics.map(d => d.message)
+        }
+        check("missing members: on a number, and on an array once a library names its methods", [
+            scalar("const a = 1\nconst b = a.a"),
+            scalar("declare arr: number[]\nconst ok = arr.size\nconst wrong = arr.nope"),
+            scalar("declare arr: number[]\nconst unchecked = arr.nope", []),
+        ], [
+            ["Property 'a' does not exist on type '1'"],
+            ["Property 'nope' does not exist on type 'number[]'"],
+            [],
+        ])
+        // Arithmetic on an `any` may have gone through a metamethod: the
+        // difference of two untyped positions is a vector as far as anyone
+        // knows, not a number with no `Magnitude`.
+        check("missing members: not on arithmetic over `any`",
+            scalar("declare function get(): any\nconst a = get()\nconst d = (a - a).Magnitude\nconst e = (-a).X", []), [])
+    }
+
+    // Calling a value that is certainly not a function is an error.
+    {
+        check("not callable: a number, a table or a method that is a field", [
+            analyze("const a = 1\na()").errors,
+            analyze("declare o: { x: number }\no:x()").errors,
+            analyze("declare u: number | (() => number)\nu()").errors,
+            analyze("declare f: () => number\nf()\ndeclare q: any\nq()").errors,
+        ], [
+            ["This expression is not callable: 'a' is of type '1'"],
+            ["This expression is not callable: 'x' is of type 'number'"],
+            ["This expression is not callable: 'u' is of type 'number | (() => number)'"],
+            [],
+        ])
+    }
+
     // `(` on a line of its own continues the statement above it.
     {
         const trap = [
@@ -878,13 +1099,14 @@ const a: A = { p: 1 }`).errors.length,
             `("A"):split(",")`,
         ].join("\n")
         check("ambiguous call: a `(` that starts a line is a call of the line above", [
+            // Two reports: the line break, and the string it ends up calling.
             analyze(trap).errors.length,
             analyze(trap).errors[0]?.startsWith("This calls the value the line above ends with"),
             // The fix, and the shapes that are not it.
             analyze(trap.replace(`("A")`, `;("A")`)).errors,
-            analyze("declare f: (a: number, b: number) => ()\nf(\n    1,\n    2,\n)").errors,
-            analyze("declare f: () => ()\nf()\nf()").errors,
-        ], [1, true, [], [], []])
+            analyze("declare f: (a: number, b: number) => nil\nf(\n    1,\n    2,\n)").errors,
+            analyze("declare f: () => nil\nf()\nf()").errors,
+        ], [2, true, [], [], []])
     }
 
     // A type still waiting on a type parameter goes where anything it could
@@ -902,7 +1124,7 @@ const a: A = { p: 1 }`).errors.length,
         ].join("\n")
         const deferred = analyze([
             rows,
-            `declare function take(skill: Row["Skills"][number]): ()`,
+            `declare function take(skill: Row["Skills"][number]): nil`,
             `function pass<P extends Row["Page"]>(skill: Extract<Row, { Page: P }>["Skills"][number]) {`,
             "    take(skill)",
             "}",
@@ -913,7 +1135,7 @@ const a: A = { p: 1 }`).errors.length,
         // And it still cannot go somewhere none of them fit.
         const wrong = analyze([
             rows,
-            `declare function takeNumber(n: number): ()`,
+            `declare function takeNumber(n: number): nil`,
             `function pass<P extends Row["Page"]>(skill: Extract<Row, { Page: P }>["Skills"][number]) {`,
             "    takeNumber(skill)",
             "}",
@@ -932,7 +1154,7 @@ const a: A = { p: 1 }`).errors.length,
     check("type parameters: a constrained parameter fits its own constraint", [
         analyze([
             "type Page = \"Bones\" | \"Fire\"",
-            "declare function take(page: Page): ()",
+            "declare function take(page: Page): nil",
             "function pass<P extends Page>(page: P) {",
             "    take(page)",
             "}",
@@ -942,7 +1164,7 @@ const a: A = { p: 1 }`).errors.length,
         analyze([
             "const Rows = { a: [{ Page: \"Bones\" }, { Page: \"Fire\" }] } as const",
             "type Row = (typeof Rows)[\"a\"][number]",
-            "declare function take(page: Row[\"Page\"]): ()",
+            "declare function take(page: Row[\"Page\"]): nil",
             "function pass<P extends Row[\"Page\"]>(page: P) {",
             "    take(page)",
             "}",
@@ -951,7 +1173,7 @@ const a: A = { p: 1 }`).errors.length,
         ].join("\n")).errors,
         // And a parameter that cannot be what is wanted is still an error.
         analyze([
-            "declare function take(n: number): ()",
+            "declare function take(n: number): nil",
             "function pass<P extends string>(value: P) {",
             "    take(value)",
             "}",
@@ -1107,7 +1329,7 @@ const a: A = { p: 1 }`).errors.length,
         analyze(`${request}\nconst free = keep({ Method: "GET" })`).bindings.free,
         analyze([
             `type Outer = { inner: { mode: "a" | "b" } }`,
-            "declare function f(o: Outer): ()",
+            "declare function f(o: Outer): nil",
             `f({ inner: { mode: "a" } })`,
         ].join("\n")).errors,
     ], [
@@ -1121,7 +1343,7 @@ const a: A = { p: 1 }`).errors.length,
     check("contextual literals: a shorthand field too",
         analyze([
             `type Request = { Method: "GET" | "POST" }`,
-            "declare function send(r: Request): ()",
+            "declare function send(r: Request): nil",
             `const Method = "GET"`,
             "send({ Method })",
         ].join("\n")).errors, [])
@@ -1130,7 +1352,7 @@ const a: A = { p: 1 }`).errors.length,
     // rather than replacing it.
     {
         const lua = parse([
-            "declare table: { insert: (t: unknown[], v: unknown) => () }",
+            "declare table: { insert: (t: unknown[], v: unknown) => nil }",
             `declare function type(value: number): "number"`,
             "declare function type<T>(value: T): string",
         ].join("\n"))
@@ -1153,7 +1375,7 @@ const a: A = { p: 1 }`).errors.length,
         for (const [id, type] of types.bindingType) bindings[scopes.bindings.get(id)!.name] = formatType(type)
         check("layered definitions: a table declared twice keeps both files' members",
             bindings.theTable,
-            "{ create: (n: number) => unknown[], insert: (t: unknown[], v: unknown) => () }")
+            "{ create: (n: number) => unknown[], insert: (t: unknown[], v: unknown) => nil }")
         check("layered definitions: and the later file's overload narrows",
             [bindings.narrowed, types.diagnostics.map(d => d.message)], ["buffer", []])
     }
@@ -1164,13 +1386,13 @@ const a: A = { p: 1 }`).errors.length,
         analyze(`${names}const PerClass = {
     GTFrisk: function() {},
     XTFriskk: function() {},
-} as const satisfies { [Names]: () => () }`).errors,
-        ["Object literal may only specify known properties, and 'XTFriskk' does not exist in type '{ [Names]: () => () }'"])
+} as const satisfies { [Names]: () => nil }`).errors,
+        ["Object literal may only specify known properties, and 'XTFriskk' does not exist in type '{ [Names]: () => nil }'"])
     check("finite indexer: the keys in the set are fine, and `[string]` takes anything", [
         analyze(`${names}const PerClass = {
     GTFrisk: function() {},
     XTFrisk: function() {},
-} as const satisfies { [Names]: () => () }`).errors,
+} as const satisfies { [Names]: () => nil }`).errors,
         analyze(`const m = { whatever: 1 } satisfies { [string]: number }`).errors,
     ], [[], []])
 
@@ -1217,6 +1439,51 @@ function g() {
 }`)
     check("alias: an assignment through the path ends the alias",
         reassigned.bindings.stale, "Char | nil")
+
+    // `t[k]` with a variable `k` is one slot until `t` or `k` changes.
+    const byVariable = analyze([
+        "declare map: { [string]: number | nil }",
+        "declare key: string",
+        "declare other: string",
+        "const Codes = { us: \"US\", kr: \"KR\" } as const",
+        "declare flag: string",
+        "function guarded() {",
+        "    if (not map[key]) { return }",
+        "    const kept = map[key]",
+        "    const elsewhere = map[other]",
+        "}",
+        "function record() {",
+        "    if (not Codes[flag]) { return }",
+        "    const code = Codes[flag]",
+        "}",
+        "function rekeyed() {",
+        "    let k = key",
+        "    if (map[k]) {",
+        "        k = other",
+        "        const moved = map[k]",
+        "    }",
+        "}",
+        "function writtenByName() {",
+        "    if (map[key]) {",
+        "        map.x = nil",
+        "        const overwritten = map[key]",
+        "    }",
+        "}",
+        "function writtenThroughKey() {",
+        "    if (map.x and map[key]) {",
+        "        map[other] = nil",
+        "        const byName = map.x",
+        "        const byKey = map[key]",
+        "    }",
+        "}",
+    ].join("\n"))
+    check("index narrowing: a guard on `t[k]` narrows `t[k]`, not `t[j]`",
+        [byVariable.bindings.kept, byVariable.bindings.elsewhere], ["number", "number | nil"])
+    check("index narrowing: a record indexed by a string", byVariable.bindings.code, `"US" | "KR"`)
+    check("index narrowing: ends when the key is assigned", byVariable.bindings.moved, "number | nil")
+    check("index narrowing: ends when the table is written by name, or through another key", [
+        byVariable.bindings.overwritten, byVariable.bindings.byName, byVariable.bindings.byKey,
+    ], ["number | nil", "number | nil", "number | nil"])
 
     // `const path = paths[stat]`: testing one narrows the other.
     const correlated = analyze([
@@ -1378,7 +1645,7 @@ function g() {
         parseError("function f(\n    a: number,\n    b: string,\n) {\n}"),
         parseError("print(\n    1,\n    2,\n)"),
         parseError("function f<\n    A,\n    B,\n>(a: A) { }"),
-        parseError("type F = (\n    a: number,\n) => ()"),
+        parseError("type F = (\n    a: number,\n) => nil"),
         parseError("type P = Partial<number,>"),
     ], [undefined, undefined, undefined, undefined, undefined])
 
@@ -1650,16 +1917,13 @@ function g() {
     ], ["Node", "Node | nil", "Node", "Node"])
 }
 
-// `[...]` is the varargs as an array — Lua's `{...}`, written the way tilua
-// writes an array. `[...xs]` still spreads what follows the dots.
+// `[...xs]` spreads an array into another.
 {
     const program = parse([
-        "function join(...: string) {",
-        "    const all = [...]",
-        "    const withOne = [1, ...]",
-        "    const spread: string[] = [\"a\"]",
-        "    const both = [...spread, \"b\"]",
-        "    return all, withOne, both",
+        "function join(...parts: string[]) {",
+        "    const both = [...parts, \"b\"]",
+        "    const withOne = [1, ...parts]",
+        "    return [both, withOne]",
         "}",
         "",
         "",
@@ -1668,9 +1932,9 @@ function g() {
     const types = analyzeTypes(program, scopes, {})
     const bindings: Record<string, string> = {}
     for (const [id, type] of types.bindingType) bindings[scopes.bindings.get(id)!.name] = formatType(type)
-    check("arrays: `[...]` collects the varargs, and `[...xs]` still spreads",
-        [types.diagnostics.map(d => d.message), bindings.all, bindings.withOne, bindings.both],
-        [[], "string[]", "(number | string)[]", "string[]"])
+    check("arrays: `[...xs]` spreads",
+        [types.diagnostics.map(d => d.message), bindings.both, bindings.withOne],
+        [[], "string[]", "(number | string)[]"])
 }
 
 // --- rest parameters ---------------------------------------------------
@@ -1703,38 +1967,26 @@ function g() {
         [[
             "Argument of type '1' is not assignable to parameter of type 'string'",
             "Expected at least 1 arguments, got 0",
-        ], "string[]", "(sep: string, ...string) => string"])
+        ], "string[]", "(sep: string, ...args: string[]) => string"])
 
-    // `...` on its own is still Lua's pack, and every name reads one of it.
-    const pack = analyze([
-        "function firstTwo(...: number): (number, number) {",
-        "    const a, b = ...",
-        "    const all = [...]",
-        "    return a, b",
-        "}",
-        "function untyped(...) {",
-        "    const x, y = ...",
-        "}",
-        "",
-        "",
+    // A rest parameter can be a tuple, or a type parameter standing for one:
+    // then the arguments are exactly its elements.
+    const whole = analyze([
+        "declare function pair(...args: [string, number]): nil",
+        "declare function forward<A extends unknown[]>(f: (...args: A) => nil, ...args: A): nil",
+        "pair(\"a\", 1)",
+        "pair(1, \"a\")",
+        "forward(function(s: string, n: number) {}, \"a\", 1)",
+        "const signature = pair",
     ].join("\n"))
-    check("rest: `...` on its own is the pack it always was, and fills every name",
-        [pack.errors, pack.bindings.a, pack.bindings.b, pack.bindings.all, pack.bindings.y],
-        [[], "number", "number", "number[]", "any"])
-
-    // The two spellings describe the same call.
-    const both = analyze([
-        "declare function withPack(...: string): ()",
-        "declare function withRest(...items: string[]): ()",
-        "const asPack = withPack",
-        "const asRest = withRest",
-    ].join("\n"))
-    check("rest: both spellings are the same signature",
-        [both.bindings.asPack, both.bindings.asRest], ["(...string) => ()", "(...string) => ()"])
+    check("rest: a tuple, or a type parameter for one, is exactly those arguments",
+        [whole.errors, whole.bindings.signature], [[
+            "Argument of type '1' is not assignable to parameter of type 'string'",
+        ], "(string, number) => nil"])
 
     // And in a type.
     const written = analyze([
-        "declare log: (level: string, ...lines: string[]) => ()",
+        "declare log: (level: string, ...lines: string[]) => nil",
         `log("info", "a", "b")`,
         `log("info", 1)`,
     ].join("\n"))
@@ -1786,7 +2038,7 @@ function g() {
     }
 
     const braced = analyze([
-        "declare function pairs(t: { [string]: number }): () => (string, number)",
+        "declare function pairs(t: { [string]: number }): () => [string, number]",
         "function classify(n: number): string {",
         "    if (n < 0) {",
         `        return "negative"`,
@@ -1801,7 +2053,7 @@ function g() {
         "    for (i = 1, 3) {",
         "        total += i",
         "    }",
-        "    for (name, n in pairs({ a: 1 })) {",
+        "    for (const [name, n] in pairs({ a: 1 })) {",
         "        total += n",
         "    }",
         "    while (total > 0) {",
@@ -1847,9 +2099,9 @@ function g() {
         "        super(n)",
         "    }",
         "}",
-        `const dog = new Animal("Rex")`,
+        `const dog = Animal.new("Rex")`,
         "const said = dog:speak()",
-        "const held = new Ints(1):get()",
+        "const held = Ints.new(1):get()",
     ].join("\n"))
     check("braces: a class, a generic one, and one extending it",
         [classes.errors, classes.bindings.dog, classes.bindings.said, classes.bindings.held],
@@ -1901,7 +2153,7 @@ function g() {
 
     const written = analyze([
         "declare applied: (f: (n: number) => string, n: number) => string",
-        "type Handler = (event: string) => ()",
+        "type Handler = (event: string) => nil",
         "declare handled: Handler",
         "declare older: (n: number) => string",
         "const apply = applied",
@@ -1963,7 +2215,7 @@ function g() {
     // A block body is a block, as in TypeScript — so an object has to be
     // parenthesized to be returned.
     const bodies = analyze([
-        "declare function print(v: unknown): ()",
+        "declare function print(v: unknown): nil",
         "const logged = (n: number) => {",
         "    const doubled = n * 2",
         "    print(doubled)",
@@ -1980,9 +2232,9 @@ function g() {
     // One parameter needs no parentheses, and a generic one is written as it
     // is on a function.
     const short = analyze([
-        "declare function each(f: (n: number) => ()): ()",
+        "declare function each(f: (n: number) => nil): nil",
         "each(n => print(n))",
-        "declare function print(v: unknown): ()",
+        "declare function print(v: unknown): nil",
         "const identity = <T>(v: T) => v",
         "const one = identity(1)",
     ].join("\n"))
@@ -2022,7 +2274,7 @@ function g() {
         `type UserId = string & { readonly __brand: "UserId" }`,
         `type PostId = string & { readonly __brand: "PostId" }`,
         "declare function findUser(id: UserId): string",
-        "declare function take(s: string): ()",
+        "declare function take(s: string): nil",
     ].join("\n")
 
     check("branded: a raw value is not one, and neither is another brand", analyze([
@@ -2116,7 +2368,7 @@ function g() {
         DECLARED,
         "declare pair: [number, string]",
         "declare trio: [number, number, number]",
-        "declare function takes(a: number, b: string): ()",
+        "declare function takes(a: number, b: string): nil",
         "add3(...nums)",
         "add3()",
         "takes(...pair)",
@@ -2141,62 +2393,29 @@ function g() {
     check("spread: a generic reads what it holds through one",
         [generic.errors, generic.bindings.picked], [[], "number | nil"])
 
-    // The same spread in a list of values: a `return`'s, a declaration's, an
-    // assignment's. The declared shape says how much room there is.
-    const returned = analyze([
+    // A spread goes in a call's arguments or an array. A list of values —
+    // a declaration's, an assignment's — pairs one value with each name.
+    check("spread: not in a list of values",
+        parseWithRecovery("declare pair: string[]\nconst a, b = ...pair").errors.map(e => e.message),
+        ["A spread goes in a call's arguments or an array: take values out of an array with a destructuring, 'const [a, b] = xs' (2:14)"])
+
+    // Several results are an array, and a destructuring takes them apart.
+    const tupled = analyze([
         "declare nums: number[]",
-        "function three(): (number, number, number) {",
-        "    return ...nums",
+        "function mixed(): [string, ...number[]] {",
+        "    return [\"a\", ...nums]",
         "}",
-        "function mixed(): (string, number, number) {",
-        "    return \"a\", ...nums",
+        "function wrong(): [string, string] {",
+        "    return nums",
         "}",
-        "function wrong(): (string, string) {",
-        "    return ...nums",
-        "}",
-        "",
-        "",
+        "const [label, ...rest] = mixed()",
+        "const one, two = mixed()",
     ].join("\n"))
-    check("spread: a `return` spreads into the values it declares",
-        returned.errors, ["Type '(number, number)' is not assignable to '(string, string)'"])
-
-    const declared = analyze([
-        "declare pair: string[]",
-        "declare trio: [number, string, boolean]",
-        "const first, second = ...pair",
-        "let p, q = \"\", \"\"",
-        "p, q = ...pair",
-        "const one, two, three = ...trio",
-    ].join("\n"))
-    check("spread: a declaration and an assignment take as many as they hold",
-        [declared.errors, declared.bindings.first, declared.bindings.second,
-            declared.bindings.p, declared.bindings.one, declared.bindings.two, declared.bindings.three],
-        [[], "string", "string", "string", "number", "string", "boolean"])
-
-    // `return ...` of a pack fills what was declared, which it never used to.
-    const packed = analyze([
-        "function pass(...: number): (number, number) {",
-        "    return ...",
-        "}",
-        "const passed = pass",
-        "",
-        "",
-    ].join("\n"))
-    check("spread: `return ...` fills the values the function declares",
-        [packed.errors, packed.bindings.passed], [[], "(...number) => (number, number)"])
-
-    // `...` on its own is untouched: it is still the pack being passed on.
-    const pack = analyze([
-        "declare function join(sep: string, ...parts: string[]): string",
-        "function pass(...: string): string {",
-        "    return join(\"-\", ...)",
-        "}",
-        "const passed = pass",
-        "",
-        "",
-    ].join("\n"))
-    check("spread: bare `...` still passes the pack on",
-        [pack.errors, pack.bindings.passed], [[], "(...string) => string"])
+    check("tuples: returned, taken apart, and a call is one value",
+        [tupled.errors, tupled.bindings.label, tupled.bindings.rest], [[
+            "Type 'number[]' is not assignable to '[string, string]'",
+            "A call is one value, here an array: take its parts with '[a, b] = ...'",
+        ], "string", "number[]"])
 }
 
 // --- classes -----------------------------------------------------------
@@ -2249,7 +2468,7 @@ function g() {
     // A class names a type and a value at once: the instances and the table.
     const basic = analyze([
         ANIMALS,
-        "const d = new Dog(\"Rex\", \"corgi\")",
+        "const d = Dog.new(\"Rex\", \"corgi\")",
         "const said = d:speak()",
         "const shown = d.label",
         "const inherited = d.kind",
@@ -2270,7 +2489,7 @@ function g() {
         "        this.x = x",
         "    }",
         "}",
-        "declare function take(p: Point): ()",
+        "declare function take(p: Point): nil",
         "take({ x: 1 })",
         "",
         "",
@@ -2283,8 +2502,8 @@ function g() {
         "        this.x = x",
         "    }",
         "}",
-        "const bad = new Vec(\"a\")",
-        "const missing = new Vec()",
+        "const bad = Vec.new(\"a\")",
+        "const missing = Vec.new()",
         "",
         "",
     ].join("\n")).errors, [
@@ -2304,7 +2523,7 @@ function g() {
         "",
         "",
     ].join("\n")).errors,
-        ["'name' has no value: give it one, assign it in the constructor, or let its type admit nil"])
+        ["'name' has no value: give it one, assign it in the constructor on every path, or let its type admit nil"])
 
     check("class: a derived constructor has to call super", analyze([
         "class A {",
@@ -2378,8 +2597,8 @@ function g() {
         "    set both(value: string) {",
         "    }",
         "}",
-        "declare function want(v: { readonly readOnly: number, both: string }): ()",
-        "want(new A())",
+        "declare function want(v: { readonly readOnly: number, both: string }): nil",
+        "want(A.new())",
         "",
         "",
     ].join("\n"))
@@ -2387,7 +2606,7 @@ function g() {
 
     // `new` above the declaration: the name is there from the top of the block.
     const hoisted = analyze([
-        "const early = new Later(1)",
+        "const early = Later.new(1)",
         "class Later {",
         "    n: number",
         "    constructor(n: number) {",
@@ -2413,7 +2632,7 @@ function g() {
         "        return this.radius",
         "    }",
         "}",
-        "const c = new Circle(2)",
+        "const c = Circle.new(2)",
         "const named = c.name",
         "const measured = c:area()",
         "const asShape: Shape = c",
@@ -2450,10 +2669,10 @@ function g() {
         "    static function of(n: number): Box",
         "    static function of(n: string): Box",
         "    static function of(n: number | string): Box {",
-        "        return new Box()",
+        "        return Box.new()",
         "    }",
         "}",
-        "const b = new Box()",
+        "const b = Box.new()",
         "const byName = b:get(\"k\")",
         "const byIndex = b:get(1)",
         "const made = Box.of(1)",
@@ -2464,6 +2683,190 @@ function g() {
     check("class: a method can be overloaded, and the receiver is still implied",
         [overloaded.errors, overloaded.bindings.byName, overloaded.bindings.byIndex, overloaded.bindings.made],
         [["No overload matches this call"], "number", "string", "Box"])
+
+    // `protected`: the class and the classes extending it; `readonly`: set
+    // where declared or in the constructor of its own class.
+    const guarded = analyze([
+        "class Unit {",
+        "    readonly id: number",
+        "    protected hp = 100",
+        "    constructor(id: number) {",
+        "        this.id = id",
+        "    }",
+        "    function rename() {",
+        "        this.id = 2",
+        "    }",
+        "}",
+        "class Boss extends Unit {",
+        "    function hit() {",
+        "        this.hp -= 1",
+        "    }",
+        "}",
+        "const boss = Boss.new(1)",
+        "boss.id = 3",
+        "const hp = boss.hp",
+        "const id: number = boss.id",
+    ].join("\n"))
+    check("class: `readonly` outside the constructor, and `protected` outside the family", guarded.errors, [
+        "Cannot assign to 'id' because it is a read-only property",
+        "Cannot assign to 'id' because it is a read-only property",
+        "Property 'hp' is protected and only accessible within class 'Unit' and the classes extending it",
+    ])
+
+    // `abstract`: no `new`, and a class extending it writes what it left out.
+    const abstracts = analyze([
+        "abstract class Shape {",
+        "    abstract function area(): number",
+        "    function describe(): string {",
+        "        return `area ${this:area()}`",
+        "    }",
+        "}",
+        "class Circle extends Shape {",
+        "    r = 1",
+        "    override function area(): number {",
+        "        return 3 * this.r * this.r",
+        "    }",
+        "}",
+        "class Square extends Shape {",
+        "    override function perimeter(): number {",
+        "        return 4",
+        "    }",
+        "}",
+        "class Loose {",
+        "    abstract function nothing(): number",
+        "}",
+        "class Wrong extends Circle {",
+        "    override function area(): string {",
+        "        return super.describe()",
+        "    }",
+        "}",
+        "const circle = Circle.new()",
+        "const said: string = circle:describe()",
+        "const shape = Shape.new()",
+    ].join("\n"))
+    check("class: abstract classes and members, and `override`", abstracts.errors, [
+        "'Square' does not write the abstract member 'area' of the class it extends; write it, or make 'Square' abstract too",
+        "'perimeter' is marked 'override', but 'Shape' has no member of that name",
+        "'nothing' is abstract, so 'Loose' has to be an 'abstract class'",
+        "'area' in 'Wrong' does not fit the 'area' of 'Circle' it replaces: '() => string' is not assignable to '() => number'",
+        "'Shape' is an abstract class: build one of the classes extending it instead",
+    ])
+
+    // `implements`: every member the shape names, of a type that fits.
+    const implemented = analyze([
+        "type Named = { name: string, greet: (self: Named) => string, nickname?: string }",
+        "class Person implements Named {",
+        "    name = \"ana\"",
+        "    function greet(): string {",
+        "        return this.name",
+        "    }",
+        "}",
+        "class Robot implements Named {",
+        "    name = 1",
+        "}",
+        "class Odd implements number {",
+        "}",
+    ].join("\n"))
+    check("class: `implements` checks the members", implemented.errors, [
+        "'Robot' does not implement 'Named': its 'name' is 'number', not 'string'",
+        "'Robot' does not implement 'Named': 'greet' is missing",
+        "A class can only implement an object type or a class, not 'number'",
+    ])
+
+    // A field is assigned on every way through the constructor, or it is nil.
+    const fields = analyze([
+        "declare flag: boolean",
+        "class Split {",
+        "    both: number",
+        "    one: number",
+        "    later: number",
+        "    constructor() {",
+        "        if (flag) {",
+        "            this.both = 1",
+        "            this.one = 1",
+        "        } else {",
+        "            this.both = 2",
+        "        }",
+        "        const set = function() {",
+        "            this.later = 1",
+        "        }",
+        "    }",
+        "}",
+    ].join("\n"))
+    check("class: a field has to be assigned on every path through the constructor", fields.errors, [
+        "'one' has no value: give it one, assign it in the constructor on every path, or let its type admit nil",
+        "'later' has no value: give it one, assign it in the constructor on every path, or let its type admit nil",
+    ])
+
+    // A method named for a metamethod is one: its instances answer to it.
+    const meta = analyze([
+        "class Vec {",
+        "    x: number",
+        "    constructor(x: number) {",
+        "        this.x = x",
+        "    }",
+        "    function __add(other: Vec): Vec {",
+        "        return Vec.new(this.x + other.x)",
+        "    }",
+        "    function __lt(other: Vec): boolean {",
+        "        return this.x < other.x",
+        "    }",
+        "    function __len(): number {",
+        "        return this.x",
+        "    }",
+        "    function __call(scale: number): Vec {",
+        "        return Vec.new(this.x * scale)",
+        "    }",
+        "    function __iter(): [(s: nil, previous: [number, string] | nil) => [number, string] | nil, nil, nil] {",
+        "        return [function(): [number, string] { return [this.x, \"x\"] }, nil, nil]",
+        "    }",
+        "    function __tostring(): string {",
+        "        return `${this.x}`",
+        "    }",
+        "}",
+        "class Plain {",
+        "    function __eq(): boolean {",
+        "        return true",
+        "    }",
+        "    static function __sub(a: Plain): Plain {",
+        "        return a",
+        "    }",
+        "    function __tostring(): number {",
+        "        return 1",
+        "    }",
+        "}",
+        "const a = Vec.new(1)",
+        "const b = Vec.new(2)",
+        "const sum = a + b",
+        "const less = a < b",
+        "const size = #a",
+        "const scaled = a(3)",
+        "for (const [index, label] in a) {",
+        "    const i: number = index",
+        "    const l: string = label",
+        "}",
+        "const p = Plain.new()",
+        "const compared = p < p",
+    ].join("\n"))
+    check("class: metamethods type the operators, and are checked themselves", [
+        meta.errors, meta.bindings.sum, meta.bindings.less, meta.bindings.size, meta.bindings.scaled,
+    ], [[
+        "'__eq' takes one operand besides 'this'",
+        "'__sub' is a metamethod of the instances; it cannot be static",
+        "'__tostring' has to return string, not 'number'",
+        "Operator '<' cannot be applied to types 'Plain' and 'Plain'",
+    ], "Vec", "boolean", "number", "Vec"])
+
+    // The modifiers are soft keywords, and say when they are misplaced.
+    check("class: modifiers in any order, as names where no member follows, and misplaced", [
+        analyze("class A {\n    readonly = 1\n    static private readonly count = 0\n    protected static function f(): number {\n        return 1\n    }\n}").errors,
+        parseWithRecovery("class A {\n    readonly function f() {}\n    static static x = 1\n}").errors.map(e => e.message),
+        parseWithRecovery("abstract class A {\n    abstract function f(): number {\n        return 1\n    }\n}").errors.length > 0,
+    ], [
+        [],
+        ["Only a field can be 'readonly' (2:5)", "'static' is written twice (3:12)"],
+        true,
+    ])
 
     // A class written inside a function names a type there too.
     const nested = analyze([
@@ -2477,7 +2880,7 @@ function g() {
         "            return this.n * 2",
         "        }",
         "    }",
-        "    const it = new Local(n)",
+        "    const it = Local.new(n)",
         "    return it:twice()",
         "}",
         "",
@@ -2506,8 +2909,8 @@ function g() {
 
     const generic = analyze([
         BOX,
-        "const ofNumber = new Box(1)",
-        "const ofString = new Box<string>(\"a\")",
+        "const ofNumber = Box.new(1)",
+        "const ofString = Box.new<string>(\"a\")",
         "const gotNumber = ofNumber:get()",
         "const gotString = ofString:get()",
         "ofNumber:set(\"wrong\")",
@@ -2520,13 +2923,13 @@ function g() {
 
     const instantiations = analyze([
         BOX,
-        "declare function wantNumbers(b: Box<number>): ()",
-        "wantNumbers(new Box(1))",
-        "wantNumbers(new Box(\"a\"))",
+        "declare function wantNumbers(b: Box<number>): nil",
+        "wantNumbers(Box.new(1))",
+        "wantNumbers(Box.new(\"a\"))",
         "function unwrap<T>(b: Box<T>): T {",
         "    return b:get()",
         "}",
-        "const unwrapped = unwrap(new Box(true))",
+        "const unwrapped = unwrap(Box.new(true))",
     ].join("\n"))
     check("class: one instantiation is not another, and a parameter reads the argument off it",
         [instantiations.errors, instantiations.bindings.unwrapped],
@@ -2542,11 +2945,11 @@ function g() {
         "        return this:get() * 2",
         "    }",
         "}",
-        "declare function wantNumbers(b: Box<number>): ()",
-        "declare function wantStrings(b: Box<string>): ()",
-        "wantNumbers(new Ints(1))",
-        "wantStrings(new Ints(1))",
-        "const doubled = new Ints(21):double()",
+        "declare function wantNumbers(b: Box<number>): nil",
+        "declare function wantStrings(b: Box<string>): nil",
+        "wantNumbers(Ints.new(1))",
+        "wantStrings(Ints.new(1))",
+        "const doubled = Ints.new(21):double()",
     ].join("\n"))
     check("class: extending a generic class fixes its argument",
         [fixed.errors, fixed.bindings.doubled],
@@ -2561,7 +2964,7 @@ function g() {
         "        return this.n",
         "    }",
         "}",
-        "const counter = new Counter()",
+        "const counter = Counter.new()",
         "const bumped = counter:bump()",
         "",
         "",
@@ -2577,10 +2980,10 @@ function g() {
         "const B = class {",
         "    x = 1",
         "}",
-        "const anA = new A()",
-        "declare function wantA(v: typeof anA): ()",
-        "wantA(new A())",
-        "wantA(new B())",
+        "const anA = A.new()",
+        "declare function wantA(v: typeof anA): nil",
+        "wantA(A.new())",
+        "wantA(B.new())",
         "",
         "",
     ].join("\n"))
@@ -2599,7 +3002,7 @@ function g() {
     // `export default class` declares the name here as well as exporting it.
     const defaulted = analyze([
         "import Service from \"./service\"",
-        "const running = new Service()",
+        "const running = Service.new()",
         "const named = running.name",
     ].join("\n"), {
         "./service": [
@@ -2624,7 +3027,7 @@ function g() {
         "}",
         "class Derived extends Base {",
         "}",
-        "const instance = new Derived()",
+        "const instance = Derived.new()",
         "const itsClass = instance.ClassObject",
         "const itsParent = Derived.ParentClass",
         "const rootParent = Base.ParentClass",
@@ -2635,11 +3038,11 @@ function g() {
         [links.errors, links.bindings.itsClass, links.bindings.itsParent, links.bindings.rootParent],
         [[], "typeof Derived", "typeof Base", "nil"])
 
-    // `new` needs a class.
-    check("class: 'new' says so when what follows is not one", analyze([
-        "const t = { new: 1 }",
-        "const bad = new t()",
-    ].join("\n")).errors, ["'t' is not a class; 'new' needs one"])
+    // Luau builds an instance with the class's own function, and so does
+    // tilua: `Name.new(...)` is not a way to write it.
+    check("class: 'Name.new(...)' is not tilua, and says what is",
+        parseWithRecovery("class A {}\nconst a = n" + "ew A()").errors.map(e => e.message),
+        ["tilua has no 'new' operator: construct with 'Name.new(...)' (2:11)"])
     // A generic inferred through an object literal owns the literal information
     // at its slot, even when that slot is several objects deep.
     const nestedGeneric = analyze([
@@ -2769,12 +3172,12 @@ function g() {
         const klass = "class A {\n    private n = 1\n    private static s = 2\n    private function f(): number { return this.n }\n"
             + "    function g(): number { const h = (): number => this.n; return h() + this:f() + A.s }\n}\n"
         check("private: reachable inside the class, reported outside it", [
-            analyze(klass + "const a = new A()\nconst x = a:g()").errors,
-            analyze(klass + "const a = new A()\nconst x = a.n").errors,
-            analyze(klass + "const a = new A()\nconst x = a:f()").errors,
+            analyze(klass + "const a = A.new()\nconst x = a:g()").errors,
+            analyze(klass + "const a = A.new()\nconst x = a.n").errors,
+            analyze(klass + "const a = A.new()\nconst x = a:f()").errors,
             analyze(klass + "const x = A.s").errors,
             analyze(klass + "class B extends A {\n    function m(): number { return this.n }\n}").errors,
-            analyze("class C {\n    public n = 1\n    private: boolean = false\n}\nconst c = new C()\nconst x = c.n\nconst y = c.private").errors,
+            analyze("class C {\n    public n = 1\n    private: boolean = false\n}\nconst c = C.new()\nconst x = c.n\nconst y = c.private").errors,
         ], [
             [],
             ["Property 'n' is private and only accessible within class 'A'"],
@@ -2799,7 +3202,7 @@ function g() {
             statements("const value = 1\nvalue"),
             statements("const o = { a: 1 }\no.a"),
             statements("const value = 1\nvalue + 1"),
-            statements("declare f: () => ()\nf()"),
+            statements("declare f: () => nil\nf()"),
             formatType(types.typeOf.get(statement.expression)!),
             [...scopes.diagnostics, ...types.diagnostics].map(d => d.message),
         ], [
@@ -2814,8 +3217,8 @@ function g() {
 
     // Two shapes printed side by side leave the reader to spot the difference.
     check("assignability: the message names what is missing or wrong", [
-        analyze("type Big = { a: number, b: string }\ndeclare f: (x: Big) => ()\nf({ a: 1 })").errors,
-        analyze("type Big = { a: number, b: string }\ndeclare f: (x: Big) => ()\nf({ a: 1, b: 2 })").errors,
+        analyze("type Big = { a: number, b: string }\ndeclare f: (x: Big) => nil\nf({ a: 1 })").errors,
+        analyze("type Big = { a: number, b: string }\ndeclare f: (x: Big) => nil\nf({ a: 1, b: 2 })").errors,
     ], [
         ["Argument of type '{ a: number }' is not assignable to parameter of type 'Big', missing b: string"],
         ["Argument of type '{ a: number, b: number }' is not assignable to parameter of type 'Big', 'b' is number, not string"],

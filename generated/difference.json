@@ -150,20 +150,18 @@
                         },
                         {
                           "type": "ReturnStatement",
-                          "arguments": [
-                            {
-                              "type": "Identifier",
-                              "name": "one",
-                              "line": {
-                                "start": 17,
-                                "end": 17
-                              },
-                              "column": {
-                                "start": 16,
-                                "end": 19
-                              }
+                          "argument": {
+                            "type": "Identifier",
+                            "name": "one",
+                            "line": {
+                              "start": 17,
+                              "end": 17
+                            },
+                            "column": {
+                              "start": 16,
+                              "end": 19
                             }
-                          ],
+                          },
                           "line": {
                             "start": 17,
                             "end": 17
@@ -365,20 +363,18 @@
                         },
                         {
                           "type": "ReturnStatement",
-                          "arguments": [
-                            {
-                              "type": "Identifier",
-                              "name": "two",
-                              "line": {
-                                "start": 25,
-                                "end": 25
-                              },
-                              "column": {
-                                "start": 16,
-                                "end": 19
-                              }
+                          "argument": {
+                            "type": "Identifier",
+                            "name": "two",
+                            "line": {
+                              "start": 25,
+                              "end": 25
+                            },
+                            "column": {
+                              "start": 16,
+                              "end": 19
                             }
-                          ],
+                          },
                           "line": {
                             "start": 25,
                             "end": 25
@@ -531,21 +527,19 @@
               },
               {
                 "type": "ReturnStatement",
-                "arguments": [
-                  {
-                    "type": "NumberLiteral",
-                    "value": 0,
-                    "raw": "0",
-                    "line": {
-                      "start": 28,
-                      "end": 28
-                    },
-                    "column": {
-                      "start": 12,
-                      "end": 13
-                    }
+                "argument": {
+                  "type": "NumberLiteral",
+                  "value": 0,
+                  "raw": "0",
+                  "line": {
+                    "start": 28,
+                    "end": 28
+                  },
+                  "column": {
+                    "start": 12,
+                    "end": 13
                   }
-                ],
+                },
                 "line": {
                   "start": 28,
                   "end": 28
@@ -766,20 +760,18 @@
                         },
                         {
                           "type": "ReturnStatement",
-                          "arguments": [
-                            {
-                              "type": "Identifier",
-                              "name": "kept",
-                              "line": {
-                                "start": 36,
-                                "end": 36
-                              },
-                              "column": {
-                                "start": 16,
-                                "end": 20
-                              }
+                          "argument": {
+                            "type": "Identifier",
+                            "name": "kept",
+                            "line": {
+                              "start": 36,
+                              "end": 36
+                            },
+                            "column": {
+                              "start": 16,
+                              "end": 20
                             }
-                          ],
+                          },
                           "line": {
                             "start": 36,
                             "end": 36
@@ -898,20 +890,18 @@
               },
               {
                 "type": "ReturnStatement",
-                "arguments": [
-                  {
-                    "type": "Identifier",
-                    "name": "gone",
-                    "line": {
-                      "start": 39,
-                      "end": 39
-                    },
-                    "column": {
-                      "start": 12,
-                      "end": 16
-                    }
+                "argument": {
+                  "type": "Identifier",
+                  "name": "gone",
+                  "line": {
+                    "start": 39,
+                    "end": 39
+                  },
+                  "column": {
+                    "start": 12,
+                    "end": 16
                   }
-                ],
+                },
                 "line": {
                   "start": 39,
                   "end": 39
@@ -1119,20 +1109,18 @@
                         },
                         {
                           "type": "ReturnStatement",
-                          "arguments": [
-                            {
-                              "type": "Identifier",
-                              "name": "present",
-                              "line": {
-                                "start": 46,
-                                "end": 46
-                              },
-                              "column": {
-                                "start": 16,
-                                "end": 23
-                              }
+                          "argument": {
+                            "type": "Identifier",
+                            "name": "present",
+                            "line": {
+                              "start": 46,
+                              "end": 46
+                            },
+                            "column": {
+                              "start": 16,
+                              "end": 23
                             }
-                          ],
+                          },
                           "line": {
                             "start": 46,
                             "end": 46
@@ -1173,21 +1161,19 @@
               },
               {
                 "type": "ReturnStatement",
-                "arguments": [
-                  {
-                    "type": "NumberLiteral",
-                    "value": 0,
-                    "raw": "0",
-                    "line": {
-                      "start": 48,
-                      "end": 48
-                    },
-                    "column": {
-                      "start": 12,
-                      "end": 13
-                    }
+                "argument": {
+                  "type": "NumberLiteral",
+                  "value": 0,
+                  "raw": "0",
+                  "line": {
+                    "start": 48,
+                    "end": 48
+                  },
+                  "column": {
+                    "start": 12,
+                    "end": 13
                   }
-                ],
+                },
                 "line": {
                   "start": 48,
                   "end": 48

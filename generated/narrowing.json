@@ -385,68 +385,23 @@
                       "statements": [
                         {
                           "type": "ReturnStatement",
-                          "arguments": [
-                            {
+                          "argument": {
+                            "type": "BinaryExpression",
+                            "operator": "*",
+                            "left": {
                               "type": "BinaryExpression",
                               "operator": "*",
                               "left": {
-                                "type": "BinaryExpression",
-                                "operator": "*",
-                                "left": {
-                                  "type": "NumberLiteral",
-                                  "value": 3.14159,
-                                  "raw": "3.14159",
-                                  "line": {
-                                    "start": 9,
-                                    "end": 9
-                                  },
-                                  "column": {
-                                    "start": 16,
-                                    "end": 23
-                                  }
-                                },
-                                "right": {
-                                  "type": "MemberExpression",
-                                  "object": {
-                                    "type": "Identifier",
-                                    "name": "shape",
-                                    "line": {
-                                      "start": 9,
-                                      "end": 9
-                                    },
-                                    "column": {
-                                      "start": 26,
-                                      "end": 31
-                                    }
-                                  },
-                                  "property": {
-                                    "type": "Identifier",
-                                    "name": "radius",
-                                    "line": {
-                                      "start": 9,
-                                      "end": 9
-                                    },
-                                    "column": {
-                                      "start": 32,
-                                      "end": 38
-                                    }
-                                  },
-                                  "line": {
-                                    "start": 9,
-                                    "end": 9
-                                  },
-                                  "column": {
-                                    "start": 26,
-                                    "end": 38
-                                  }
-                                },
+                                "type": "NumberLiteral",
+                                "value": 3.14159,
+                                "raw": "3.14159",
                                 "line": {
                                   "start": 9,
                                   "end": 9
                                 },
                                 "column": {
                                   "start": 16,
-                                  "end": 38
+                                  "end": 23
                                 }
                               },
                               "right": {
@@ -459,8 +414,8 @@
                                     "end": 9
                                   },
                                   "column": {
-                                    "start": 41,
-                                    "end": 46
+                                    "start": 26,
+                                    "end": 31
                                   }
                                 },
                                 "property": {
@@ -471,8 +426,8 @@
                                     "end": 9
                                   },
                                   "column": {
-                                    "start": 47,
-                                    "end": 53
+                                    "start": 32,
+                                    "end": 38
                                   }
                                 },
                                 "line": {
@@ -480,8 +435,8 @@
                                   "end": 9
                                 },
                                 "column": {
-                                  "start": 41,
-                                  "end": 53
+                                  "start": 26,
+                                  "end": 38
                                 }
                               },
                               "line": {
@@ -490,10 +445,53 @@
                               },
                               "column": {
                                 "start": 16,
+                                "end": 38
+                              }
+                            },
+                            "right": {
+                              "type": "MemberExpression",
+                              "object": {
+                                "type": "Identifier",
+                                "name": "shape",
+                                "line": {
+                                  "start": 9,
+                                  "end": 9
+                                },
+                                "column": {
+                                  "start": 41,
+                                  "end": 46
+                                }
+                              },
+                              "property": {
+                                "type": "Identifier",
+                                "name": "radius",
+                                "line": {
+                                  "start": 9,
+                                  "end": 9
+                                },
+                                "column": {
+                                  "start": 47,
+                                  "end": 53
+                                }
+                              },
+                              "line": {
+                                "start": 9,
+                                "end": 9
+                              },
+                              "column": {
+                                "start": 41,
                                 "end": 53
                               }
+                            },
+                            "line": {
+                              "start": 9,
+                              "end": 9
+                            },
+                            "column": {
+                              "start": 16,
+                              "end": 53
                             }
-                          ],
+                          },
                           "line": {
                             "start": 9,
                             "end": 9
@@ -528,78 +526,33 @@
                   "statements": [
                     {
                       "type": "ReturnStatement",
-                      "arguments": [
-                        {
-                          "type": "BinaryExpression",
-                          "operator": "*",
-                          "left": {
-                            "type": "MemberExpression",
-                            "object": {
-                              "type": "Identifier",
-                              "name": "shape",
-                              "line": {
-                                "start": 11,
-                                "end": 11
-                              },
-                              "column": {
-                                "start": 16,
-                                "end": 21
-                              }
-                            },
-                            "property": {
-                              "type": "Identifier",
-                              "name": "w",
-                              "line": {
-                                "start": 11,
-                                "end": 11
-                              },
-                              "column": {
-                                "start": 22,
-                                "end": 23
-                              }
-                            },
+                      "argument": {
+                        "type": "BinaryExpression",
+                        "operator": "*",
+                        "left": {
+                          "type": "MemberExpression",
+                          "object": {
+                            "type": "Identifier",
+                            "name": "shape",
                             "line": {
                               "start": 11,
                               "end": 11
                             },
                             "column": {
                               "start": 16,
-                              "end": 23
+                              "end": 21
                             }
                           },
-                          "right": {
-                            "type": "MemberExpression",
-                            "object": {
-                              "type": "Identifier",
-                              "name": "shape",
-                              "line": {
-                                "start": 11,
-                                "end": 11
-                              },
-                              "column": {
-                                "start": 26,
-                                "end": 31
-                              }
-                            },
-                            "property": {
-                              "type": "Identifier",
-                              "name": "h",
-                              "line": {
-                                "start": 11,
-                                "end": 11
-                              },
-                              "column": {
-                                "start": 32,
-                                "end": 33
-                              }
-                            },
+                          "property": {
+                            "type": "Identifier",
+                            "name": "w",
                             "line": {
                               "start": 11,
                               "end": 11
                             },
                             "column": {
-                              "start": 26,
-                              "end": 33
+                              "start": 22,
+                              "end": 23
                             }
                           },
                           "line": {
@@ -608,10 +561,53 @@
                           },
                           "column": {
                             "start": 16,
+                            "end": 23
+                          }
+                        },
+                        "right": {
+                          "type": "MemberExpression",
+                          "object": {
+                            "type": "Identifier",
+                            "name": "shape",
+                            "line": {
+                              "start": 11,
+                              "end": 11
+                            },
+                            "column": {
+                              "start": 26,
+                              "end": 31
+                            }
+                          },
+                          "property": {
+                            "type": "Identifier",
+                            "name": "h",
+                            "line": {
+                              "start": 11,
+                              "end": 11
+                            },
+                            "column": {
+                              "start": 32,
+                              "end": 33
+                            }
+                          },
+                          "line": {
+                            "start": 11,
+                            "end": 11
+                          },
+                          "column": {
+                            "start": 26,
                             "end": 33
                           }
+                        },
+                        "line": {
+                          "start": 11,
+                          "end": 11
+                        },
+                        "column": {
+                          "start": 16,
+                          "end": 33
                         }
-                      ],
+                      },
                       "line": {
                         "start": 11,
                         "end": 11
@@ -764,21 +760,19 @@
                       "statements": [
                         {
                           "type": "ReturnStatement",
-                          "arguments": [
-                            {
-                              "type": "StringLiteral",
-                              "value": "",
-                              "raw": "\"\"",
-                              "line": {
-                                "start": 18,
-                                "end": 18
-                              },
-                              "column": {
-                                "start": 16,
-                                "end": 18
-                              }
+                          "argument": {
+                            "type": "StringLiteral",
+                            "value": "",
+                            "raw": "\"\"",
+                            "line": {
+                              "start": 18,
+                              "end": 18
+                            },
+                            "column": {
+                              "start": 16,
+                              "end": 18
                             }
-                          ],
+                          },
                           "line": {
                             "start": 18,
                             "end": 18
@@ -819,20 +813,18 @@
               },
               {
                 "type": "ReturnStatement",
-                "arguments": [
-                  {
-                    "type": "Identifier",
-                    "name": "s",
-                    "line": {
-                      "start": 20,
-                      "end": 20
-                    },
-                    "column": {
-                      "start": 12,
-                      "end": 13
-                    }
+                "argument": {
+                  "type": "Identifier",
+                  "name": "s",
+                  "line": {
+                    "start": 20,
+                    "end": 20
+                  },
+                  "column": {
+                    "start": 12,
+                    "end": 13
                   }
-                ],
+                },
                 "line": {
                   "start": 20,
                   "end": 20
@@ -1784,20 +1776,18 @@
               },
               {
                 "type": "ReturnStatement",
-                "arguments": [
-                  {
-                    "type": "Identifier",
-                    "name": "flag",
-                    "line": {
-                      "start": 46,
-                      "end": 46
-                    },
-                    "column": {
-                      "start": 12,
-                      "end": 16
-                    }
+                "argument": {
+                  "type": "Identifier",
+                  "name": "flag",
+                  "line": {
+                    "start": 46,
+                    "end": 46
+                  },
+                  "column": {
+                    "start": 12,
+                    "end": 16
                   }
-                ],
+                },
                 "line": {
                   "start": 46,
                   "end": 46
@@ -2010,44 +2000,42 @@
             "statements": [
               {
                 "type": "ReturnStatement",
-                "arguments": [
-                  {
-                    "type": "IndexExpression",
-                    "object": {
-                      "type": "Identifier",
-                      "name": "bag",
-                      "line": {
-                        "start": 52,
-                        "end": 52
-                      },
-                      "column": {
-                        "start": 12,
-                        "end": 15
-                      }
-                    },
-                    "index": {
-                      "type": "StringLiteral",
-                      "value": "label",
-                      "raw": "\"label\"",
-                      "line": {
-                        "start": 52,
-                        "end": 52
-                      },
-                      "column": {
-                        "start": 16,
-                        "end": 23
-                      }
-                    },
+                "argument": {
+                  "type": "IndexExpression",
+                  "object": {
+                    "type": "Identifier",
+                    "name": "bag",
                     "line": {
                       "start": 52,
                       "end": 52
                     },
                     "column": {
                       "start": 12,
-                      "end": 24
+                      "end": 15
                     }
+                  },
+                  "index": {
+                    "type": "StringLiteral",
+                    "value": "label",
+                    "raw": "\"label\"",
+                    "line": {
+                      "start": 52,
+                      "end": 52
+                    },
+                    "column": {
+                      "start": 16,
+                      "end": 23
+                    }
+                  },
+                  "line": {
+                    "start": 52,
+                    "end": 52
+                  },
+                  "column": {
+                    "start": 12,
+                    "end": 24
                   }
-                ],
+                },
                 "line": {
                   "start": 52,
                   "end": 52

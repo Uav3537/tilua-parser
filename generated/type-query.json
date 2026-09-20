@@ -664,20 +664,18 @@
             "statements": [
               {
                 "type": "ReturnStatement",
-                "arguments": [
-                  {
-                    "type": "Identifier",
-                    "name": "value",
-                    "line": {
-                      "start": 24,
-                      "end": 24
-                    },
-                    "column": {
-                      "start": 12,
-                      "end": 17
-                    }
+                "argument": {
+                  "type": "Identifier",
+                  "name": "value",
+                  "line": {
+                    "start": 24,
+                    "end": 24
+                  },
+                  "column": {
+                    "start": 12,
+                    "end": 17
                   }
-                ],
+                },
                 "line": {
                   "start": 24,
                   "end": 24

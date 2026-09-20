@@ -103,32 +103,30 @@
             "statements": [
               {
                 "type": "ReturnStatement",
-                "arguments": [
-                  {
-                    "type": "UnaryExpression",
-                    "operator": "#",
-                    "argument": {
-                      "type": "Identifier",
-                      "name": "x",
-                      "line": {
-                        "start": 6,
-                        "end": 6
-                      },
-                      "column": {
-                        "start": 13,
-                        "end": 14
-                      }
-                    },
+                "argument": {
+                  "type": "UnaryExpression",
+                  "operator": "#",
+                  "argument": {
+                    "type": "Identifier",
+                    "name": "x",
                     "line": {
                       "start": 6,
                       "end": 6
                     },
                     "column": {
-                      "start": 12,
+                      "start": 13,
                       "end": 14
                     }
+                  },
+                  "line": {
+                    "start": 6,
+                    "end": 6
+                  },
+                  "column": {
+                    "start": 12,
+                    "end": 14
                   }
-                ],
+                },
                 "line": {
                   "start": 6,
                   "end": 6
@@ -358,20 +356,18 @@
             "statements": [
               {
                 "type": "ReturnStatement",
-                "arguments": [
-                  {
-                    "type": "Identifier",
-                    "name": "x",
-                    "line": {
-                      "start": 12,
-                      "end": 12
-                    },
-                    "column": {
-                      "start": 12,
-                      "end": 13
-                    }
+                "argument": {
+                  "type": "Identifier",
+                  "name": "x",
+                  "line": {
+                    "start": 12,
+                    "end": 12
+                  },
+                  "column": {
+                    "start": 12,
+                    "end": 13
                   }
-                ],
+                },
                 "line": {
                   "start": 12,
                   "end": 12

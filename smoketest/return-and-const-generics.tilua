@@ -38,12 +38,10 @@ const maybe: () => nil | 2 = function() {
     return 2
 }
 
--- Several values form a *type pack*, written and printed `(A, B)`. A pack is
--- not a tuple: it spreads across names in an expression list, where a tuple
--- is one value.
-const pair: () => (1, "x") | (2, "y") = function() {
-    if (cond == 1) { return 1, "x" }
-    return 2, "y"
+-- Several values are a tuple: an array, returned like any other value.
+const pair: () => [1, "x"] | [2, "y"] = function() {
+    if (cond == 1) { return [1, "x"] }
+    return [2, "y"]
 }
 
 -- ============================================================

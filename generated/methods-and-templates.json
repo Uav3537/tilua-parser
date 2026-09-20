@@ -300,55 +300,33 @@
               },
               {
                 "type": "ReturnStatement",
-                "arguments": [
-                  {
-                    "type": "BinaryExpression",
-                    "operator": "+",
-                    "left": {
-                      "type": "MemberExpression",
-                      "object": {
-                        "type": "Identifier",
-                        "name": "here",
-                        "line": {
-                          "start": 24,
-                          "end": 24
-                        },
-                        "column": {
-                          "start": 12,
-                          "end": 16
-                        }
-                      },
-                      "property": {
-                        "type": "Identifier",
-                        "name": "n",
-                        "line": {
-                          "start": 24,
-                          "end": 24
-                        },
-                        "column": {
-                          "start": 17,
-                          "end": 18
-                        }
-                      },
+                "argument": {
+                  "type": "BinaryExpression",
+                  "operator": "+",
+                  "left": {
+                    "type": "MemberExpression",
+                    "object": {
+                      "type": "Identifier",
+                      "name": "here",
                       "line": {
                         "start": 24,
                         "end": 24
                       },
                       "column": {
                         "start": 12,
-                        "end": 18
+                        "end": 16
                       }
                     },
-                    "right": {
+                    "property": {
                       "type": "Identifier",
-                      "name": "by",
+                      "name": "n",
                       "line": {
                         "start": 24,
                         "end": 24
                       },
                       "column": {
-                        "start": 21,
-                        "end": 23
+                        "start": 17,
+                        "end": 18
                       }
                     },
                     "line": {
@@ -357,10 +335,30 @@
                     },
                     "column": {
                       "start": 12,
+                      "end": 18
+                    }
+                  },
+                  "right": {
+                    "type": "Identifier",
+                    "name": "by",
+                    "line": {
+                      "start": 24,
+                      "end": 24
+                    },
+                    "column": {
+                      "start": 21,
                       "end": 23
                     }
+                  },
+                  "line": {
+                    "start": 24,
+                    "end": 24
+                  },
+                  "column": {
+                    "start": 12,
+                    "end": 23
                   }
-                ],
+                },
                 "line": {
                   "start": 24,
                   "end": 24
@@ -461,43 +459,41 @@
             "statements": [
               {
                 "type": "ReturnStatement",
-                "arguments": [
-                  {
-                    "type": "MemberExpression",
-                    "object": {
-                      "type": "Identifier",
-                      "name": "self",
-                      "line": {
-                        "start": 28,
-                        "end": 28
-                      },
-                      "column": {
-                        "start": 12,
-                        "end": 16
-                      }
-                    },
-                    "property": {
-                      "type": "Identifier",
-                      "name": "n",
-                      "line": {
-                        "start": 28,
-                        "end": 28
-                      },
-                      "column": {
-                        "start": 17,
-                        "end": 18
-                      }
-                    },
+                "argument": {
+                  "type": "MemberExpression",
+                  "object": {
+                    "type": "Identifier",
+                    "name": "self",
                     "line": {
                       "start": 28,
                       "end": 28
                     },
                     "column": {
                       "start": 12,
+                      "end": 16
+                    }
+                  },
+                  "property": {
+                    "type": "Identifier",
+                    "name": "n",
+                    "line": {
+                      "start": 28,
+                      "end": 28
+                    },
+                    "column": {
+                      "start": 17,
                       "end": 18
                     }
+                  },
+                  "line": {
+                    "start": 28,
+                    "end": 28
+                  },
+                  "column": {
+                    "start": 12,
+                    "end": 18
                   }
-                ],
+                },
                 "line": {
                   "start": 28,
                   "end": 28
@@ -1453,7 +1449,6 @@
                 "end": 16
               }
             },
-            "isPack": false,
             "line": {
               "start": 57,
               "end": 57
@@ -1613,18 +1608,17 @@
                 }
               }
             ],
-            "hasVarargs": false,
             "returnType": {
-              "type": "TypePackNode",
-              "types": [],
-              "hasVarargs": false,
+              "type": "TypeReference",
+              "base": "nil",
+              "typeArguments": [],
               "line": {
                 "start": 57,
                 "end": 57
               },
               "column": {
                 "start": 79,
-                "end": 81
+                "end": 82
               }
             },
             "line": {
@@ -1633,7 +1627,7 @@
             },
             "column": {
               "start": 62,
-              "end": 81
+              "end": 82
             }
           },
           "line": {
@@ -1642,7 +1636,7 @@
           },
           "column": {
             "start": 20,
-            "end": 83
+            "end": 84
           }
         },
         "line": {
@@ -1651,7 +1645,7 @@
         },
         "column": {
           "start": 1,
-          "end": 83
+          "end": 84
         }
       },
       {

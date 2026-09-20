@@ -709,39 +709,50 @@
               },
               {
                 "type": "ReturnStatement",
-                "arguments": [
-                  {
-                    "type": "Identifier",
-                    "name": "p",
-                    "line": {
-                      "start": 31,
-                      "end": 31
+                "argument": {
+                  "type": "ArrayExpression",
+                  "elements": [
+                    {
+                      "type": "Identifier",
+                      "name": "p",
+                      "line": {
+                        "start": 31,
+                        "end": 31
+                      },
+                      "column": {
+                        "start": 13,
+                        "end": 14
+                      }
                     },
-                    "column": {
-                      "start": 12,
-                      "end": 13
+                    {
+                      "type": "Identifier",
+                      "name": "t",
+                      "line": {
+                        "start": 31,
+                        "end": 31
+                      },
+                      "column": {
+                        "start": 16,
+                        "end": 17
+                      }
                     }
+                  ],
+                  "line": {
+                    "start": 31,
+                    "end": 31
                   },
-                  {
-                    "type": "Identifier",
-                    "name": "t",
-                    "line": {
-                      "start": 31,
-                      "end": 31
-                    },
-                    "column": {
-                      "start": 15,
-                      "end": 16
-                    }
+                  "column": {
+                    "start": 12,
+                    "end": 18
                   }
-                ],
+                },
                 "line": {
                   "start": 31,
                   "end": 31
                 },
                 "column": {
                   "start": 5,
-                  "end": 16
+                  "end": 18
                 }
               }
             ],
@@ -751,7 +762,7 @@
             },
             "column": {
               "start": 5,
-              "end": 16
+              "end": 18
             }
           },
           "line": {
@@ -1036,7 +1047,6 @@
                   }
                 }
               ],
-              "hasVarargs": false,
               "returnType": {
                 "type": "UnionTypeNode",
                 "types": [
@@ -1152,20 +1162,18 @@
                 "statements": [
                   {
                     "type": "ReturnStatement",
-                    "arguments": [
-                      {
-                        "type": "Identifier",
-                        "name": "port",
-                        "line": {
-                          "start": 41,
-                          "end": 41
-                        },
-                        "column": {
-                          "start": 16,
-                          "end": 20
-                        }
+                    "argument": {
+                      "type": "Identifier",
+                      "name": "port",
+                      "line": {
+                        "start": 41,
+                        "end": 41
+                      },
+                      "column": {
+                        "start": 16,
+                        "end": 20
                       }
-                    ],
+                    },
                     "line": {
                       "start": 41,
                       "end": 41
@@ -1632,44 +1640,42 @@
               },
               {
                 "type": "ReturnStatement",
-                "arguments": [
-                  {
-                    "type": "BinaryExpression",
-                    "operator": "..",
-                    "left": {
-                      "type": "Identifier",
-                      "name": "t1",
-                      "line": {
-                        "start": 51,
-                        "end": 51
-                      },
-                      "column": {
-                        "start": 12,
-                        "end": 14
-                      }
-                    },
-                    "right": {
-                      "type": "Identifier",
-                      "name": "t2",
-                      "line": {
-                        "start": 51,
-                        "end": 51
-                      },
-                      "column": {
-                        "start": 18,
-                        "end": 20
-                      }
-                    },
+                "argument": {
+                  "type": "BinaryExpression",
+                  "operator": "..",
+                  "left": {
+                    "type": "Identifier",
+                    "name": "t1",
                     "line": {
                       "start": 51,
                       "end": 51
                     },
                     "column": {
                       "start": 12,
+                      "end": 14
+                    }
+                  },
+                  "right": {
+                    "type": "Identifier",
+                    "name": "t2",
+                    "line": {
+                      "start": 51,
+                      "end": 51
+                    },
+                    "column": {
+                      "start": 18,
                       "end": 20
                     }
+                  },
+                  "line": {
+                    "start": 51,
+                    "end": 51
+                  },
+                  "column": {
+                    "start": 12,
+                    "end": 20
                   }
-                ],
+                },
                 "line": {
                   "start": 51,
                   "end": 51
@@ -1876,20 +1882,18 @@
               },
               {
                 "type": "ReturnStatement",
-                "arguments": [
-                  {
-                    "type": "Identifier",
-                    "name": "t3",
-                    "line": {
-                      "start": 57,
-                      "end": 57
-                    },
-                    "column": {
-                      "start": 12,
-                      "end": 14
-                    }
+                "argument": {
+                  "type": "Identifier",
+                  "name": "t3",
+                  "line": {
+                    "start": 57,
+                    "end": 57
+                  },
+                  "column": {
+                    "start": 12,
+                    "end": 14
                   }
-                ],
+                },
                 "line": {
                   "start": 57,
                   "end": 57
@@ -2002,7 +2006,6 @@
                     }
                   }
                 ],
-                "hasVarargs": false,
                 "returnType": {
                   "type": "TypeReference",
                   "base": "number",
@@ -2363,39 +2366,50 @@
               },
               {
                 "type": "ReturnStatement",
-                "arguments": [
-                  {
-                    "type": "Identifier",
-                    "name": "t4",
-                    "line": {
-                      "start": 66,
-                      "end": 66
+                "argument": {
+                  "type": "ArrayExpression",
+                  "elements": [
+                    {
+                      "type": "Identifier",
+                      "name": "t4",
+                      "line": {
+                        "start": 66,
+                        "end": 66
+                      },
+                      "column": {
+                        "start": 13,
+                        "end": 15
+                      }
                     },
-                    "column": {
-                      "start": 12,
-                      "end": 14
+                    {
+                      "type": "Identifier",
+                      "name": "t5",
+                      "line": {
+                        "start": 66,
+                        "end": 66
+                      },
+                      "column": {
+                        "start": 17,
+                        "end": 19
+                      }
                     }
+                  ],
+                  "line": {
+                    "start": 66,
+                    "end": 66
                   },
-                  {
-                    "type": "Identifier",
-                    "name": "t5",
-                    "line": {
-                      "start": 66,
-                      "end": 66
-                    },
-                    "column": {
-                      "start": 16,
-                      "end": 18
-                    }
+                  "column": {
+                    "start": 12,
+                    "end": 20
                   }
-                ],
+                },
                 "line": {
                   "start": 66,
                   "end": 66
                 },
                 "column": {
                   "start": 5,
-                  "end": 18
+                  "end": 20
                 }
               }
             ],
@@ -2405,7 +2419,7 @@
             },
             "column": {
               "start": 5,
-              "end": 18
+              "end": 20
             }
           },
           "line": {

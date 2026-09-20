@@ -848,93 +848,91 @@
             "statements": [
               {
                 "type": "ReturnStatement",
-                "arguments": [
-                  {
-                    "type": "ArrayExpression",
-                    "elements": [
-                      {
-                        "type": "IndexExpression",
-                        "object": {
-                          "type": "Identifier",
-                          "name": "xs",
-                          "line": {
-                            "start": 19,
-                            "end": 19
-                          },
-                          "column": {
-                            "start": 13,
-                            "end": 15
-                          }
-                        },
-                        "index": {
-                          "type": "NumberLiteral",
-                          "value": 1,
-                          "raw": "1",
-                          "line": {
-                            "start": 19,
-                            "end": 19
-                          },
-                          "column": {
-                            "start": 16,
-                            "end": 17
-                          }
-                        },
+                "argument": {
+                  "type": "ArrayExpression",
+                  "elements": [
+                    {
+                      "type": "IndexExpression",
+                      "object": {
+                        "type": "Identifier",
+                        "name": "xs",
                         "line": {
                           "start": 19,
                           "end": 19
                         },
                         "column": {
                           "start": 13,
-                          "end": 18
+                          "end": 15
                         }
                       },
-                      {
-                        "type": "IndexExpression",
-                        "object": {
-                          "type": "Identifier",
-                          "name": "xs",
-                          "line": {
-                            "start": 19,
-                            "end": 19
-                          },
-                          "column": {
-                            "start": 20,
-                            "end": 22
-                          }
+                      "index": {
+                        "type": "NumberLiteral",
+                        "value": 1,
+                        "raw": "1",
+                        "line": {
+                          "start": 19,
+                          "end": 19
                         },
-                        "index": {
-                          "type": "NumberLiteral",
-                          "value": 2,
-                          "raw": "2",
-                          "line": {
-                            "start": 19,
-                            "end": 19
-                          },
-                          "column": {
-                            "start": 23,
-                            "end": 24
-                          }
-                        },
+                        "column": {
+                          "start": 16,
+                          "end": 17
+                        }
+                      },
+                      "line": {
+                        "start": 19,
+                        "end": 19
+                      },
+                      "column": {
+                        "start": 13,
+                        "end": 18
+                      }
+                    },
+                    {
+                      "type": "IndexExpression",
+                      "object": {
+                        "type": "Identifier",
+                        "name": "xs",
                         "line": {
                           "start": 19,
                           "end": 19
                         },
                         "column": {
                           "start": 20,
-                          "end": 25
+                          "end": 22
                         }
+                      },
+                      "index": {
+                        "type": "NumberLiteral",
+                        "value": 2,
+                        "raw": "2",
+                        "line": {
+                          "start": 19,
+                          "end": 19
+                        },
+                        "column": {
+                          "start": 23,
+                          "end": 24
+                        }
+                      },
+                      "line": {
+                        "start": 19,
+                        "end": 19
+                      },
+                      "column": {
+                        "start": 20,
+                        "end": 25
                       }
-                    ],
-                    "line": {
-                      "start": 19,
-                      "end": 19
-                    },
-                    "column": {
-                      "start": 12,
-                      "end": 26
                     }
+                  ],
+                  "line": {
+                    "start": 19,
+                    "end": 19
+                  },
+                  "column": {
+                    "start": 12,
+                    "end": 26
                   }
-                ],
+                },
                 "line": {
                   "start": 19,
                   "end": 19

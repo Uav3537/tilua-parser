@@ -1,4 +1,5 @@
--- Destructuring in generic-for; numeric-for stays a plain identifier.
+-- A loop takes one value each time; several are an array it takes apart.
+-- Numeric-for stays a plain identifier.
 
 const pairsList = [["a", 1], ["b", 2], ["c", 3]]
 const records = [
@@ -6,12 +7,13 @@ const records = [
     { id: 2, label: "two" },
 ]
 
-for (i, entry in ipairs(pairsList)) {
+-- an iteration: `[step, state, first]`, whose steps are one `[i, value]` each
+for (const [i, entry] in ipairs(pairsList)) {
     print(i, entry)
 }
 
--- generalized iteration: each element is yielded directly
-for (record in records) {
+-- a table walked as it is: each item is one of its values
+for (const record in records) {
     print(record.id, record.label)
 }
 
@@ -23,6 +25,21 @@ for (i: number = 10, 1, -1) {
     print(i)
 }
 
-for (key, { deep } in pairs({ x: { deep: 1 } })) {
+-- the item taken apart by a pattern, as deep as it goes
+for (const [key, { deep }] in pairs({ x: { deep: 1 } })) {
     print(key, deep)
+}
+
+-- an iterator function: called until it answers nil
+function counter(limit: number): () => number | nil {
+    let n = 0
+    return function(): number | nil {
+        n += 1
+        if (n > limit) { return nil }
+        return n
+    }
+}
+
+for (const n in counter(3)) {
+    print(n)
 }

@@ -95,8 +95,12 @@ export function sourceMapTypes(
             if (!isNode(child)) continue
             const childAlias = visit(child, [...segments, child.name], alias)
             // Only a name `.` can reach, not already a member, and the first
-            // child of that name — `FindFirstChild` returns the first.
-            if (!IDENTIFIER.test(child.name) || taken.has(child.name) || named.has(child.name)) continue
+            // child of that name — `FindFirstChild` returns the first. A
+            // service is the exception: `game.ReplicatedStorage` is a member
+            // of `DataModel` typed as that very class, and the child is that
+            // service, so its tree only narrows what the member already says.
+            const service = child.name === child.className && options.classes.has(child.className)
+            if (!IDENTIFIER.test(child.name) || (taken.has(child.name) && !service) || named.has(child.name)) continue
             named.add(child.name)
             members.push(`${child.name}: ${childAlias}`)
         }

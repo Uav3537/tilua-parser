@@ -3,10 +3,14 @@
  *
  * Nothing is loaded by default. An entry names a type library:
  *
- *   "roblox"          the package `@tilua-types/roblox` — any name, looked up there
- *   "@tilua-types/roblox"   the same
- *   "./types"         a folder of the project (its `package.json`, or `index.d.tilua`)
- *   "./defs.d.tilua"  a file of the project
+ *   "roblox"               `@tilua-types/roblox`, or failing that a package
+ *                          called `roblox` — a library of your own, published
+ *                          under any name, is written the same way
+ *   "@tilua-types/roblox"  a package by its full name; so is `"@me/types"`
+ *   "@tilua-types/*"       every type library installed under that scope
+ *                          (`*` stands for any part of the last segment)
+ *   "./types"              a folder of the project (its `package.json`, or `index.d.tilua`)
+ *   "./defs.d.tilua"       a file of the project
  *
  * A package is looked for in `node_modules` from the config's folder upward.
  * Its definitions file is `tilua.types` in its `package.json`, or
@@ -87,13 +91,37 @@ export function resolveTypeLibraries(config: TiluaConfig, host: ProjectHost = no
             continue
         }
 
-        const name = entry.startsWith("@tilua-types/") ? entry : `@tilua-types/${entry}`
-        const found = findPackage(name, config.directory, host)
+        if (entry.includes("*")) {
+            const matched = matchPackages(entry, config.directory, host)
+            if (matched === undefined) {
+                problems.push({
+                    file: config.path,
+                    message: `'${entry}' needs the folders listed, and this tool cannot list them; name the libraries one by one`,
+                    ...entryPosition(config, entry),
+                })
+            } else if (!matched.length) {
+                problems.push({
+                    file: config.path,
+                    message: `No installed type library matches '${entry}'`,
+                    ...entryPosition(config, entry),
+                })
+            }
+            for (const found of matched ?? []) addPackage(found.directory, found.file, new Set())
+            continue
+        }
+
+        // A bare name is one of ours first, then whatever package has that
+        // name — which is how a library someone else published is loaded. A
+        // scoped name says where it is already.
+        const names = entry.startsWith("@") ? [entry] : [`@tilua-types/${entry}`, entry]
+        const found = names.map(name => findPackage(name, config.directory, host)).find(Boolean)
         if (found) addPackage(found.directory, found.file, new Set())
         else {
             problems.push({
                 file: config.path,
-                message: `Cannot find type library '${name}'. Install it with: npm i -D ${name}`,
+                message: names.length === 1
+                    ? `Cannot find type library '${entry}'. Install it with: npm i -D ${entry}`
+                    : `Cannot find type library '${names[0]}' or '${entry}'. Install it with: npm i -D ${names[0]}`,
                 ...entryPosition(config, entry),
             })
         }
@@ -142,6 +170,42 @@ function findPackage(name: string, from: string, host: ProjectHost): { directory
         if (parent === directory) return undefined
         directory = parent
     }
+}
+
+/** Every installed type library whose name `pattern` matches, in name order —
+ *  from the nearest `node_modules` that has it. `undefined` when the host
+ *  cannot list folders. Packages that are not type libraries are passed over:
+ *  `@tilua/*` names the parser too. */
+function matchPackages(
+    pattern: string,
+    from: string,
+    host: ProjectHost,
+): { directory: string; file: string }[] | undefined {
+    if (!host.readDirectory) return undefined
+    const slash = pattern.lastIndexOf("/")
+    const scope = slash < 0 ? "" : pattern.slice(0, slash)
+    const last = pattern.slice(slash + 1)
+    const matches = new RegExp(`^${last.split("*").map(escapeRegExp).join(".*")}$`)
+    const found = new Map<string, { directory: string; file: string }>()
+    let directory = resolve(from)
+    for (;;) {
+        const folder = join(directory, "node_modules", ...(scope ? scope.split("/") : []))
+        for (const name of host.readDirectory(folder) ?? []) {
+            const full = scope ? `${scope}/${name}` : name
+            if (!matches.test(name) || found.has(full)) continue
+            const candidate = join(folder, name)
+            const file = packageEntry(candidate, host)
+            if (file) found.set(full, { directory: candidate, file })
+        }
+        const parent = dirname(directory)
+        if (parent === directory) break
+        directory = parent
+    }
+    return [...found.keys()].sort().map(name => found.get(name)!)
+}
+
+function escapeRegExp(text: string): string {
+    return text.replace(/[.+?^${}()|[\]\\]/g, "\\$&")
 }
 
 function dependencyNames(directory: string, host: ProjectHost): string[] {

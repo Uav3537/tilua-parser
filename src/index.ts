@@ -6,7 +6,7 @@ export type { SourceComment, TokenizeOptions } from '@lexer/lexer'
 // Re-export every AST/token type so consumers can `import type { ... } from "@tilua/parser"`.
 export * from '@lexer/token'
 export * from '@ast/nodes'
-import { analyzeScopes, getBinding, isGlobal, isUnassignedGlobal } from '@ast/analyzeScopes'
+import { analyzeScopes, getBinding, isGlobal, isUnassignedGlobal, LANGUAGE_GLOBALS } from '@ast/analyzeScopes'
 export type { ScopeAnalysis, ScopeDiagnostic, Binding, BindingId, BindingKind } from '@ast/analyzeScopes'
 import { analyzeTypes, moduleExports } from '@ast/analyzeTypes'
 export type { TypeAnalysis, AnalyzeTypesOptions, TypeDiagnostic, ModuleExports, ExportedType } from '@ast/analyzeTypes'
@@ -30,7 +30,7 @@ export * from './project'
 export {
     tokenize, LexError,
     parse, parseTokens, parseExpressionFromSource, parseWithRecovery, ParseError,
-    analyzeScopes, getBinding, isGlobal, isUnassignedGlobal,
+    analyzeScopes, getBinding, isGlobal, isUnassignedGlobal, LANGUAGE_GLOBALS,
     analyzeTypes, moduleExports,
 }
 

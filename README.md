@@ -96,10 +96,14 @@ npm i -D @tilua-types/roblox        # Luau + Roblox; or @tilua-types/lua on its 
 - **Which config applies** — the nearest one in the file's folder or above.
   `tilua.config.json` and `tilua.config.jsonc` in the same folder is an error.
   Both forms accept comments and trailing commas.
-- **`types`** — any name, looked up as the package `@tilua-types/<name>` in
-  `node_modules` from the config upward; one that is not installed is an
-  error. A relative path (`"./types"`, `"./defs.d.tilua"`) loads the project's
-  own definitions. A type library's own type-library dependencies load first.
+- **`types`** — packages are looked for in `node_modules` from the config
+  upward. A bare name is `@tilua-types/<name>` first, then the package of that
+  name, so a library published under any name works: `"roblox"`,
+  `"my-types"`. A scoped name is taken as written (`"@me/types"`), and a `*`
+  matches every installed type library it fits (`"@tilua-types/*"`), in name
+  order. A relative path (`"./types"`, `"./defs.d.tilua"`) loads the project's
+  own definitions. A type library's own type-library dependencies load first;
+  one that is not installed is an error.
 - **`paths`** — tsconfig rules: an exact pattern wins, then the `*` pattern
   with the longest prefix; targets resolve from `baseUrl` (default: the
   config's folder).
@@ -147,7 +151,7 @@ if (n < 0) {
 
 while (going) { step() }
 for (i = 1, 10) { total += i }
-for (name, value in pairs(t)) { print(name, value) }
+for (const [name, value] in pairs(t)) { print(name, value) }
 repeat { step() } until (done)
 do { ... }
 
@@ -175,7 +179,7 @@ if (n < 0) return "negative"
 elseif (n == 0) return "zero"
 else return "positive"
 
-for (_, item in items) if (item) print(item)
+for (const item in items) if (item) print(item)
 while (queued > 0) queued -= 1
 ```
 
@@ -407,7 +411,7 @@ class Dog extends Animal {
     }
 }
 
-const rex = new Dog("Rex", "shiba")
+const rex = Dog.new("Rex", "shiba")
 rex:speak()                     -- the receiver is `this`
 rex.label = "Max"               -- the setter
 Dog.made()                      -- a static, inherited from Animal
@@ -415,22 +419,98 @@ Dog.made()                      -- a static, inherited from Animal
 
 The receiver is written `this`, and it is an ordinary first parameter: a
 method's type is `(this: Dog, ...) => R`, so `rex:speak()` supplies it the way
-`function T:m()` supplies `self`. `new Dog(x)` *is* `Dog.new(x)` — the same
-function, callable by hand and passable as a value.
+`function T:m()` supplies `self`. An instance is built the way Luau builds
+one, with the class's own function: `Dog.new(x)` — callable like any other,
+and passable as a value. There is no `new Dog(x)`; writing it is a syntax
+error that says so.
 
-**`public` and `private`** go before a member — `private balance = 0`,
-`private static function check()`, `public get size()`. Leaving it out means
-public. A private member can be reached only inside the body of the class that
-declared it, including functions nested in its methods; a subclass is outside,
-as in TypeScript. It is a type check and nothing more: the member is an
-ordinary key at runtime. `public` and `private` stay ordinary names elsewhere,
-so `private: boolean` is still a field.
+**`public`, `private` and `protected`** go before a member — `private
+balance = 0`, `private static function check()`, `public get size()`. Leaving
+it out means public. A private member can be reached only inside the body of
+the class that declared it, including functions nested in its methods; a
+subclass is outside, as in TypeScript. A protected one is reachable from the
+classes extending it too. It is a type check and nothing more: the member is
+an ordinary key at runtime.
+
+**`readonly`** fields are assigned where they are declared or in the
+constructor of their own class, and nowhere else: `readonly id: number`.
+
+The modifiers can come in any order — `static private readonly count = 0` —
+and each stays an ordinary name where no member follows it, so
+`private: boolean` and `readonly = 1` are still fields.
+
+**`abstract`** — an `abstract class` has no `new`: it is built only as part of
+a class extending it. It may declare `abstract function area(): number`, a
+head with no body, and a class extending it that is not abstract itself has to
+write every such member. Calling an abstract method through `super` is an
+error, as is `Shape.new`.
+
+**`override`** says a member replaces one of the class it extends, and is an
+error on a member that does not. Whether or not it is written, a member that
+replaces one has to fit it: its type, `this` aside, is checked against the
+base's.
+
+**`implements`** — `class Person implements Named, Greeter` checks that the
+instances have every member each shape names, of a type that fits. Nothing
+happens at runtime.
+
+```luau
+abstract class Shape implements Named {
+    readonly name: string
+    protected sides = 0
+    constructor(name: string) {
+        this.name = name
+    }
+    abstract function area(): number
+}
+
+class Square extends Shape {
+    side = 1
+    constructor() {
+        super("square")
+        this.sides = 4                  -- protected: reachable from here
+    }
+    override function area(): number {
+        return this.side * this.side
+    }
+}
+```
+
+**Metamethods** are methods with their Luau names. The class table *is* its
+instances' metatable, so `function __add(other: Vec): Vec` in a class is the
+`+` of its instances — and the type checker reads it the same way: `a + b`
+between two `Vec`s is a `Vec`. `__sub`, `__mul`, `__div`, `__idiv`, `__mod`,
+`__pow`, `__unm`, `__concat`, `__len` (`#v`), `__eq`, `__lt` and `__le` (`<`,
+`>`, `<=`, `>=`), `__call` (calling an instance), `__iter` (`for a, b in v`)
+and `__tostring` all work this way, and a class extending another inherits
+them. Each is checked: it takes the operands Luau hands it, returns what Luau
+expects of it (`__tostring` a string, `__eq`/`__lt`/`__le` a boolean), and is
+not `static`. Comparing two instances whose class has no `__lt` is an error,
+as it is at runtime.
+
+```luau
+class Vec {
+    x: number
+    constructor(x: number) {
+        this.x = x
+    }
+    function __add(other: Vec): Vec {
+        return Vec.new(this.x + other.x)
+    }
+    function __tostring(): string {
+        return `Vec(${this.x})`
+    }
+}
+
+const v = Vec.new(1) + Vec.new(2)       -- Vec
+print(tostring(v))                      -- Vec(3)
+```
 
 A declaration names two things. As a **type**, `Dog` is the type of its
 instances, nominal the same way a `declare class` is: a table with the same
 members is not one, and only `Dog` and what extends it are assignable to it.
 As a **value**, `Dog` is the class table — its statics, and the `new` that
-builds an instance. `export class` exports both.
+builds an instance (`Dog.new(...)`). `export class` exports both.
 
 Two links are always there, and they are what the memory model promises:
 
@@ -455,12 +535,12 @@ class Box<T> {
         return this.value
     }
     function map<R>(f: (value: T) => R): Box<R> {
-        return new Box(f(this.value))
+        return Box.new(f(this.value))
     }
 }
 
-const n = new Box(1)               -- Box<number>, read off the argument
-const s = new Box<string>("a")     -- or written out
+const n = Box.new(1)               -- Box<number>, read off the argument
+const s = Box.new<string>("a")     -- or written out
 const held: number = n:get()
 
 class Ints extends Box<number> {   -- extending one fixes its argument
@@ -482,24 +562,65 @@ it, as TypeScript's does, and importing it brings in the type too:
 
 ```luau
 import Box from "./box"            -- `Box` is the class *and* the type
-const held: Box<number> = new Box(1)
+const held: Box<number> = Box.new(1)
 ```
 
 Reported: a field with a type that nothing gives a value (`name: string` that
-the constructor never assigns), a derived constructor that does not call
+the constructor does not assign on every way through it — both arms of an
+`if`, not in a loop or a function written inside), a derived constructor that does not call
 `super(...)`, `extends` naming something that is not a class, a chain that
 closes on itself, a member written twice, and a member named one of the words
 the compiler builds the class table out of (`new`, `ClassObject`,
 `ParentClass`, `__init`, `__index`, `__newindex`, `__getters`, `__setters`,
 `__dynamic`).
 
-**Varargs** — `...` is Lua's pack, and every name on the left reads one of
-it: with `...: number`, `const a, b = ...` gives two numbers. `[...]` puts the
-whole pack in an array.
+**One value, and arrays** — tilua has no packs. A function returns one value;
+several are an array, and a tuple type says how many and of what:
+
+```luau
+function divide(a: number, b: number): [number, number] {
+    return [a // b, a % b]
+}
+
+const [quotient, remainder] = divide(7, 2)    -- taken apart
+const both = divide(7, 2)                     -- or kept: [number, number]
+```
+
+An array is a table, at runtime as much as in the types: `return [a, b]` is
+`return { a, b }`. Where Luau answers several values — `pcall`, `string.find`,
+a Roblox method such as `FindPartOnRay` — the type library puts a function of
+its own in place of that global or method, which answers one value, as its
+type says. A tuple may end in a rest,
+`[string, ...number[]]`: that many, then any number more. `const a, b = 1, 2`
+still pairs names with values one each; `const a, b = f()` is a name short,
+and says to write `const [a, b] = f()`.
+
+**A loop takes one value too** — `for (const item in source)`, and several are
+an array the pattern takes apart:
+
+```luau
+for (const name in names) { print(name) }
+for (const [i, name] in ipairs(names)) { print(i, name) }
+for (const [key, score] in pairs(scores)) { print(key, score) }
+```
+
+The name is `const`, or `let` where the body assigns to it, as anywhere else.
+A source is an array or a table, walked for its values; an iterator function,
+called until it answers `nil`; or an iteration — `[step, state, first]`, what
+`pairs(t)` answers — whose `step` is called with the state and the item before
+it. An object says how it is walked with `__iter`, which answers one of those
+two. `for (k, v in ...)` and `for (x in f, s, v)` are Luau's packs, and are
+syntax errors.
+
+A function that returns nothing returns `nil`: `() => nil`, not `() => ()`.
+Bare `...` is gone — a
+function takes a rest parameter, and what the script was started with is
+`scriptArgs: unknown[]`. `()`, `(A, B)` as a type, `T...`, `...: T` and
+`return a, b` are syntax errors that say what to write instead.
 
 **Rest parameters** — `...name: T[]` is JavaScript's: every argument from that
-position on, as an array. It is last, and the call signature is the same one
-`...: T` describes — the difference is only what the body sees.
+position on, as an array. It is last, and it is the one way a function takes a
+varying number of arguments.
 
 ```luau
 function join(separator: string, ...parts: string[]): string {
@@ -517,24 +638,28 @@ firstOf(1, 2)             -- number | nil: the arguments say what `T` is
 ```
 
 A type is written the same way: `type Reporter = (level: string, ...lines:
-string[]) => ()` describes the same calls as `(level: string, ...string) =>
-()`. Without an annotation a rest parameter is `unknown[]`; annotated with
-something that is not an array, it is reported.
+string[]) => nil`. Without an annotation a rest parameter is `unknown[]`. A rest
+parameter may also be a tuple, or a type parameter standing for one — then the
+arguments are exactly its elements, which is how a function says it forwards
+another's:
 
-**Spreads** — `...xs` puts what an array holds into any list of values, as
-JavaScript does: a call's arguments, a `return`, a declaration, an assignment.
-Bare `...` is unchanged, and is still the pack.
+```luau
+declare function spawn<A extends unknown[]>(f: (...args: A) => nil, ...args: A): thread
+
+spawn(function(n: number) { print(n) }, 1)       -- ok
+spawn(function(n: number) { print(n) }, "no")    -- '"no"' is not a number
+```
+
+**Spreads** — `...xs` puts what an array holds into a call's arguments or an
+array literal, as JavaScript does. A list of values — a declaration's, an
+assignment's — takes one value per name; take an array apart with a
+destructuring instead.
 
 ```luau
 join("-", ...names)              -- every name
 join("-", ...names, "z")         -- and one more after them
 add3(...nums)                    -- however many `nums` turns out to hold
-
-function three(): (number, number, number) {
-    return ...nums
-}
-
-const first, second = ...names   -- one each, as far as the names go
+const both = [...names, "z"]
 ```
 
 What the array holds is checked against what it fills. How many it holds is
@@ -570,9 +695,10 @@ its parameter types from it: in `signal:Connect(player => ... )`,
 `player` is typed from `Connect`. The same applies to an annotated `const`
 and to an assignment such as `remote.OnServerInvoke = function(player) { ... }`.
 
-**Type packs** — `type Signal<T... = ...any> = { Connect: (self, cb: (T...) => ()) => () }`.
-A pack parameter takes every type argument from its position on:
-`Signal<Player, string>`, `Signal<()>` for none.
+**Signals and other variadic generics** — a type parameter can stand for a
+list of arguments: `type Signal<T extends unknown[] = any[]> = { Connect:
+(self, cb: (...args: T) => nil) => Connection }`, given as a tuple —
+`Signal<[Player, string]>`, `Signal<[]>` for none.
 
 **Operators** — on a type that declares metamethods (`__add`, `__mul`,
 `__unm`, ...), an operator has the metamethod's result, tried on the left
@@ -617,8 +743,8 @@ non-nil part.
 
 Only `nil` and `false` are falsy — `0` and `""` are truthy, unlike JavaScript.
 
-**Types** — unions, intersections, tuples `[A, B]`, type packs `(A, B)` (the
-several values a function returns), `keyof`, `T[K]`, conditional types with
+**Types** — unions, intersections, tuples `[A, B]` (with a rest, `[A,
+...B[]]`), `keyof`, `T[K]`, conditional types with
 `infer`, mapped types with `as` remapping, template literal types
 (`` `on${Event}` ``), and set difference `A - B`. The utility types
 (`Partial`, `Pick`, `Omit`, `ReturnType`, `Parameters`, `Exclude`, …) are

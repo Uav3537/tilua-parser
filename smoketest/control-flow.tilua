@@ -31,7 +31,7 @@ function viaDoBlock(v: string | nil): string {
 -- `continue` skips the rest of the iteration, so the code below it is narrowed.
 function lengths(items: (string | nil)[]): number {
     let total = 0
-    for (_, item in items) {
+    for (const item in items) {
         if (item == nil) { continue }
         const present: string = item
         total = total + #present
@@ -42,7 +42,7 @@ function lengths(items: (string | nil)[]): number {
 -- `break` leaves the loop, so the code after it in the body is narrowed too.
 function firstNil(items: (string | nil)[]): number {
     let seen = 0
-    for (_, item in items) {
+    for (const item in items) {
         if (item == nil) { break }
         const present: string = item
         seen = seen + #present
@@ -88,7 +88,7 @@ function sign(n: number): string {
 
 function bareContinue(items: (string | nil)[]): number {
     let total = 0
-    for (_, item in items) {
+    for (const item in items) {
         if (item == nil) continue
         const present: string = item
         total = total + #present
