@@ -58,12 +58,12 @@ export interface LiteralType {
 }
 
 /** `T[]` */
-export interface ArrayType { kind: "array"; element: Type; alias?: string }
+export interface ArrayType { kind: "array"; element: Type; alias?: string; readonly?: boolean }
 
 /** `[A, B, C]` — fixed length; `[A, ...B[]]` — at least that, then any
  *  number of `B`. `rest` is the element type of that tail. A tuple is an
  *  array, a table like any other: several results are one of these. */
-export interface TupleType { kind: "tuple"; elements: Type[]; rest?: Type; alias?: string }
+export interface TupleType { kind: "tuple"; elements: Type[]; rest?: Type; alias?: string; readonly?: boolean }
 
 export interface ObjectProperty {
     type: Type
@@ -417,9 +417,9 @@ export function substitute(t: Type, subst: Map<string, Type>): Type {
         case "typeParam":
             return subst.get(t.name) ?? t
         case "array":
-            return arrayOf(substitute(t.element, subst))
+            return { ...arrayOf(substitute(t.element, subst)), readonly: t.readonly }
         case "tuple":
-            return tuple(t.elements.map(e => substitute(e, subst)), t.rest && substitute(t.rest, subst))
+            return { ...tuple(t.elements.map(e => substitute(e, subst)), t.rest && substitute(t.rest, subst)), readonly: t.readonly } as Type
         case "object": {
             const entries: [string, ObjectProperty][] = []
             for (const [k, v] of t.properties) entries.push([k, { ...v, type: substitute(v.type, subst) }])
@@ -625,6 +625,20 @@ export function unify(param: Type, arg: Type, vars: Set<string>, out: Map<string
 // union / intersection (flattening + light simplification)
 // ============================================================
 
+/** What two members must share to be one member. A literal or a primitive
+ *  says it in a few characters; anything larger is told apart by how it
+ *  prints, which is the same answer `equalTypes` gives. Printing a class out
+ *  of a Roblox library is not cheap, and forming a union is one of the things
+ *  the analyzer does most, so the short answers are worth taking first. */
+function memberKey(t: Type): string {
+    switch (t.kind) {
+        case "literal": return `l${t.base}:${String(t.value)}`
+        case "primitive": return `p${t.name}`
+        case "any": case "unknown": case "never": return t.kind
+        default: return formatType(t)
+    }
+}
+
 export function union(types: Type[]): Type {
     const flat: Type[] = []
     for (const t of types) {
@@ -640,7 +654,7 @@ export function union(types: Type[]): Type {
     const seen = new Map<string, Type>()
     for (const t of flat) {
         if (t.kind === "never") continue
-        const key = formatType(t)
+        const key = memberKey(t)
         if (!seen.has(key)) seen.set(key, t)
     }
     let members = reduceSubtypes([...seen.values()])
@@ -682,7 +696,7 @@ export function intersection(types: Type[]): Type {
     const seen = new Map<string, Type>()
     for (const t of flat) {
         if (t.kind === "unknown") continue
-        seen.set(formatType(t), t)
+        seen.set(memberKey(t), t)
     }
     const members = [...seen.values()]
     if (members.length === 0) return unknownType
@@ -732,9 +746,9 @@ export function widen(t: Type): Type {
         case "literal":
             return primitive(t.base)
         case "array":
-            return arrayOf(widen(t.element))
+            return { ...arrayOf(widen(t.element)), readonly: t.readonly }
         case "tuple":
-            return tuple(t.elements.map(widen), t.rest && widen(t.rest))
+            return { ...tuple(t.elements.map(widen), t.rest && widen(t.rest)), readonly: t.readonly } as Type
         case "object": {
             if (t.frozen || t.class) return t
             const entries: [string, ObjectProperty][] = []
@@ -903,6 +917,11 @@ function isAssignableInner(a: Type, b: Type): boolean {
         return b.kind === "primitive" && b.name === "string"
     }
     if (a.kind === "primitive") return b.kind === "primitive" && b.name === a.name
+
+    // A list that may be written to is one that may be read; the other way
+    // round would hand out a write nobody promised.
+    if ((a.kind === "array" || a.kind === "tuple") && a.readonly
+        && (b.kind === "array" || b.kind === "tuple") && !b.readonly) return false
 
     if (a.kind === "array") {
         if (b.kind === "array") return isAssignable(a.element, b.element)
@@ -1358,10 +1377,10 @@ function formatTypeUncached(t: Type): string {
         case "never": return "never"
         case "primitive": return t.name
         case "literal": return t.base === "string" ? JSON.stringify(t.value) : String(t.value)
-        case "array": return `${formatAtom(t.element)}[]`
+        case "array": return `${t.readonly ? "readonly " : ""}${formatAtom(t.element)}[]`
         case "tuple": {
             const inner = [...t.elements.map(formatType), ...(t.rest ? [`...${formatAtom(t.rest)}[]`] : [])]
-            return `[${inner.join(", ")}]`
+            return `${t.readonly ? "readonly " : ""}[${inner.join(", ")}]`
         }
         case "object": {
             if (t.name) {

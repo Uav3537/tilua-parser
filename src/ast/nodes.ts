@@ -702,6 +702,9 @@ export interface IndexExpression extends BaseNode {
     type: "IndexExpression"
     object: Expression
     index: Expression
+    /** `object?.[key]` — when `object` is nil, the whole chain this link
+     *  belongs to is nil and the key is not evaluated. */
+    optional?: boolean
 }
 
 export interface CallExpression extends BaseNode {
@@ -929,6 +932,8 @@ export interface TableTypeNode extends BaseNode {
 export interface ArrayTypeNode extends BaseNode {
     type: "ArrayTypeNode"
     element: TypeNode
+    /** `readonly T[]` — the list may be read, not written to. */
+    isReadonly?: boolean
 }
 
 /** `[number, string]` — a tuple type; `[string, ...number[]]` ends in a rest
@@ -938,6 +943,8 @@ export interface TupleTypeNode extends BaseNode {
     elements: TypeNode[]
     /** `...number[]` at the end: the array type the rest of it is. */
     rest?: TypeNode
+    /** `readonly [A, B]` — see `ArrayTypeNode.isReadonly`. */
+    isReadonly?: boolean
 }
 
 export interface FunctionTypeParameter extends BaseNode {

@@ -341,9 +341,11 @@ name: T | nil   -- must be written, but may be nil
 Omitting an argument requires `?` (or a default), as in TypeScript — a
 parameter typed `T | nil` still has to be passed something.
 
-**Optional chaining** — `a?.b` and `a?:m(x)` are nil when `a` is, and then
-nothing further along the chain runs, arguments included: `folder?:FindFirstChild("A")?.Name`
-is a `string | nil`. The `?` must touch the `.` or `:`; `c ? a : b` stays a
+**Optional chaining** — `a?.b`, `a?.[k]`, `a?.(x)` and `a?:m(x)` are nil when
+`a` is, and then nothing further along the chain runs, arguments and the key
+included: `folder?:FindFirstChild("A")?.Name` is a `string | nil`, and
+`maps?.[key]?.label` reads the key only when `maps` is there. The `?` must
+touch the `.` or `:`; `c ? a : b` stays a
 ternary. Parentheses end a chain. A chain cannot be assigned to (`a?.b = 1` is
 an error). A chain that got through narrows what it tested: inside
 `if (part?.Parent)`, and `if (part?.Name == "Door")`, `part` is not nil.
@@ -742,6 +744,17 @@ possibly nil. Use `?.` / `?:`, or check first. The read is still typed from the
 non-nil part.
 
 Only `nil` and `false` are falsy — `0` and `""` are truthy, unlike JavaScript.
+
+**What Luau raises on is said first.** An operator no metamethod answers takes
+numbers — `..` a string or a number, `#` a string or a table — so `n * 2` with
+`n` a `number | nil` is an error where it is written rather than where it runs.
+A comparison two types can never settle (`s == "c"` with `s` a `"a" | "b"`) is
+one too; a test against `nil` never is, since a map's value and an array's
+element are read as what they hold. A name holds nothing until its line has
+run, a list is indexed by position (`xs["a"]` is not a read), `readonly T[]`
+rules out writing to the list as well as passing it where a `number[]` is
+wanted, a key written twice in one table is reported, and a parameter with no
+type says so — it is `any`, and `any` turns off every check made of it.
 
 **Types** — unions, intersections, tuples `[A, B]` (with a rest, `[A,
 ...B[]]`), `keyof`, `T[K]`, conditional types with

@@ -589,6 +589,72 @@ const rel = (path: string | undefined): string | undefined =>
         "unknown[]",
     ])
 
+    // What Luau raises on, said before it runs. An operator no metamethod
+    // answers takes numbers (`..` a string or a number, `#` a string or a
+    // table), and `any` passes because nothing is known about it.
+    check("operators: the operands are checked where no metamethod answers", [
+        analyze("function f(n: number | nil) { return n * 2 }").errors,
+        analyze("function f(s: string) { return s * 2 }").errors,
+        analyze("function f(a: any) { return a * 2 }").errors,
+        analyze("function f(s: string | nil) { return s .. \"x\" }").errors,
+        analyze("function f(n: number) { return n .. \"x\" }").errors,
+        analyze("function f(n: number) { return #n }").errors,
+        analyze("function f(a: number, b: string) { return a < b }").errors,
+        analyze("function f(a: string, b: string) { return a < b }").errors,
+    ], [
+        ["Operator '*' cannot be applied to types 'number | nil' and '2'"],
+        ["Operator '*' cannot be applied to types 'string' and '2'"],
+        [],
+        ["Operator '..' cannot be applied to types 'string | nil' and '\"x\"'"],
+        [],
+        ["Operator '#' cannot be applied to type 'number'"],
+        ["Operator '<' cannot be applied to types 'number' and 'string'"],
+        [],
+    ])
+
+    // A comparison whose answer is settled by the types was not the one meant.
+    // A test against nil is never that: a map's value is read as what it
+    // holds, so nil is exactly what it may still turn out to be.
+    check("comparison: two types with no value in common", [
+        analyze("function f(s: \"a\" | \"b\") { return s == \"c\" }").errors,
+        analyze("function f(s: \"a\" | \"b\") { return s == \"a\" }").errors,
+        analyze("function f(a: number, b: string) { return a == b }").errors,
+        analyze("function f(n: number) { return n == nil }").errors,
+        analyze("function f(a: any, b: number) { return a == b }").errors,
+    ], [
+        ["This comparison is always false: '\"a\" | \"b\"' and '\"c\"' have no value in common"],
+        [],
+        ["This comparison is always false: 'number' and 'string' have no value in common"],
+        [],
+        [],
+    ])
+
+    // A name holds nothing until its line has run, a list is indexed by
+    // position, `readonly` is a promise about the list itself, a key written
+    // twice is a typo, and a parameter with no type turns off every check
+    // made of it.
+    check("strictness: what TypeScript reports, and tilua now does too", [
+        analyze("function f() {\n    print(later)\n    const later = 1\n}").errors,
+        analyze("function f(xs: number[]) { return xs[\"a\"] }").errors,
+        analyze("const ro: readonly number[] = [1]\nro[1] = 2").errors,
+        analyze("declare ro: readonly number[]\nconst xs: number[] = ro").errors,
+        analyze("declare xs: number[]\nconst ro: readonly number[] = xs").errors,
+        analyze("const o = { a: 1, a: 2 }").errors,
+        analyze("declare base: { a: number }\nconst o = { ...base, a: 2 }").errors,
+        analyze("function f(a) { return a }").errors,
+        analyze("function take(f: (a: number) => nil): nil { return nil }\ntake(function(a) { print(a) })").errors,
+    ], [
+        ["'later' is used before its declaration, and holds nothing until that line has run"],
+        ["Type '\"a\"' cannot be used to index type 'number[]'"],
+        ["Cannot assign to an element of 'readonly number[]': it is read-only"],
+        ["Type 'readonly number[]' is not assignable to 'number[]'"],
+        [],
+        ["'a' is given twice in this table; only the last one is kept"],
+        [],
+        ["Parameter 'a' has no type, so it is 'any': give it one, or a default to read it from"],
+        [],
+    ])
+
     // A loop takes one value each time: Luau's `for k, v in ...` and its
     // triplet `in f, s, v` are both packs, and say what to write instead.
     check("loops: a loop names one value, and has one source", [
@@ -829,6 +895,18 @@ const rel = (path: string | undefined): string | undefined =>
     ].join("\n"))
     check("indexing: `assert` on a condition narrows by it, and `or {}` keeps the map's keys",
         [settled.errors, settled.bindings.kept, settled.bindings.headers], [[], "number", "{ [string]: string }"])
+
+    // `a?.[k]` — read the key only when there is something to read it from,
+    // and `t[k]?.m` when the key may hold nothing.
+    const optionalIndex = analyze([
+        "declare maps: { [string]: { label: string } } | nil",
+        "declare key: string",
+        "const label = maps?.[key]",
+        "const named = maps?.[key]?.label",
+    ].join("\n"))
+    check("optional index: the read takes nil, and the chain carries it",
+        [optionalIndex.errors, optionalIndex.bindings.label, optionalIndex.bindings.named],
+        [[], "{ label: string } | nil", "string | nil"])
 
     // `f?.()` — call it only when it is there.
     const optionalCall = analyze([

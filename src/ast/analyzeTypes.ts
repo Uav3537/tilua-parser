@@ -667,7 +667,7 @@ function expressionLabel(e: Expression, depth = 0): string | undefined {
                 : e.index.type === "NumberLiteral" ? e.index.raw
                 : e.index.type === "Identifier" ? e.index.name
                 : "..."
-            return o === undefined ? undefined : `${o}[${i}]`
+            return o === undefined ? undefined : `${o}${e.optional ? "?." : ""}[${i}]`
         }
         case "ParenthesizedExpression": {
             const inner = expressionLabel(e.expression, depth + 1)
@@ -712,11 +712,12 @@ class TypeAnalyzer {
     /** Put on every ref to one of `aliasDefs`, so a module that imports the
      *  type expands the ref here rather than by its name there. */
     private readonly origin: TypeOrigin = { expand: t => this.expand(t) }
-    /** See `resolveClass`. */
-    private readonly classTypes = new WeakMap<DeclareClassStatement, ObjectType>()
+    /** See `resolveClass`. Shared with other analyses over the same libraries
+     *  when none of their names is redefined here; see `shareableClasses`. */
+    private classTypes = new WeakMap<DeclareClassStatement, ObjectType>()
     /** See `instanceType` — one instance type per `class ... end`. */
     private readonly instanceTypes = new WeakMap<ClassLike, ObjectType>()
-    private readonly classMembers = new WeakMap<ObjectType, () => { properties: Map<string, ObjectProperty>; indexer: ObjectType["indexer"] } | undefined>()
+    private classMembers = new WeakMap<ObjectType, () => { properties: Map<string, ObjectProperty>; indexer: ObjectType["indexer"] } | undefined>()
     /** Generic parameters currently in lexical scope (alias body / generic fn),
      *  with their `extends` constraints resolved. */
     private readonly typeParamScope: { name: string; constraint?: Type; isConst?: boolean }[] = []
@@ -767,6 +768,16 @@ class TypeAnalyzer {
     }
 
     run(): TypeAnalysis {
+        // A definitions file's classes resolve to the same types for every
+        // file checked against it, so long as this one does not give any of
+        // its names a meaning of its own. When it does not, they are resolved
+        // once and shared: a project of forty files then reads the Roblox
+        // class it names once rather than forty times.
+        const shared = shareableClasses(this.options.libs ?? [], this.program)
+        if (shared) {
+            this.classTypes = shared.classTypes
+            this.classMembers = shared.classMembers
+        }
         // The language's own types, then definitions files, then this program
         // — so aliases resolve against the full set, and a later declaration
         // of a name wins over an earlier one.
@@ -2145,11 +2156,15 @@ class TypeAnalyzer {
             case "TypeLiteralString": return literal(node.value)
             case "TypeLiteralBoolean": return literal(node.value)
             case "TypeLiteralNumber": return literal(node.value)
-            case "ArrayTypeNode": return arrayOf(this.resolveType(node.element))
+            case "ArrayTypeNode": {
+                const made = arrayOf(this.resolveType(node.element))
+                return node.isReadonly ? { ...made, readonly: true } : made
+            }
             case "TupleTypeNode": {
                 const rest = node.rest && this.expand(this.resolveType(node.rest))
-                return tuple(node.elements.map(e => this.resolveType(e)),
+                const made = tuple(node.elements.map(e => this.resolveType(e)),
                     rest ? (rest.kind === "array" ? rest.element : rest.kind === "any" ? anyType : unknownType) : undefined)
+                return node.isReadonly && made.kind === "tuple" ? { ...made, readonly: true } : made
             }
             case "UnionTypeNode": return union(node.types.map(t => this.resolveType(t)))
             case "IntersectionTypeNode": return intersection(node.types.map(t => this.resolveType(t)))
@@ -3177,8 +3192,24 @@ class TypeAnalyzer {
         if (p.rest) return arrayOf(unknownType)
         if (p.pattern) return this.patternToType(p.pattern, env)
         if (p.default) return widen(this.infer(p.default, env))
-        return this.contextualParams.get(p) ?? anyType
+        const contextual = this.contextualParams.get(p)
+        if (contextual) return contextual
+        // Nothing says what it holds, and nothing will: a parameter with no
+        // type is `any`, which turns off every check made of what is done
+        // with it. Where it is written says so.
+        if (this.emitDiagnostics && !receiver && p.name && (p as { line?: unknown }).line
+            && !this.untypedParamReported.has(p)) {
+            this.untypedParamReported.add(p)
+            this.diagnostics.push({
+                node: p as unknown as Expression,
+                message: `Parameter '${p.name}' has no type, so it is 'any': give it one, or a default to read it from`,
+            })
+        }
+        return anyType
     }
+
+    /** Parameters already spoken about: a body is visited more than once. */
+    private readonly untypedParamReported = new WeakSet<object>()
 
     /** What a function expression's unannotated parameters are, from where
      *  it is written — see `applyContext`. */
@@ -3567,6 +3598,14 @@ class TypeAnalyzer {
         argsFor: (f: FunctionType, args: Type[]) => Type[],
     ): Type | undefined {
         if (fns.length < 2) return undefined
+        // An `any` argument fits every signature, so the first one is not the
+        // answer — every one of them is. `type(v)` on an `any` is a `string`,
+        // not the `"nil"` its first overload happens to promise.
+        if (argTypes.some(t => this.expand(t).kind === "any")) {
+            const taken = fns.filter(f => this.overloadAccepts(f, argsFor(f, argTypes)))
+            if (taken.length < 2) return undefined
+            return union(taken.map(f => this.callReturn(f, argsFor(f, argTypes))))
+        }
         const position = argTypes.findIndex(t => this.expand(t).kind === "union")
         if (position < 0) return undefined
         const members = (this.expand(argTypes[position]) as Extract<Type, { kind: "union" }>).types
@@ -3628,6 +3667,11 @@ class TypeAnalyzer {
      *  lone argument cannot be checked against without false errors. */
     private boundParams(f: FunctionType): Type[] {
         if (!f.typeParams?.length) return f.params.map(p => p.type)
+        // A signature is asked this once per call site written against it, and
+        // an overloaded library function is asked it for every candidate. The
+        // answer is the signature's alone.
+        const known = this.boundParamsCache.get(f)
+        if (known) return known
         const bounds = new Map<string, Type>(f.typeParams.map(name => [name, anyType]))
         const seen = new WeakSet<object>()
         const walk = (value: unknown): void => {
@@ -3648,8 +3692,12 @@ class TypeAnalyzer {
             for (const child of Object.values(value)) walk(child)
         }
         for (const p of f.params) if (containsTypeParam(p.type)) walk(p.type)
-        return f.params.map(p => this.reduceType(substitute(p.type, bounds)))
+        const bound = f.params.map(p => this.reduceType(substitute(p.type, bounds)))
+        this.boundParamsCache.set(f, bound)
+        return bound
     }
+
+    private readonly boundParamsCache = new WeakMap<FunctionType, Type[]>()
 
     /** Record what each written argument is expected to be — see
      *  `TypeAnalysis.expectedTypeOf`. */
@@ -4218,7 +4266,7 @@ class TypeAnalyzer {
     /** What one `for (const item in source)` hands over each time, and how it
      *  walks the source. `pairs`/`ipairs` are read from the table they are
      *  given, so a record's keys stay the literals they are. */
-    private iterationOf(source: Expression, sourceType: Type): [Type, LoopForm] {
+    private iterationOf(source: Expression, sourceType: Type, report = true): [Type, LoopForm] {
         // `pairs(t)` / `ipairs(t)`: each item is the table's `[key, value]`.
         if (source.type === "CallExpression" && source.callee.type === "Identifier" && source.arguments[0]) {
             const name = source.callee.name
@@ -4260,7 +4308,17 @@ class TypeAnalyzer {
         if (t.kind === "object") {
             return [t.indexer?.value ?? union([...t.properties.values()].map(p => p.type)), values]
         }
-        if (t.kind !== "never" && this.emitDiagnostics) {
+        // Whichever member it holds is walked the same way, so the item is
+        // one of theirs — as long as they agree on how they are walked.
+        if (t.kind === "union") {
+            const each = t.types.map(member => this.iterationOf(source, member, false))
+            const [first] = each
+            if (first && each.every(([, form]) =>
+                form.walks === first[1].walks && form.viaIter === first[1].viaIter)) {
+                return [union(each.map(([item]) => item)), first[1]]
+            }
+        }
+        if (t.kind !== "never" && report && this.emitDiagnostics) {
             this.diagnostics.push({
                 node: source,
                 message: `Cannot loop over '${formatType(sourceType)}': a loop walks an array, a table, an iterator function or an iteration such as 'pairs(t)'`,
@@ -4702,7 +4760,16 @@ class TypeAnalyzer {
         const names = keys.map(nameOf)
         const others = keys.filter((_, i) => names[i] === undefined)
         let message: string | undefined
-        if (others.length && this.cannotIndex(object, others)) {
+        // A list is indexed by position. A name is not one, whatever it says —
+        // `xs["1"]` is not `xs[1]`, and Luau reads nothing there.
+        const listOnly = (t: Type): boolean => {
+            const x = this.expand(t)
+            if (x.kind === "union") return x.types.every(listOnly)
+            return x.kind === "array" || x.kind === "tuple"
+        }
+        if (names.some(name => name !== undefined) && listOnly(withoutNil(this.expand(object)))) {
+            message = `Type '${briefType(index)}' cannot be used to index type '${shown}'`
+        } else if (others.length && this.cannotIndex(object, others)) {
             message = `Type '${briefType(index)}' cannot be used to index type '${shown}'`
         } else if (!others.length && names.every(name => this.memberMissing(object, name!))) {
             // Names only, and not one of them is there. One that is makes the
@@ -5037,8 +5104,18 @@ class TypeAnalyzer {
                 const arg = this.infer(expr.argument, env)
                 switch (expr.operator) {
                     case "not": return booleanType
-                    case "-": return this.operatorResult(expr, "-", arg, undefined) ?? this.arithmeticOn([arg])
-                    case "#": return this.operatorResult(expr, "#", arg, undefined) ?? numberType
+                    case "-": {
+                        const answered = this.operatorResult(expr, "-", arg, undefined)
+                        if (answered) return answered
+                        this.checkOperands(expr, "-", arg)
+                        return this.arithmeticOn([arg])
+                    }
+                    case "#": {
+                        const answered = this.operatorResult(expr, "#", arg, undefined)
+                        if (answered) return answered
+                        this.checkOperands(expr, "#", arg)
+                        return numberType
+                    }
                 }
                 return arg
             }
@@ -5074,14 +5151,24 @@ class TypeAnalyzer {
                     if (unwrapParens(expr.left).type === "StringLiteral") this.expectedTypeOf.set(unwrapParens(expr.left), r)
                 }
                 switch (op) {
-                    case "..": return this.operatorResult(expr, op, l, r) ?? stringType
+                    case "..": {
+                        const answered = this.operatorResult(expr, op, l, r)
+                        if (answered) return answered
+                        this.checkOperands(expr, op, l, r)
+                        return stringType
+                    }
                     case "<": case ">": case "<=": case ">=":
-                        this.checkComparison(expr, op, l, r)
+                        if (!this.checkComparison(expr, op, l, r)) this.checkOperands(expr, op, l, r)
                         return booleanType
                     case "==": case "~=":
+                        this.checkOverlap(expr, op, l, r)
                         return booleanType
-                    case "+": case "-": case "*": case "/": case "//": case "%": case "^":
-                        return this.operatorResult(expr, op, l, r) ?? this.arithmeticOn([l, r])
+                    case "+": case "-": case "*": case "/": case "//": case "%": case "^": {
+                        const answered = this.operatorResult(expr, op, l, r)
+                        if (answered) return answered
+                        this.checkOperands(expr, op, l, r)
+                        return this.arithmeticOn([l, r])
+                    }
                 }
                 return union([l, r])
             }
@@ -5372,6 +5459,16 @@ class TypeAnalyzer {
             name = target.property.name
             object = target.object
         } else if (target.type === "IndexExpression") {
+            const list = this.expand(this.infer(target.object, env))
+            // `readonly T[]` is a promise about the list itself: no place in
+            // it is written to, whichever one is named.
+            if ((list.kind === "array" || list.kind === "tuple") && list.readonly) {
+                this.diagnostics.push({
+                    node: target,
+                    message: `Cannot assign to an element of '${formatType(list)}': it is read-only`,
+                })
+                return
+            }
             const index = this.expand(this.infer(target.index, env))
             // A computed key names no one property unless it is a known string.
             if (index.kind !== "literal" || typeof index.value !== "string") return
@@ -5590,9 +5687,37 @@ class TypeAnalyzer {
                     if (s.indexer) indexer = mergeIndexer(indexer, s.indexer)
                 }
             }
+            this.checkDuplicateKey(expr, field, entries)
         }
         return objectType(entries, indexer, asConst || undefined)
     }
+
+    /** `{ a: 1, a: 2 }` — the second wins and the first was written for
+     *  nothing, which is a typo far more often than a decision. A spread is
+     *  not one: overriding what it brought is exactly what it is for. */
+    private checkDuplicateKey(
+        expr: TableExpression,
+        field: TableExpression["fields"][number],
+        entries: readonly [string, ObjectProperty][],
+    ): void {
+        if (!this.emitDiagnostics || this.duplicateKeyReported.has(field)) return
+        const written = field.type === "TableFieldNamed"
+            ? (field.key.type === "Identifier" ? field.key.name : field.key.value)
+            : field.type === "TableFieldShorthand" ? field.name.name
+            : undefined
+        if (written === undefined) return
+        // Anything a spread brought in is fair game to write over.
+        const spreadBefore = expr.fields.slice(0, expr.fields.indexOf(field)).some(f => f.type === "TableFieldSpread")
+        if (spreadBefore) return
+        if (entries.filter(([k]) => k === written).length < 2) return
+        this.duplicateKeyReported.add(field)
+        this.diagnostics.push({
+            node: field.type === "TableFieldNamed" ? field.key : (field as { name: Identifier }).name,
+            message: `'${written}' is given twice in this table; only the last one is kept`,
+        })
+    }
+
+    private readonly duplicateKeyReported = new WeakSet<object>()
 
     /** A value inferred `as const`, widened back wherever `context` does not
      *  ask for a literal: `satisfies`' result type. A property keeps `"circle"`
@@ -6195,27 +6320,93 @@ class TypeAnalyzer {
         return operands.some(t => this.expand(t).kind === "any") ? anyType : numberType
     }
 
-    /** `a < b` between class instances: Luau asks `__lt` (`__le` for `<=`),
-     *  with the operands swapped for `>` and `>=`, and an instance without
-     *  one cannot be compared at all. */
-    private checkComparison(node: Expression, op: string, l: Type, r: Type): void {
+    /** `a == b` where nothing `a` can hold is anything `b` can: the answer is
+     *  always the same, so the comparison was not the one meant. Only types
+     *  that say what they hold take part — `any`, `unknown` and a type
+     *  parameter say nothing, and a table compares by identity, so two of them
+     *  may well be the same table. */
+    private checkOverlap(node: Expression, op: string, l: Type, r: Type): void {
         if (!this.emitDiagnostics) return
         const left = this.expand(l)
         const right = this.expand(r)
+        const judged = (t: Type): boolean => {
+            const parts = t.kind === "union" ? t.types.map(m => this.expand(m)) : [t]
+            return parts.every(p => p.kind === "literal" || p.kind === "primitive")
+        }
+        // A test against nil is never idle: a map's value and an array's
+        // element are read as what they hold, so nil is exactly what a type
+        // saying otherwise may still turn out to be.
+        const isNil = (t: Type): boolean => t.kind === "primitive" && t.name === "nil"
+        if (isNil(left) || isNil(right)) return
+        if (!judged(left) || !judged(right)) return
+        if (isAssignable(left, right) || isAssignable(right, left)) return
+        // A literal against its own primitive overlaps even where neither is
+        // assignable to the other, which `isAssignable` already answers; what
+        // is left is two sets with nothing in common.
+        this.diagnostics.push({
+            node,
+            message: `This comparison is always ${op === "==" ? "false" : "true"}: '${formatType(l)}' and '${formatType(r)}' have no value in common`,
+        })
+    }
+
+    /** What an operator takes, where no metamethod answered for it. Luau
+     *  raises on the rest — `n * 2` with `n` nil is an error at the line it
+     *  runs, and a nil `n` is exactly what `number | nil` says may happen — so
+     *  it is said here instead. `any` passes: nothing is known about it. */
+    private checkOperands(node: Expression, op: string, left: Type, right?: Type): void {
+        if (!this.emitDiagnostics) return
+        const fits = (t: Type): boolean => {
+            const x = this.expand(t)
+            if (x.kind === "any" || x.kind === "never") return true
+            switch (op) {
+                // `..` joins strings, and Luau writes a number into one.
+                case "..": return isAssignable(x, stringType) || isAssignable(x, numberType)
+                // `#` counts a string's bytes or a table's entries.
+                case "#": return x.kind === "array" || x.kind === "tuple" || x.kind === "object"
+                    || isAssignable(x, stringType)
+                default: return isAssignable(x, numberType)
+            }
+        }
+        // `<` and its kin compare two numbers or two strings, never one of each.
+        if (op === "<" || op === ">" || op === "<=" || op === ">=") {
+            const both = (t: Type): Type => this.expand(t)
+            const [l, r] = [both(left), both(right!)]
+            const loose = (t: Type): boolean => t.kind === "any" || t.kind === "never"
+            const alike = (as: Type): boolean => isAssignable(l, as) && isAssignable(r, as)
+            if (loose(l) || loose(r) || alike(numberType) || alike(stringType)) return
+        } else if (fits(left) && (right === undefined || fits(right))) {
+            return
+        }
+        this.diagnostics.push({
+            node,
+            message: right === undefined
+                ? `Operator '${op}' cannot be applied to type '${formatType(left)}'`
+                : `Operator '${op}' cannot be applied to types '${formatType(left)}' and '${formatType(right)}'`,
+        })
+    }
+
+    /** `a < b` between class instances: Luau asks `__lt` (`__le` for `<=`),
+     *  with the operands swapped for `>` and `>=`, and an instance without
+     *  one cannot be compared at all. */
+    private checkComparison(node: Expression, op: string, l: Type, r: Type): boolean {
+        if (!this.emitDiagnostics) return false
+        const left = this.expand(l)
+        const right = this.expand(r)
         const instance = (t: Type): boolean => t.kind === "object" && t.class !== undefined
-        if (!instance(left) && !instance(right)) return
+        if (!instance(left) && !instance(right)) return false
         const name = op === "<" || op === ">" ? "__lt" : "__le"
         const operands = op === ">" || op === ">=" ? [right, left] : [left, right]
         for (const receiver of operands) {
             const method = receiver.kind === "object" ? receiver.properties.get(name) : undefined
             if (!method) continue
-            if (this.pickOverload(this.overloadsOf(method.type), operands)) return
+            if (this.pickOverload(this.overloadsOf(method.type), operands)) return true
             break
         }
         this.diagnostics.push({
             node,
             message: `Operator '${op}' cannot be applied to types '${formatType(l)}' and '${formatType(r)}'`,
         })
+        return true
     }
 
     /** What an operator on a value with metamethods gives: `a + b` calls
@@ -6546,8 +6737,81 @@ class TypeAnalyzer {
     }
 }
 
+/** Every type name a definitions file declares — a class, an alias or a
+ *  `declare`. Worked out once per file: they are long, and every analysis
+ *  against them asks the same question. */
+const libraryNames = new WeakMap<Program, Set<string>>()
+
+function namesDeclaredIn(program: Program): Set<string> {
+    const known = libraryNames.get(program)
+    if (known) return known
+    const names = new Set<string>()
+    for (const stmt of program.body.statements) {
+        const declaration = stmt.type === "ExportStatement" || stmt.type === "ExportDefaultStatement"
+            ? stmt.declaration
+            : stmt
+        if (declaration.type === "TypeAliasStatement") names.add(declaration.name.name)
+        else if (declaration.type === "ExportTypeAliasStatement") names.add(declaration.alias.name.name)
+        else if (declaration.type === "DeclareClassStatement") names.add(declaration.name.name)
+        else if (declaration.type === "ClassDeclaration" && declaration.name) names.add(declaration.name.name)
+        else if (stmt.type === "ImportStatement") {
+            for (const s of stmt.specifiers) names.add(s.local.name)
+            if (stmt.defaultImport) names.add(stmt.defaultImport.name)
+            if (stmt.namespaceImport) names.add(stmt.namespaceImport.name)
+        }
+    }
+    libraryNames.set(program, names)
+    return names
+}
+
+interface SharedClasses {
+    readonly libs: readonly Program[]
+    readonly classTypes: WeakMap<DeclareClassStatement, ObjectType>
+    readonly classMembers: WeakMap<ObjectType, () => { properties: Map<string, ObjectProperty>; indexer: ObjectType["indexer"] } | undefined>
+}
+
+const sharedClassesByLib = new WeakMap<Program, SharedClasses>()
+
+/** The store of resolved library classes this analysis may use — or
+ *  `undefined` when it must resolve its own. A file that declares a name one
+ *  of the libraries also declares changes what that library's classes mean,
+ *  so it gets no share of theirs. */
+function shareableClasses(libs: readonly Program[], program: Program): SharedClasses | undefined {
+    if (!libs.length) return undefined
+    const mine = namesDeclaredIn(program)
+    if (mine.size) {
+        for (const lib of libs) {
+            for (const name of namesDeclaredIn(lib)) if (mine.has(name)) return undefined
+        }
+    }
+    const existing = sharedClassesByLib.get(libs[0])
+    if (existing) {
+        const same = existing.libs.length === libs.length && existing.libs.every((lib, i) => lib === libs[i])
+        if (same) return existing
+        return undefined
+    }
+    const store: SharedClasses = { libs: [...libs], classTypes: new WeakMap(), classMembers: new WeakMap() }
+    sharedClassesByLib.set(libs[0], store)
+    return store
+}
+
+/** Both walks below answer the same for a node every time they are asked —
+ *  the tree does not change — and the same library nodes are asked about once
+ *  per module analyzed. Remembering the answer is what keeps a project's
+ *  thousandth file as quick as its first. */
+const referencedNamesOf = new WeakMap<object, string[]>()
+const typeQueryIn = new WeakMap<object, boolean>()
+
 /** Every type name a type node mentions: `Config`, `Enum.Material`. */
-function referencedTypeNames(node: unknown, out: string[] = []): string[] {
+function referencedTypeNames(node: unknown, out?: string[]): string[] {
+    if (out === undefined && node && typeof node === "object") {
+        const known = referencedNamesOf.get(node)
+        if (known) return known
+        const found = referencedTypeNames(node, [])
+        referencedNamesOf.set(node, found)
+        return found
+    }
+    out = out ?? []
     if (!node || typeof node !== "object") return out
     if (Array.isArray(node)) {
         for (const item of node) referencedTypeNames(item, out)
@@ -6567,9 +6831,13 @@ function referencedTypeNames(node: unknown, out: string[] = []): string[] {
  *  so it cannot be resolved before the statements are walked. */
 function containsTypeQuery(node: unknown): boolean {
     if (!node || typeof node !== "object") return false
-    if (Array.isArray(node)) return node.some(containsTypeQuery)
-    if ((node as { type?: unknown }).type === "TypeofTypeNode") return true
-    return Object.values(node).some(containsTypeQuery)
+    const known = typeQueryIn.get(node)
+    if (known !== undefined) return known
+    const found = Array.isArray(node)
+        ? node.some(containsTypeQuery)
+        : (node as { type?: unknown }).type === "TypeofTypeNode" || Object.values(node).some(containsTypeQuery)
+    typeQueryIn.set(node, found)
+    return found
 }
 
 /** `Uppercase<T>` and friends are built in, and resolve only once their

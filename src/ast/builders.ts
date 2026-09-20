@@ -2106,6 +2106,19 @@ export class Parser {
                     base = { type: "MemberExpression", object: base, property: prop, optional: true, ...spanFrom(base, prop) }
                     continue
                 }
+                if (punct === "." && this.punctuatorAt(2, "[")) {
+                    this.advance()
+                    this.advance()
+                    this.expectPunctuator("[")
+                    const index = this.inBrackets(() => this.parseExpression())
+                    this.expectPunctuator("]")
+                    base = {
+                        type: "IndexExpression",
+                        object: base, index, optional: true,
+                        ...spanFrom(base, this.previous()),
+                    }
+                    continue
+                }
                 if (punct === "." && this.punctuatorAt(2, "(")) {
                     this.advance()
                     this.advance()
@@ -2917,8 +2930,14 @@ export class Parser {
      *  `name?: T` for an optional property or parameter. */
     private parseSuffixType(): TypeNode {
         if (this.checkIdentifierValue("readonly")) {
+            const start = this.current()
             this.advance()
-            return this.parseSuffixType()
+            const t = this.parseSuffixType()
+            // A list is the one thing `readonly` says something about here:
+            // a property says it where the property is written.
+            if (t.type === "ArrayTypeNode" || t.type === "TupleTypeNode") return { ...t, isReadonly: true }
+            this.problemAt(start, "'readonly' belongs on an array or a tuple: a property is marked where it is written")
+            return t
         }
 
         let t = this.parsePrimaryType()

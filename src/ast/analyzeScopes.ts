@@ -194,7 +194,7 @@ class Analyzer {
     private readonly hoisted = new Map<Identifier, number>()
     /** Names that resolved to a global from code that runs later, with the
      *  scope they were read in. */
-    private readonly deferredGlobals: { node: Identifier; scope: Scope; assignment: boolean }[] = []
+    private readonly deferredGlobals: { node: Identifier; scope: Scope; assignment: boolean; depth: number }[] = []
 
     private hoistFunctions(block: Block, scope: Scope): void {
         for (const statement of block.statements) {
@@ -218,18 +218,26 @@ class Analyzer {
      *  can call it, but a call straight in the block before the declaration
      *  finds nothing there yet. At a module's top level the whole function is
      *  hoisted, and this does not apply. */
-    private checkUseBeforeDefine(identifier: Identifier, id: BindingId): void {
+    private checkUseBeforeDefine(identifier: Identifier, id: BindingId, at = this.functionDepth): void {
         const binding = this.bindings.get(id)!
-        if ((binding.declaredBy !== "function" && binding.declaredBy !== "class") || this.typeQueryDepth > 0) return
+        if (this.typeQueryDepth > 0) return
         const declaration = binding.declarationNode as Identifier | undefined
-        const depth = declaration && this.hoisted.get(declaration)
-        if (depth === undefined || depth !== this.functionDepth) return
-        const before = identifier.line.start < declaration!.line.start ||
-            (identifier.line.start === declaration!.line.start && identifier.column.start < declaration!.column.start)
+        if (!declaration) return
+        const hoisted = binding.declaredBy === "function" || binding.declaredBy === "class"
+        // A name declared where the read is — `const` and `let`, and a
+        // function or class whose name is hoisted no further than its own
+        // block — holds nothing until its line has run.
+        const depth = hoisted ? this.hoisted.get(declaration) : this.declaredDepth.get(id)
+        const readable = hoisted || binding.kind === "local"
+        if (!readable || depth === undefined || depth !== at) return
+        const before = identifier.line.start < declaration.line.start ||
+            (identifier.line.start === declaration.line.start && identifier.column.start < declaration.column.start)
         if (!before) return
         this.diagnostics.push({
             node: identifier,
-            message: `'${binding.name}' is used before its definition: inside a function, a function declared further down is only there once its declaration has run`,
+            message: hoisted
+                ? `'${binding.name}' is used before its definition: inside a function, a function declared further down is only there once its declaration has run`
+                : `'${binding.name}' is used before its declaration, and holds nothing until that line has run`,
             kind: "use-before-define",
         })
     }
@@ -237,7 +245,7 @@ class Analyzer {
     private noteDeferred(identifier: Identifier, scope: Scope, id: BindingId, assignment: boolean): void {
         if (this.functionDepth === 0 && this.typeQueryDepth === 0) return
         if (this.bindings.get(id)!.kind !== "global") return
-        this.deferredGlobals.push({ node: identifier, scope, assignment })
+        this.deferredGlobals.push({ node: identifier, scope, assignment, depth: this.functionDepth })
     }
 
     /** Point each deferred read of a global at the declaration of that name
@@ -245,7 +253,7 @@ class Analyzer {
      *  that reads it. Such code runs after the declaration has: a closure
      *  written inside a value reads the name the value is bound to. */
     private resolveForwardReferences(): void {
-        for (const { node, scope, assignment } of this.deferredGlobals) {
+        for (const { node, scope, assignment, depth } of this.deferredGlobals) {
             const localId = this.lookup(scope, node.name)
             const globalId = this.bindingOf.get(node)
             if (localId === undefined || globalId === undefined || localId === globalId) continue
@@ -260,7 +268,12 @@ class Analyzer {
             this.bindingOf.set(node, localId)
             this.bindings.get(localId)!.references.push(node)
             if (assignment) this.checkConstAssign(localId, node)
-            else if (this.typeQueryDepth === 0) this.checkTypeOnly(localId, node)
+            else if (this.typeQueryDepth === 0) {
+                this.checkTypeOnly(localId, node)
+                // The read was written before the declaration it turned out
+                // to name; whether that matters is the same question as ever.
+                this.checkUseBeforeDefine(node, localId, depth)
+            }
         }
     }
 
@@ -300,9 +313,14 @@ class Analyzer {
         }
         const id = this.nextId++
         this.bindings.set(id, { id, name, kind, declarationNode: node, references: [], isConst, declaredBy })
+        this.declaredDepth.set(id, this.functionDepth)
         scope.declarations.set(name, id)
         return id
     }
+
+    /** Which function body each name was declared in. A read of a `const` from
+     *  the same body, but above it, is a read of nothing. */
+    private readonly declaredDepth = new Map<BindingId, number>()
 
     private resolve(scope: Scope, name: string): BindingId {
         for (let s: Scope | null = scope; s; s = s.parent) {
