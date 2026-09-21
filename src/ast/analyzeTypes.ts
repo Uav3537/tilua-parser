@@ -3154,8 +3154,10 @@ class TypeAnalyzer {
     // Functions
     // --------------------------------------------------------
 
-    private visitFunctionBody(func: FunctionBody, outerEnv: FlowEnv): void {
-        this.withTypeParams(func.generics, () => this.visitFunctionBodyInner(func, outerEnv))
+    /** `returns`, when given, collects the type of each `return` the walk
+     *  reads — see `inferFunctionBody`. */
+    private visitFunctionBody(func: FunctionBody, outerEnv: FlowEnv, returns?: Type[]): void {
+        this.withTypeParams(func.generics, () => this.visitFunctionBodyInner(func, outerEnv, returns))
     }
 
     /** A parameter's type: annotation, else a shape synthesized from a
@@ -3233,6 +3235,66 @@ class TypeAnalyzer {
      *  it, as in TypeScript: `signal:Connect(function(player) ... end)` knows
      *  `player` from `Connect`'s callback type. Anything else is inferred as
      *  usual. */
+    /** The arguments of a call, in two passes where one is needed.
+     *
+     *  A function written at the call site with a parameter nothing annotates
+     *  reads that parameter from the signature — and where the signature says
+     *  `(v: T) => U`, `T` is only known once the other arguments have been
+     *  read. So such an argument is read once quietly, to get a shape to pick
+     *  a signature with, and then again with `T` in hand: `map(xs, v => v + 1)`
+     *  has its `v` a number by then, and `U` follows from what the body
+     *  answers. Everything else is read once, as it always was. */
+    private inferArguments(
+        written: readonly Expression[],
+        fns: readonly FunctionType[],
+        selfOf: (f: FunctionType) => number,
+        extra: (f: FunctionType, args: Type[]) => Type[],
+        env: FlowEnv,
+    ): Type[] {
+        const expected = this.expectedArguments(written, fns as FunctionType[], selfOf)
+        written.forEach((a, i) => this.applyContext(a, expected[i]))
+        const waits = written.map((a, i) => this.waitsOnInference(a, expected[i]))
+        if (!waits.some(Boolean)) return written.map(a => this.infer(a, env))
+
+        const argTypes = written.map((a, i) => (waits[i] ? this.quietly(() => this.infer(a, env)) : this.infer(a, env)))
+        const picked = this.pickOverload(fns as FunctionType[], argTypes, f => extra(f, argTypes), this.spreadOf(written, selfOf(fns[0])))
+        const subst = picked?.typeParams?.length
+            ? this.inferTypeArgs(picked, extra(picked, argTypes))
+            : undefined
+        written.forEach((a, i) => {
+            if (!waits[i]) return
+            if (picked && subst) {
+                const self = selfOf(picked)
+                const declared = i + self < picked.params.length ? picked.params[i + self].type : picked.varargs
+                if (declared) this.applyContext(a, this.reduceType(substitute(declared, subst)))
+            }
+            argTypes[i] = this.infer(a, env)
+        })
+        return argTypes
+    }
+
+    /** Is this argument a function whose own type waits on the call's? */
+    private waitsOnInference(arg: Expression, expected: Type | undefined): boolean {
+        if (!expected || !containsTypeParam(expected)) return false
+        let e = arg
+        while (e.type === "ParenthesizedExpression") e = e.expression
+        if (e.type !== "FunctionExpression") return false
+        return e.func.params.some(p =>
+            !p.typeAnnotation && !p.default && !p.pattern && p.name !== "self" && p.name !== "this")
+    }
+
+    /** Read something without saying anything about it: a first pass whose
+     *  only purpose is a shape to go on. */
+    private quietly<T>(read: () => T): T {
+        const was = this.emitDiagnostics
+        this.emitDiagnostics = false
+        try {
+            return read()
+        } finally {
+            this.emitDiagnostics = was
+        }
+    }
+
     private applyContext(expr: Expression, expected: Type | undefined): void {
         let e = expr
         while (e.type === "ParenthesizedExpression") e = e.expression
@@ -3427,7 +3489,7 @@ class TypeAnalyzer {
         }
     }
 
-    private visitFunctionBodyInner(func: FunctionBody, outerEnv: FlowEnv): void {
+    private visitFunctionBodyInner(func: FunctionBody, outerEnv: FlowEnv, returns?: Type[]): void {
         const env = forkEnv(outerEnv)
         for (const p of func.params) {
             if (p.pattern) {
@@ -3444,7 +3506,7 @@ class TypeAnalyzer {
                 if (p.typeAnnotation) this.annotated.add(id)
             }
         }
-        this.withVarargs(func, () => this.collectReturns(undefined, () => {
+        this.withVarargs(func, () => this.collectReturns(returns, () => {
             this.visitBlock(func.body, env)
             this.checkReturnsAtAll(func, this.declaredReturns[this.declaredReturns.length - 1])
         }))
@@ -3521,7 +3583,10 @@ class TypeAnalyzer {
             // A bare T retains its existing widening behaviour unless `<const T>`.
             const preserve = keepsLiterals(param)
                 || (param.kind !== "typeParam" && containsTypeParam(param))
-            unify(p.type, preserve ? arg : widen(arg), vars, subst)
+            // Each parameter is its own inference site: the first one to
+            // pin a name down keeps it, and a later argument that does not
+            // fit is reported against it rather than widening it away.
+            unify(p.type, preserve ? arg : widen(arg), vars, subst, "first")
         })
         // The arguments `...` takes say what it holds, the way a parameter's
         // does: `firstOf(1, 2)` of a `(...items: T[])` reads `T` as `number`.
@@ -3983,7 +4048,12 @@ class TypeAnalyzer {
         }
     }
 
-    private inferFunctionBody(func: FunctionBody, env: FlowEnv): Type {
+    /** `visited`, when given, is what the real walk of the body just
+     *  collected from its `return`s: a function expression is walked before
+     *  its type is asked for, so there is nothing left to guess, and walking
+     *  the body a second time only to read them made every callback nested in
+     *  another cost twice its parent's. */
+    private inferFunctionBody(func: FunctionBody, env: FlowEnv, visited?: readonly Type[]): Type {
         const names = func.generics.map(g => g.name)
         return this.withTypeParams(func.generics, () => {
             const params = func.params.flatMap(p => {
@@ -4018,6 +4088,12 @@ class TypeAnalyzer {
                 returns = this.resolveType(func.returnType)
             } else if (func.predicate) {
                 returns = booleanType
+            } else if (visited) {
+                // A body with no `return` the walk reached still has its
+                // `return`s read where they stand, as below.
+                returns = visited.length
+                    ? union([...visited])
+                    : this.withVarargs(func, () => this.silently(() => this.inferReturnType(func.body, bodyEnv)))
             } else {
                 // Walk the body once, silently, so locals have types before the
                 // `return` expressions are read — otherwise `local r = f()
@@ -5050,10 +5126,12 @@ class TypeAnalyzer {
             case "ArrayExpression": return this.inferArray(expr, env, false)
             case "TableExpression": return this.inferObject(expr, env, false)
 
-            case "FunctionExpression":
+            case "FunctionExpression": {
                 this.checkParamOrder(expr.func.params, expr)
-                this.visitFunctionBody(expr.func, env)
-                return this.inferFunctionBody(expr.func, env)
+                const returned: Type[] = []
+                this.visitFunctionBody(expr.func, env, returned)
+                return this.inferFunctionBody(expr.func, env, returned)
+            }
 
             case "ParenthesizedExpression":
                 return this.infer(expr.expression, env)
@@ -5288,9 +5366,7 @@ class TypeAnalyzer {
         const united = this.unionSignatures(callee)
         const fns = united ?? this.overloadsOf(callee)
         const explicit = this.explicitTypeArguments(expr, fns)
-        const expected = this.expectedArguments(expr.arguments, fns, () => 0)
-        expr.arguments.forEach((a, i) => this.applyContext(a, expected[i]))
-        const argTypes = expr.arguments.map(a => this.infer(a, env))
+        const argTypes = this.inferArguments(expr.arguments, fns, () => 0, (_, args) => args, env)
         if (fns.length) {
             this.recordExpected(expr.arguments, fns, () => 0, () => argTypes)
             const spread = this.spreadOf(expr.arguments)
@@ -5366,9 +5442,8 @@ class TypeAnalyzer {
         const united = this.unionSignatures(method)
         const fns = united ?? this.overloadsOf(method)
         const explicit = this.explicitTypeArguments(expr, fns)
-        const expected = this.expectedArguments(expr.arguments, fns, f => (this.takesSelf(f) ? 1 : 0))
-        expr.arguments.forEach((a, i) => this.applyContext(a, expected[i]))
-        const argTypes = expr.arguments.map(a => this.infer(a, env))
+        const argTypes = this.inferArguments(expr.arguments, fns, f => (this.takesSelf(f) ? 1 : 0),
+            (f, args) => (this.takesSelf(f) ? [objType, ...args] : args), env)
         if (fns.length) {
             // `obj:m(a)` passes `obj` as the implicit first argument, but
             // only to a signature that actually declares a `self` slot —

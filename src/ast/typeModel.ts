@@ -553,14 +553,26 @@ function classArguments(t: Type, name: string): readonly Type[] | undefined {
     return undefined
 }
 
-export function unify(param: Type, arg: Type, vars: Set<string>, out: Map<string, Type>): void {
+/** How a type parameter takes a second candidate, at the top of a
+ *  parameter. Below it — a list's elements, a tuple's places — every
+ *  candidate is the same site and they gather, whichever mode was asked for. Arguments collected by
+ *  one `...rest: T[]` are all of them equally, so `firstOf(1, "a")` reads
+ *  `T` as their union. Two parameters written separately are not: the one
+ *  written first says what `T` is, and an argument that disagrees with it is
+ *  a mistake to report rather than a reason to widen. */
+export type Unification = "union" | "first"
+
+export function unify(param: Type, arg: Type, vars: Set<string>, out: Map<string, Type>, how: Unification = "union"): void {
     if (param.kind === "typeParam" && param.constraint && !vars.has(param.name)) {
-        unify(param.constraint, arg, vars, out)
+        unify(param.constraint, arg, vars, out, how)
         return
     }
     if (param.kind === "typeParam" && vars.has(param.name)) {
         const prev = out.get(param.name)
-        out.set(param.name, prev ? union([prev, arg]) : arg)
+        if (!prev) out.set(param.name, arg)
+        else if (isAssignable(arg, prev)) { /* what it already is covers this one */ }
+        else if (isAssignable(prev, arg)) out.set(param.name, arg)
+        else if (how === "union") out.set(param.name, union([prev, arg]))
         return
     }
     if (arg.kind === "any" || arg.kind === "never") return

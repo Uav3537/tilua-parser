@@ -629,6 +629,39 @@ const rel = (path: string | undefined): string | undefined =>
         [],
     ])
 
+    // A type parameter written in two places is pinned down by the first
+    // argument, and an argument that disagrees is reported rather than
+    // widening it away — while one `...rest: T[]` gathers all of its own.
+    // A callback written at the call site is read last, with `T` in hand.
+    {
+        const lib = [
+            "declare function find<T>(t: T[], value: T): number | nil",
+            "declare function pair<T>(a: T, b: T): T",
+            "declare function firstOf<T>(...items: T[]): T",
+            "declare function map<T, U>(xs: T[], f: (v: T) => U): U[]",
+            "declare xs: { Name: string }[]",
+            "declare ns: number[]",
+        ].join("\n") + "\n"
+        const call = (line: string) => analyze(lib + line)
+        check("inference: the first argument pins a type parameter down, and a callback is read last", [
+            call("const i = find(xs, function(v) { return true })").errors,
+            call("const i = find(xs, 1)").errors,
+            call("const p = pair(1, \"a\")").errors,
+            call("const p = pair(1, 2)").bindings.p,
+            call("const v = firstOf(1, \"a\")").bindings.v,
+            call("const ys = map(ns, function(v) { return v + 1 })").bindings.ys,
+            call("const ys = map(ns, (v) => v > 1)").bindings.ys,
+        ], [
+            ["Parameter 'v' has no type, so it is 'any': give it one, or a default to read it from", "Argument of type '(v: any) => true' is not assignable to parameter of type '{ Name: string }'"],
+            ["Argument of type '1' is not assignable to parameter of type '{ Name: string }'"],
+            ["Argument of type '\"a\"' is not assignable to parameter of type 'number'"],
+            "number",
+            "number | string",
+            "number[]",
+            "boolean[]",
+        ])
+    }
+
     // A name holds nothing until its line has run, a list is indexed by
     // position, `readonly` is a promise about the list itself, a key written
     // twice is a typo, and a parameter with no type turns off every check
