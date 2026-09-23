@@ -1634,7 +1634,7 @@ export class Parser {
         // can't otherwise begin with `{` or `[`, so this is unambiguous (no
         // parens required, unlike JS).
         if (this.checkPunctuator("{") || this.checkPunctuator("[")) {
-            const target = this.checkPunctuator("{") ? this.parseObjectPattern() : this.parseArrayPattern()
+            const target = this.checkPunctuator("{") ? this.parseObjectPattern(true) : this.parseArrayPattern(true)
             return this.parseAssignmentRest(start, target)
         }
 
@@ -2268,8 +2268,8 @@ export class Parser {
     /** An assignment target after the first — Luau's `a, b = ...`, read only
      *  to be reported: a prefix expression or a destructuring pattern. */
     private parseAssignTarget(): Expression | ObjectPattern | ArrayPattern {
-        if (this.checkPunctuator("{")) return this.parseObjectPattern()
-        if (this.checkPunctuator("[")) return this.parseArrayPattern()
+        if (this.checkPunctuator("{")) return this.parseObjectPattern(true)
+        if (this.checkPunctuator("[")) return this.parseArrayPattern(true)
         return this.parsePrefixExpression()
     }
 
@@ -2479,14 +2479,18 @@ export class Parser {
     /** Parses a binding target. When `topLevel`, also consumes a trailing
      *  `<attr>` list (identifier only) and a `: Type` annotation — these are
      *  only valid at the outermost level of a `local` / parameter binding,
-     *  never nested inside another pattern. */
-    private parseBindingTarget(topLevel: boolean): BindingTarget {
+     *  never nested inside another pattern. When `assign`, the pattern is a
+     *  destructuring assignment's (`[t[i], t[j]] = ...`), and a leaf is any
+     *  place a value can be assigned to: a name, a member or an index. */
+    private parseBindingTarget(topLevel: boolean, assign = false): BindingTarget {
         let target: BindingTarget
 
         if (this.checkPunctuator("{")) {
-            target = this.parseObjectPattern()
+            target = this.parseObjectPattern(assign)
         } else if (this.checkPunctuator("[")) {
-            target = this.parseArrayPattern()
+            target = this.parseArrayPattern(assign)
+        } else if (assign) {
+            return this.parseAssignPatternLeaf()
         } else {
             const nameTok = this.expectIdentifier()
             let attributes: string[] | undefined
@@ -2510,11 +2514,27 @@ export class Parser {
         return target
     }
 
-    private parseObjectPattern(): ObjectPattern {
-        return this.inBrackets(() => this.parseObjectPatternInner())
+    /** A leaf of a destructuring assignment: `a`, `a.b` or `a[i]`. */
+    private parseAssignPatternLeaf(): BindingTarget {
+        const expression = this.parsePrefixExpression()
+        if (expression.type === "Identifier") {
+            return { type: "IdentifierPattern", name: expression.name, line: expression.line, column: expression.column }
+        }
+        if (expression.type === "MemberExpression" || expression.type === "IndexExpression") {
+            this.rejectOptionalTarget(expression)
+            return expression
+        }
+        const err = new ParseError("Only a name, a member or an index can be assigned to", expression.line.start, expression.column.start)
+        if (!this.recover) throw err
+        this.record(err)
+        return { type: "IdentifierPattern", name: "", line: expression.line, column: expression.column }
     }
 
-    private parseObjectPatternInner(): ObjectPattern {
+    private parseObjectPattern(assign = false): ObjectPattern {
+        return this.inBrackets(() => this.parseObjectPatternInner(assign))
+    }
+
+    private parseObjectPatternInner(assign: boolean): ObjectPattern {
         const start = this.current()
         this.expectPunctuator("{")
         const properties: ObjectPatternProperty[] = []
@@ -2523,7 +2543,7 @@ export class Parser {
         while (!this.checkPunctuator("}")) {
             if (this.checkOperator("...")) {
                 this.advance()
-                rest = this.parseBindingTarget(false)
+                rest = this.parseBindingTarget(false, assign)
                 break
             }
 
@@ -2538,17 +2558,17 @@ export class Parser {
                 key = this.parseExpression()
                 this.expectPunctuator("]")
                 this.expectPunctuator(":")
-                value = this.parseBindingTarget(false)
+                value = this.parseBindingTarget(false, assign)
             } else if (this.checkType("Literal") && (this.current() as any).kind === "string") {
                 const t = this.advance() as any
                 key = { type: "StringLiteral", value: t.value, raw: t.raw, ...spanFrom(t, t) }
                 this.expectPunctuator(":")
-                value = this.parseBindingTarget(false)
+                value = this.parseBindingTarget(false, assign)
             } else {
                 const nameTok = this.expectIdentifier()
                 key = { type: "Identifier", name: nameTok.value as string, ...spanFrom(nameTok, nameTok) }
                 if (this.matchPunctuator(":")) {
-                    value = this.parseBindingTarget(false)
+                    value = this.parseBindingTarget(false, assign)
                 } else {
                     shorthand = true
                     value = { type: "IdentifierPattern", name: nameTok.value as string, ...spanFrom(nameTok, nameTok) }
@@ -2572,11 +2592,11 @@ export class Parser {
         return { type: "ObjectPattern", properties, rest, ...spanFrom(start, this.previous()) }
     }
 
-    private parseArrayPattern(): ArrayPattern {
-        return this.inBrackets(() => this.parseArrayPatternInner())
+    private parseArrayPattern(assign = false): ArrayPattern {
+        return this.inBrackets(() => this.parseArrayPatternInner(assign))
     }
 
-    private parseArrayPatternInner(): ArrayPattern {
+    private parseArrayPatternInner(assign: boolean): ArrayPattern {
         const start = this.current()
         this.expectPunctuator("[")
         const elements: (ArrayPatternElement | null)[] = []
@@ -2585,7 +2605,7 @@ export class Parser {
         while (!this.checkPunctuator("]")) {
             if (this.checkOperator("...")) {
                 this.advance()
-                rest = this.parseBindingTarget(false)
+                rest = this.parseBindingTarget(false, assign)
                 break
             }
             if (this.checkPunctuator(",")) {
@@ -2595,7 +2615,7 @@ export class Parser {
             }
 
             const elStart = this.current()
-            const value = this.parseBindingTarget(false)
+            const value = this.parseBindingTarget(false, assign)
             let def: Expression | undefined
             if (this.matchOperator("=")) def = this.parseExpression()
             elements.push({ type: "ArrayPatternElement", value, default: def, ...spanFrom(elStart, this.previous()) })

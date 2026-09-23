@@ -256,6 +256,32 @@ const rel = (path: string | undefined): string | undefined =>
     // Functions have no `const` / `let`: `function f()` declares `f`.
     check("functions: `function name()` declares a function", analyze("function twice(n: number): number { return n * 2 }\nconst four = twice(2)").bindings.four, "number")
     check("functions: its name cannot be reassigned", analyze("function f() { }\nf = nil").errors, ["Cannot assign to 'f' — it is a function"])
+    // Each overload must be one the implementation can serve.
+    check("overloads: a signature the implementation serves", analyze([
+        "function f(a: \"x\", b?: number): number",
+        "function f(a: \"y\"): number",
+        "function f(a, b: number = 1) { return b }",
+        "class A {",
+        "    function m(a: number): number",
+        "    function m(a: number, b: number): number",
+        "    function m(a: number, b?: number) { return a }",
+        "}",
+    ].join("\n")).errors, [])
+    check("overloads: a signature the implementation cannot serve", [
+        "function f(a: string, b?: number): number\nfunction f(a) { return 1 }",
+        "function f(a: string): number\nfunction f(a: string, b: number) { return b }",
+        "function f(...xs: number[]): number\nfunction f(a: number) { return a }",
+        "function f(a: string): number\nfunction f(a: number) { return a }",
+        "function f(a: string): string\nfunction f(a: string): number { return 1 }",
+        "class A {\n    function m(a: number, b: number): number\n    function m(a: number) { return a }\n}",
+    ].map(code => analyze(code).errors), [
+        ["This overload takes parameter 'b', which the implementation does not have: it takes 1 parameter"],
+        ["The implementation requires 2 arguments, and this overload passes at most 1"],
+        ["This overload takes a rest parameter, which the implementation does not have"],
+        ["Parameter 'a' of this overload is 'string', which the implementation's 'number' does not accept"],
+        ["This overload returns 'string', which the implementation's 'number' cannot be"],
+        ["This overload takes parameter 'b', which the implementation does not have: it takes 1 parameter"],
+    ])
     check("functions: `const function` is not tilua", parseError("const function f() {}"),
         "A function is declared as 'function name()'; 'const' does not apply to functions")
     check("functions: exported with `export function`", analyze(`import { twice } from "./m"\nconst n = twice(1)`,
@@ -1982,6 +2008,23 @@ function g() {
     ], [
         "An optional chain cannot be assigned to",
         "An optional chain cannot be assigned to",
+        "An optional chain cannot be assigned to",
+    ])
+
+    // A destructuring assignment's leaves are places, not only names.
+    const places = analyze([
+        "const t: number[] = [1, 2]",
+        "const o = { a: 0, b: \"\" }",
+        "let i = 1",
+        "[t[i], t[i + 1]] = [t[i + 1], t[i]]",
+        "{ a: o.a, b: o.b } = { a: 1, b: \"x\" }",
+    ].join("\n"))
+    check("destructuring assignment: indexes and members are targets", places.errors, [])
+    check("destructuring assignment: only a place can be assigned to", [
+        parseError("[f()] = t"),
+        parseError("[a?.b] = t"),
+    ], [
+        "Only a name, a member or an index can be assigned to",
         "An optional chain cannot be assigned to",
     ])
     const optional = analyze([

@@ -473,6 +473,10 @@ class Analyzer {
                     this.checkConstAssign(id, t)
                     return
                 }
+                case "MemberExpression":
+                case "IndexExpression":
+                    this.visitExpression(t, scope)
+                    return
                 case "ObjectPattern":
                     for (const p of t.properties) {
                         if (p.computed) this.visitExpression(p.key as Expression, scope)
@@ -514,7 +518,9 @@ class Analyzer {
                 // Initializers see the *old* bindings — `const x = x` reads
                 // the outer `x`, not the one being declared.
                 if (stmt.init) this.visitExpression(stmt.init, scope)
-                this.visitType(stmt.name.typeAnnotation, scope)
+                if (stmt.name.type !== "MemberExpression" && stmt.name.type !== "IndexExpression") {
+                    this.visitType(stmt.name.typeAnnotation, scope)
+                }
                 this.declarePattern(scope, stmt.name, "local", scope, stmt.kind === "const")
                 return
             }

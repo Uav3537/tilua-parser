@@ -1,6 +1,6 @@
 import type {
     Program, Block, Statement, Expression, TypeNode,
-    Identifier, FunctionBody, FunctionSignature, BindingTarget, GenericTypeParameter, VariableDeclaration,
+    Identifier, FunctionBody, FunctionSignature, FunctionParameter, BindingTarget, GenericTypeParameter, VariableDeclaration,
     ObjectPattern, ArrayPattern, ObjectPatternProperty, ReturnStatement,
     TableExpression, ArrayExpression, IfStatement, TypePredicateNode, DeclareClassStatement, DeclareStatement,
     ClassDeclaration, TypeAliasStatement, ExportTypeAliasStatement, ClassExpression, ClassLike, ClassMember,
@@ -1521,6 +1521,17 @@ class TypeAnalyzer {
 
         // The compiler builds the class table out of these, so a member cannot
         // be called one of them.
+        // The shape is built without diagnostics, so a method's overload set
+        // is checked against its implementation here.
+        this.withClass(stmt, () => this.withTypeParams(this.classTypeParams(stmt), () => {
+            this.withSelfType(this.selfTypeOf(stmt), () => {
+                for (const member of stmt.members) {
+                    if (member.type !== "ClassMethod" || !member.signatures) continue
+                    for (const signature of member.signatures) this.checkOverload(member.func, signature)
+                }
+            })
+        }))
+
         for (const member of stmt.members) {
             if (member.type === "ClassConstructor") continue
             if (CLASS_RESERVED.has(member.name.name)) {
@@ -3350,7 +3361,8 @@ class TypeAnalyzer {
      *  annotation (`function f({ a, b = 1 })`). */
     private patternToType(target: ObjectPattern | ArrayPattern, env: FlowEnv): Type {
         const leaf = (v: BindingTarget, def: Expression | undefined): Type =>
-            v.type !== "IdentifierPattern" ? this.patternToType(v, env)
+            v.type === "ObjectPattern" || v.type === "ArrayPattern" ? this.patternToType(v, env)
+                : v.type !== "IdentifierPattern" ? anyType
                 : v.typeAnnotation ? this.resolveType(v.typeAnnotation)
                 : def ? widen(this.infer(def, env))
                 : anyType
@@ -3893,6 +3905,7 @@ class TypeAnalyzer {
      *  can actually be. An annotation, a pattern or a default still wins. */
     private paramsFromSignatures(func: FunctionBody, signatures: readonly FunctionSignature[] | undefined): void {
         if (!signatures?.length) return
+        for (const signature of signatures) this.checkOverload(func, signature)
         const resolved = signatures.map(sig => this.signatureToFnType(sig))
         func.params.forEach((param, i) => {
             if (param.typeAnnotation || param.pattern || param.default) return
@@ -3905,6 +3918,71 @@ class TypeAnalyzer {
             }
             if (candidates.length) this.contextualParams.set(param, union(candidates))
         })
+    }
+
+    /** The implementation is what runs for every signature of an overload
+     *  set, so each signature must be one it can serve: no parameter it does
+     *  not have, no fewer arguments than it requires, no argument type it does
+     *  not accept, and a return it can give. Stricter than TypeScript, which
+     *  lets a signature name parameters the implementation never reads. */
+    private checkOverload(func: FunctionBody, signature: FunctionSignature): void {
+        if (!this.emitDiagnostics) return
+        const node = signature as unknown as TypeNode
+        const report = (message: string): void => { this.diagnostics.push({ node, message }) }
+        // The receiver the parser injects is on one side or both.
+        const own = (params: readonly FunctionParameter[]): FunctionParameter[] =>
+            params.filter((p, i) => !p.rest && !(i === 0 && !p.typeAnnotation && (p.name === "self" || p.name === "this")))
+        const implementation = own(func.params)
+        const offered = own(signature.params)
+        const implementationRest = func.params.some(p => p.rest)
+        const signatureRest = signature.params.some(p => p.rest)
+        const label = (p: FunctionParameter): string => p.pattern ? "a destructured parameter" : `'${p.name}'`
+
+        if (!implementationRest) {
+            const extra = offered[implementation.length]
+            if (extra) {
+                report(`This overload takes parameter ${label(extra)}, which the implementation does not have: `
+                    + `it takes ${implementation.length} parameter${implementation.length === 1 ? "" : "s"}`)
+                return
+            }
+            if (signatureRest) {
+                report("This overload takes a rest parameter, which the implementation does not have")
+                return
+            }
+        }
+        if (!signatureRest) {
+            let required = 0
+            implementation.forEach((p, i) => { if (!p.optional && p.default === undefined) required = i + 1 })
+            if (offered.length < required) {
+                report(`The implementation requires ${required} argument${required === 1 ? "" : "s"}, `
+                    + `and this overload passes at most ${offered.length}`)
+                return
+            }
+        }
+
+        // A type parameter stands for whatever a call gives it: not checked.
+        if (signature.generics.length || func.generics.length) return
+        for (let i = 0; i < offered.length && i < implementation.length; i++) {
+            const target = implementation[i]
+            // A bare parameter takes its type from the signatures themselves.
+            if (!target.typeAnnotation && target.default === undefined) continue
+            let accepted = this.paramType(target, new Map())
+            // A default stands in for a missing argument.
+            if (target.default !== undefined) accepted = optional(accepted)
+            const given = this.paramType(offered[i], new Map())
+            if (!isAssignable(given, accepted)) {
+                report(`Parameter ${label(offered[i])} of this overload is '${briefType(given)}', `
+                    + `which the implementation's '${briefType(accepted)}' does not accept`)
+                return
+            }
+        }
+        if (signature.returnType && func.returnType) {
+            const promised = this.resolveType(signature.returnType)
+            const returned = this.resolveType(func.returnType)
+            if (!isAssignable(promised, returned) && !isAssignable(returned, promised)) {
+                report(`This overload returns '${briefType(promised)}', which the implementation's '${briefType(returned)}' cannot be`)
+            }
+        }
     }
 
     private signatureToFnType(sig: FunctionSignature): Type {
@@ -4413,6 +4491,12 @@ class TypeAnalyzer {
                 }
                 return
             }
+            case "MemberExpression":
+            case "IndexExpression":
+                this.infer(target, env)
+                this.checkReadonlyAssign(target, env)
+                this.assignToRef(target, widen(valueType), env)
+                return
             case "ObjectPattern": {
                 for (const p of target.properties) {
                     const key = !p.computed && p.key.type === "Identifier" ? p.key.name

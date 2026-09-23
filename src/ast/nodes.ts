@@ -176,7 +176,9 @@ export interface VariableDeclaration extends BaseNode {
 // of plain member/index reads (`local a = z.a`, etc).
 // ============================================================
 
-export type BindingTarget = IdentifierPattern | ObjectPattern | ArrayPattern
+/** A member or an index (`t.a`, `t[i]`) is a leaf only in a destructuring
+ *  assignment (`[t[i], t[j]] = [t[j], t[i]]`): a declaration binds names. */
+export type BindingTarget = IdentifierPattern | ObjectPattern | ArrayPattern | MemberExpression | IndexExpression
 
 export interface IdentifierPattern extends BaseNode {
     type: "IdentifierPattern"
