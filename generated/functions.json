@@ -705,72 +705,60 @@
       {
         "type": "VariableDeclaration",
         "kind": "const",
-        "names": [
-          {
-            "type": "IdentifierPattern",
-            "name": "applyN",
-            "line": {
-              "start": 11,
-              "end": 11
-            },
-            "column": {
-              "start": 7,
-              "end": 13
-            }
+        "name": {
+          "type": "IdentifierPattern",
+          "name": "applyN",
+          "line": {
+            "start": 11,
+            "end": 11
+          },
+          "column": {
+            "start": 7,
+            "end": 13
           }
-        ],
-        "init": [
-          {
-            "type": "FunctionExpression",
-            "func": {
-              "type": "FunctionBody",
-              "generics": [],
-              "params": [
-                {
-                  "type": "FunctionParameter",
-                  "name": "n",
-                  "typeAnnotation": {
-                    "type": "TypeReference",
-                    "base": "number",
-                    "typeArguments": [],
-                    "line": {
-                      "start": 11,
-                      "end": 11
-                    },
-                    "column": {
-                      "start": 28,
-                      "end": 34
-                    }
-                  },
+        },
+        "init": {
+          "type": "FunctionExpression",
+          "func": {
+            "type": "FunctionBody",
+            "generics": [],
+            "params": [
+              {
+                "type": "FunctionParameter",
+                "name": "n",
+                "typeAnnotation": {
+                  "type": "TypeReference",
+                  "base": "number",
+                  "typeArguments": [],
                   "line": {
                     "start": 11,
                     "end": 11
                   },
                   "column": {
-                    "start": 25,
+                    "start": 28,
                     "end": 34
                   }
                 },
-                {
-                  "type": "FunctionParameter",
-                  "name": "",
-                  "pattern": {
-                    "type": "ArrayPattern",
-                    "elements": [
-                      {
-                        "type": "ArrayPatternElement",
-                        "value": {
-                          "type": "IdentifierPattern",
-                          "name": "dx",
-                          "line": {
-                            "start": 11,
-                            "end": 11
-                          },
-                          "column": {
-                            "start": 37,
-                            "end": 39
-                          }
-                        },
+                "line": {
+                  "start": 11,
+                  "end": 11
+                },
+                "column": {
+                  "start": 25,
+                  "end": 34
+                }
+              },
+              {
+                "type": "FunctionParameter",
+                "name": "",
+                "pattern": {
+                  "type": "ArrayPattern",
+                  "elements": [
+                    {
+                      "type": "ArrayPatternElement",
+                      "value": {
+                        "type": "IdentifierPattern",
+                        "name": "dx",
                         "line": {
                           "start": 11,
                           "end": 11
@@ -780,20 +768,20 @@
                           "end": 39
                         }
                       },
-                      {
-                        "type": "ArrayPatternElement",
-                        "value": {
-                          "type": "IdentifierPattern",
-                          "name": "dy",
-                          "line": {
-                            "start": 11,
-                            "end": 11
-                          },
-                          "column": {
-                            "start": 41,
-                            "end": 43
-                          }
-                        },
+                      "line": {
+                        "start": 11,
+                        "end": 11
+                      },
+                      "column": {
+                        "start": 37,
+                        "end": 39
+                      }
+                    },
+                    {
+                      "type": "ArrayPatternElement",
+                      "value": {
+                        "type": "IdentifierPattern",
+                        "name": "dy",
                         "line": {
                           "start": 11,
                           "end": 11
@@ -802,39 +790,39 @@
                           "start": 41,
                           "end": 43
                         }
-                      }
-                    ],
-                    "line": {
-                      "start": 11,
-                      "end": 11
-                    },
-                    "column": {
-                      "start": 36,
-                      "end": 44
-                    }
-                  },
-                  "typeAnnotation": {
-                    "type": "ArrayTypeNode",
-                    "element": {
-                      "type": "TypeReference",
-                      "base": "number",
-                      "typeArguments": [],
+                      },
                       "line": {
                         "start": 11,
                         "end": 11
                       },
                       "column": {
-                        "start": 46,
-                        "end": 52
+                        "start": 41,
+                        "end": 43
                       }
-                    },
+                    }
+                  ],
+                  "line": {
+                    "start": 11,
+                    "end": 11
+                  },
+                  "column": {
+                    "start": 36,
+                    "end": 44
+                  }
+                },
+                "typeAnnotation": {
+                  "type": "ArrayTypeNode",
+                  "element": {
+                    "type": "TypeReference",
+                    "base": "number",
+                    "typeArguments": [],
                     "line": {
                       "start": 11,
                       "end": 11
                     },
                     "column": {
                       "start": 46,
-                      "end": 54
+                      "end": 52
                     }
                   },
                   "line": {
@@ -842,66 +830,54 @@
                     "end": 11
                   },
                   "column": {
-                    "start": 36,
+                    "start": 46,
                     "end": 54
                   }
+                },
+                "line": {
+                  "start": 11,
+                  "end": 11
+                },
+                "column": {
+                  "start": 36,
+                  "end": 54
                 }
-              ],
-              "hasVarargs": false,
-              "body": {
-                "type": "Block",
-                "statements": [
-                  {
-                    "type": "ReturnStatement",
-                    "argument": {
+              }
+            ],
+            "hasVarargs": false,
+            "body": {
+              "type": "Block",
+              "statements": [
+                {
+                  "type": "ReturnStatement",
+                  "argument": {
+                    "type": "BinaryExpression",
+                    "operator": "+",
+                    "left": {
                       "type": "BinaryExpression",
                       "operator": "+",
                       "left": {
-                        "type": "BinaryExpression",
-                        "operator": "+",
-                        "left": {
-                          "type": "Identifier",
-                          "name": "n",
-                          "line": {
-                            "start": 12,
-                            "end": 12
-                          },
-                          "column": {
-                            "start": 12,
-                            "end": 13
-                          }
-                        },
-                        "right": {
-                          "type": "Identifier",
-                          "name": "dx",
-                          "line": {
-                            "start": 12,
-                            "end": 12
-                          },
-                          "column": {
-                            "start": 16,
-                            "end": 18
-                          }
-                        },
+                        "type": "Identifier",
+                        "name": "n",
                         "line": {
                           "start": 12,
                           "end": 12
                         },
                         "column": {
                           "start": 12,
-                          "end": 18
+                          "end": 13
                         }
                       },
                       "right": {
                         "type": "Identifier",
-                        "name": "dy",
+                        "name": "dx",
                         "line": {
                           "start": 12,
                           "end": 12
                         },
                         "column": {
-                          "start": 21,
-                          "end": 23
+                          "start": 16,
+                          "end": 18
                         }
                       },
                       "line": {
@@ -910,6 +886,18 @@
                       },
                       "column": {
                         "start": 12,
+                        "end": 18
+                      }
+                    },
+                    "right": {
+                      "type": "Identifier",
+                      "name": "dy",
+                      "line": {
+                        "start": 12,
+                        "end": 12
+                      },
+                      "column": {
+                        "start": 21,
                         "end": 23
                       }
                     },
@@ -918,27 +906,27 @@
                       "end": 12
                     },
                     "column": {
-                      "start": 5,
+                      "start": 12,
                       "end": 23
                     }
+                  },
+                  "line": {
+                    "start": 12,
+                    "end": 12
+                  },
+                  "column": {
+                    "start": 5,
+                    "end": 23
                   }
-                ],
-                "line": {
-                  "start": 12,
-                  "end": 12
-                },
-                "column": {
-                  "start": 5,
-                  "end": 23
                 }
-              },
+              ],
               "line": {
-                "start": 11,
-                "end": 13
+                "start": 12,
+                "end": 12
               },
               "column": {
-                "start": 24,
-                "end": 2
+                "start": 5,
+                "end": 23
               }
             },
             "line": {
@@ -946,11 +934,19 @@
               "end": 13
             },
             "column": {
-              "start": 16,
+              "start": 24,
               "end": 2
             }
+          },
+          "line": {
+            "start": 11,
+            "end": 13
+          },
+          "column": {
+            "start": 16,
+            "end": 2
           }
-        ],
+        },
         "line": {
           "start": 11,
           "end": 13
@@ -963,168 +959,156 @@
       {
         "type": "VariableDeclaration",
         "kind": "const",
-        "names": [
-          {
-            "type": "IdentifierPattern",
-            "name": "greet",
-            "line": {
-              "start": 15,
-              "end": 15
-            },
-            "column": {
-              "start": 7,
-              "end": 12
-            }
+        "name": {
+          "type": "IdentifierPattern",
+          "name": "greet",
+          "line": {
+            "start": 15,
+            "end": 15
+          },
+          "column": {
+            "start": 7,
+            "end": 12
           }
-        ],
-        "init": [
-          {
-            "type": "FunctionExpression",
-            "func": {
-              "type": "FunctionBody",
-              "generics": [],
-              "params": [
-                {
-                  "type": "FunctionParameter",
-                  "name": "who",
-                  "typeAnnotation": {
-                    "type": "TypeReference",
-                    "base": "string",
-                    "typeArguments": [],
-                    "line": {
-                      "start": 15,
-                      "end": 15
-                    },
-                    "column": {
-                      "start": 29,
-                      "end": 35
-                    }
-                  },
+        },
+        "init": {
+          "type": "FunctionExpression",
+          "func": {
+            "type": "FunctionBody",
+            "generics": [],
+            "params": [
+              {
+                "type": "FunctionParameter",
+                "name": "who",
+                "typeAnnotation": {
+                  "type": "TypeReference",
+                  "base": "string",
+                  "typeArguments": [],
                   "line": {
                     "start": 15,
                     "end": 15
                   },
                   "column": {
-                    "start": 24,
+                    "start": 29,
                     "end": 35
                   }
                 },
-                {
-                  "type": "FunctionParameter",
-                  "name": "punct",
-                  "default": {
-                    "type": "StringLiteral",
-                    "value": "!",
-                    "raw": "\"!\"",
-                    "line": {
-                      "start": 15,
-                      "end": 15
-                    },
-                    "column": {
-                      "start": 45,
-                      "end": 48
-                    }
-                  },
+                "line": {
+                  "start": 15,
+                  "end": 15
+                },
+                "column": {
+                  "start": 24,
+                  "end": 35
+                }
+              },
+              {
+                "type": "FunctionParameter",
+                "name": "punct",
+                "default": {
+                  "type": "StringLiteral",
+                  "value": "!",
+                  "raw": "\"!\"",
                   "line": {
                     "start": 15,
                     "end": 15
                   },
                   "column": {
-                    "start": 37,
+                    "start": 45,
                     "end": 48
                   }
+                },
+                "line": {
+                  "start": 15,
+                  "end": 15
+                },
+                "column": {
+                  "start": 37,
+                  "end": 48
                 }
-              ],
-              "hasVarargs": false,
-              "body": {
-                "type": "Block",
-                "statements": [
-                  {
-                    "type": "ReturnStatement",
-                    "argument": {
-                      "type": "InterpolatedStringExpression",
-                      "parts": [
-                        {
-                          "kind": "string",
-                          "value": "hello, ",
-                          "raw": "hello, "
-                        },
-                        {
-                          "kind": "expression",
-                          "expression": {
-                            "type": "Identifier",
-                            "name": "who",
-                            "line": {
-                              "start": 16,
-                              "end": 16
-                            },
-                            "column": {
-                              "start": 22,
-                              "end": 25
-                            }
-                          }
-                        },
-                        {
-                          "kind": "string",
-                          "value": "",
-                          "raw": ""
-                        },
-                        {
-                          "kind": "expression",
-                          "expression": {
-                            "type": "Identifier",
-                            "name": "punct",
-                            "line": {
-                              "start": 16,
-                              "end": 16
-                            },
-                            "column": {
-                              "start": 28,
-                              "end": 33
-                            }
-                          }
-                        },
-                        {
-                          "kind": "string",
-                          "value": "",
-                          "raw": ""
-                        }
-                      ],
-                      "line": {
-                        "start": 16,
-                        "end": 16
+              }
+            ],
+            "hasVarargs": false,
+            "body": {
+              "type": "Block",
+              "statements": [
+                {
+                  "type": "ReturnStatement",
+                  "argument": {
+                    "type": "InterpolatedStringExpression",
+                    "parts": [
+                      {
+                        "kind": "string",
+                        "value": "hello, ",
+                        "raw": "hello, "
                       },
-                      "column": {
-                        "start": 12,
-                        "end": 35
+                      {
+                        "kind": "expression",
+                        "expression": {
+                          "type": "Identifier",
+                          "name": "who",
+                          "line": {
+                            "start": 16,
+                            "end": 16
+                          },
+                          "column": {
+                            "start": 22,
+                            "end": 25
+                          }
+                        }
+                      },
+                      {
+                        "kind": "string",
+                        "value": "",
+                        "raw": ""
+                      },
+                      {
+                        "kind": "expression",
+                        "expression": {
+                          "type": "Identifier",
+                          "name": "punct",
+                          "line": {
+                            "start": 16,
+                            "end": 16
+                          },
+                          "column": {
+                            "start": 28,
+                            "end": 33
+                          }
+                        }
+                      },
+                      {
+                        "kind": "string",
+                        "value": "",
+                        "raw": ""
                       }
-                    },
+                    ],
                     "line": {
                       "start": 16,
                       "end": 16
                     },
                     "column": {
-                      "start": 5,
+                      "start": 12,
                       "end": 35
                     }
+                  },
+                  "line": {
+                    "start": 16,
+                    "end": 16
+                  },
+                  "column": {
+                    "start": 5,
+                    "end": 35
                   }
-                ],
-                "line": {
-                  "start": 16,
-                  "end": 16
-                },
-                "column": {
-                  "start": 5,
-                  "end": 35
                 }
-              },
+              ],
               "line": {
-                "start": 15,
-                "end": 17
+                "start": 16,
+                "end": 16
               },
               "column": {
-                "start": 23,
-                "end": 2
+                "start": 5,
+                "end": 35
               }
             },
             "line": {
@@ -1132,11 +1116,19 @@
               "end": 17
             },
             "column": {
-              "start": 15,
+              "start": 23,
               "end": 2
             }
+          },
+          "line": {
+            "start": 15,
+            "end": 17
+          },
+          "column": {
+            "start": 15,
+            "end": 2
           }
-        ],
+        },
         "line": {
           "start": 15,
           "end": 17
@@ -1149,123 +1141,111 @@
       {
         "type": "VariableDeclaration",
         "kind": "const",
-        "names": [
-          {
-            "type": "IdentifierPattern",
-            "name": "braces",
-            "line": {
-              "start": 22,
-              "end": 22
-            },
-            "column": {
-              "start": 7,
-              "end": 13
-            }
+        "name": {
+          "type": "IdentifierPattern",
+          "name": "braces",
+          "line": {
+            "start": 22,
+            "end": 22
+          },
+          "column": {
+            "start": 7,
+            "end": 13
           }
-        ],
-        "init": [
-          {
-            "type": "FunctionExpression",
-            "func": {
-              "type": "FunctionBody",
-              "generics": [],
-              "params": [
-                {
-                  "type": "FunctionParameter",
-                  "name": "x",
-                  "typeAnnotation": {
-                    "type": "TypeReference",
-                    "base": "number",
-                    "typeArguments": [],
-                    "line": {
-                      "start": 22,
-                      "end": 22
-                    },
-                    "column": {
-                      "start": 28,
-                      "end": 34
-                    }
-                  },
+        },
+        "init": {
+          "type": "FunctionExpression",
+          "func": {
+            "type": "FunctionBody",
+            "generics": [],
+            "params": [
+              {
+                "type": "FunctionParameter",
+                "name": "x",
+                "typeAnnotation": {
+                  "type": "TypeReference",
+                  "base": "number",
+                  "typeArguments": [],
                   "line": {
                     "start": 22,
                     "end": 22
                   },
                   "column": {
-                    "start": 25,
+                    "start": 28,
                     "end": 34
                   }
+                },
+                "line": {
+                  "start": 22,
+                  "end": 22
+                },
+                "column": {
+                  "start": 25,
+                  "end": 34
                 }
-              ],
-              "hasVarargs": false,
-              "body": {
-                "type": "Block",
-                "statements": [
-                  {
-                    "type": "ReturnStatement",
-                    "argument": {
-                      "type": "InterpolatedStringExpression",
-                      "parts": [
-                        {
-                          "kind": "string",
-                          "value": "set {a, b} costs $5 -> ",
-                          "raw": "set {a, b} costs $5 -> "
-                        },
-                        {
-                          "kind": "expression",
-                          "expression": {
-                            "type": "Identifier",
-                            "name": "x",
-                            "line": {
-                              "start": 23,
-                              "end": 23
-                            },
-                            "column": {
-                              "start": 38,
-                              "end": 39
-                            }
-                          }
-                        },
-                        {
-                          "kind": "string",
-                          "value": ", not ${x}",
-                          "raw": ", not \\${x}"
-                        }
-                      ],
-                      "line": {
-                        "start": 23,
-                        "end": 23
+              }
+            ],
+            "hasVarargs": false,
+            "body": {
+              "type": "Block",
+              "statements": [
+                {
+                  "type": "ReturnStatement",
+                  "argument": {
+                    "type": "InterpolatedStringExpression",
+                    "parts": [
+                      {
+                        "kind": "string",
+                        "value": "set {a, b} costs $5 -> ",
+                        "raw": "set {a, b} costs $5 -> "
                       },
-                      "column": {
-                        "start": 12,
-                        "end": 52
+                      {
+                        "kind": "expression",
+                        "expression": {
+                          "type": "Identifier",
+                          "name": "x",
+                          "line": {
+                            "start": 23,
+                            "end": 23
+                          },
+                          "column": {
+                            "start": 38,
+                            "end": 39
+                          }
+                        }
+                      },
+                      {
+                        "kind": "string",
+                        "value": ", not ${x}",
+                        "raw": ", not \\${x}"
                       }
-                    },
+                    ],
                     "line": {
                       "start": 23,
                       "end": 23
                     },
                     "column": {
-                      "start": 5,
+                      "start": 12,
                       "end": 52
                     }
+                  },
+                  "line": {
+                    "start": 23,
+                    "end": 23
+                  },
+                  "column": {
+                    "start": 5,
+                    "end": 52
                   }
-                ],
-                "line": {
-                  "start": 23,
-                  "end": 23
-                },
-                "column": {
-                  "start": 5,
-                  "end": 52
                 }
-              },
+              ],
               "line": {
-                "start": 22,
-                "end": 24
+                "start": 23,
+                "end": 23
               },
               "column": {
-                "start": 24,
-                "end": 2
+                "start": 5,
+                "end": 52
               }
             },
             "line": {
@@ -1273,11 +1253,19 @@
               "end": 24
             },
             "column": {
-              "start": 16,
+              "start": 24,
               "end": 2
             }
+          },
+          "line": {
+            "start": 22,
+            "end": 24
+          },
+          "column": {
+            "start": 16,
+            "end": 2
           }
-        ],
+        },
         "line": {
           "start": 22,
           "end": 24
@@ -1290,34 +1278,30 @@
       {
         "type": "VariableDeclaration",
         "kind": "const",
-        "names": [
-          {
-            "type": "IdentifierPattern",
-            "name": "T",
-            "line": {
-              "start": 26,
-              "end": 26
-            },
-            "column": {
-              "start": 7,
-              "end": 8
-            }
+        "name": {
+          "type": "IdentifierPattern",
+          "name": "T",
+          "line": {
+            "start": 26,
+            "end": 26
+          },
+          "column": {
+            "start": 7,
+            "end": 8
           }
-        ],
-        "init": [
-          {
-            "type": "TableExpression",
-            "fields": [],
-            "line": {
-              "start": 26,
-              "end": 26
-            },
-            "column": {
-              "start": 11,
-              "end": 13
-            }
+        },
+        "init": {
+          "type": "TableExpression",
+          "fields": [],
+          "line": {
+            "start": 26,
+            "end": 26
+          },
+          "column": {
+            "start": 11,
+            "end": 13
           }
-        ],
+        },
         "line": {
           "start": 26,
           "end": 26
@@ -1513,45 +1497,21 @@
             "statements": [
               {
                 "type": "AssignmentStatement",
-                "targets": [
-                  {
-                    "type": "MemberExpression",
-                    "object": {
-                      "type": "Identifier",
-                      "name": "self",
-                      "line": {
-                        "start": 28,
-                        "end": 28
-                      },
-                      "column": {
-                        "start": 5,
-                        "end": 9
-                      }
-                    },
-                    "property": {
-                      "type": "Identifier",
-                      "name": "verbose",
-                      "line": {
-                        "start": 28,
-                        "end": 28
-                      },
-                      "column": {
-                        "start": 10,
-                        "end": 17
-                      }
-                    },
+                "target": {
+                  "type": "MemberExpression",
+                  "object": {
+                    "type": "Identifier",
+                    "name": "self",
                     "line": {
                       "start": 28,
                       "end": 28
                     },
                     "column": {
                       "start": 5,
-                      "end": 17
+                      "end": 9
                     }
-                  }
-                ],
-                "values": [
-                  {
+                  },
+                  "property": {
                     "type": "Identifier",
                     "name": "verbose",
                     "line": {
@@ -1559,11 +1519,31 @@
                       "end": 28
                     },
                     "column": {
-                      "start": 20,
-                      "end": 27
+                      "start": 10,
+                      "end": 17
                     }
+                  },
+                  "line": {
+                    "start": 28,
+                    "end": 28
+                  },
+                  "column": {
+                    "start": 5,
+                    "end": 17
                   }
-                ],
+                },
+                "value": {
+                  "type": "Identifier",
+                  "name": "verbose",
+                  "line": {
+                    "start": 28,
+                    "end": 28
+                  },
+                  "column": {
+                    "start": 20,
+                    "end": 27
+                  }
+                },
                 "line": {
                   "start": 28,
                   "end": 28
@@ -1575,45 +1555,21 @@
               },
               {
                 "type": "AssignmentStatement",
-                "targets": [
-                  {
-                    "type": "MemberExpression",
-                    "object": {
-                      "type": "Identifier",
-                      "name": "self",
-                      "line": {
-                        "start": 29,
-                        "end": 29
-                      },
-                      "column": {
-                        "start": 5,
-                        "end": 9
-                      }
-                    },
-                    "property": {
-                      "type": "Identifier",
-                      "name": "retries",
-                      "line": {
-                        "start": 29,
-                        "end": 29
-                      },
-                      "column": {
-                        "start": 10,
-                        "end": 17
-                      }
-                    },
+                "target": {
+                  "type": "MemberExpression",
+                  "object": {
+                    "type": "Identifier",
+                    "name": "self",
                     "line": {
                       "start": 29,
                       "end": 29
                     },
                     "column": {
                       "start": 5,
-                      "end": 17
+                      "end": 9
                     }
-                  }
-                ],
-                "values": [
-                  {
+                  },
+                  "property": {
                     "type": "Identifier",
                     "name": "retries",
                     "line": {
@@ -1621,11 +1577,31 @@
                       "end": 29
                     },
                     "column": {
-                      "start": 20,
-                      "end": 27
+                      "start": 10,
+                      "end": 17
                     }
+                  },
+                  "line": {
+                    "start": 29,
+                    "end": 29
+                  },
+                  "column": {
+                    "start": 5,
+                    "end": 17
                   }
-                ],
+                },
+                "value": {
+                  "type": "Identifier",
+                  "name": "retries",
+                  "line": {
+                    "start": 29,
+                    "end": 29
+                  },
+                  "column": {
+                    "start": 20,
+                    "end": 27
+                  }
+                },
                 "line": {
                   "start": 29,
                   "end": 29
@@ -2453,35 +2429,31 @@
               {
                 "type": "VariableDeclaration",
                 "kind": "let",
-                "names": [
-                  {
-                    "type": "IdentifierPattern",
-                    "name": "sum",
-                    "line": {
-                      "start": 49,
-                      "end": 49
-                    },
-                    "column": {
-                      "start": 9,
-                      "end": 12
-                    }
+                "name": {
+                  "type": "IdentifierPattern",
+                  "name": "sum",
+                  "line": {
+                    "start": 49,
+                    "end": 49
+                  },
+                  "column": {
+                    "start": 9,
+                    "end": 12
                   }
-                ],
-                "init": [
-                  {
-                    "type": "NumberLiteral",
-                    "value": 0,
-                    "raw": "0",
-                    "line": {
-                      "start": 49,
-                      "end": 49
-                    },
-                    "column": {
-                      "start": 15,
-                      "end": 16
-                    }
+                },
+                "init": {
+                  "type": "NumberLiteral",
+                  "value": 0,
+                  "raw": "0",
+                  "line": {
+                    "start": 49,
+                    "end": 49
+                  },
+                  "column": {
+                    "start": 15,
+                    "end": 16
                   }
-                ],
+                },
                 "line": {
                   "start": 49,
                   "end": 49
@@ -2829,24 +2801,14 @@
       {
         "type": "VariableDeclaration",
         "kind": "const",
-        "names": [
-          {
-            "type": "ArrayPattern",
-            "elements": [
-              {
-                "type": "ArrayPatternElement",
-                "value": {
-                  "type": "IdentifierPattern",
-                  "name": "two",
-                  "line": {
-                    "start": 61,
-                    "end": 61
-                  },
-                  "column": {
-                    "start": 8,
-                    "end": 11
-                  }
-                },
+        "name": {
+          "type": "ArrayPattern",
+          "elements": [
+            {
+              "type": "ArrayPatternElement",
+              "value": {
+                "type": "IdentifierPattern",
+                "name": "two",
                 "line": {
                   "start": 61,
                   "end": 61
@@ -2855,71 +2817,77 @@
                   "start": 8,
                   "end": 11
                 }
-              }
-            ],
-            "line": {
-              "start": 61,
-              "end": 61
-            },
-            "column": {
-              "start": 7,
-              "end": 12
-            }
-          }
-        ],
-        "init": [
-          {
-            "type": "CallExpression",
-            "callee": {
-              "type": "Identifier",
-              "name": "firstTwo",
+              },
               "line": {
                 "start": 61,
                 "end": 61
               },
               "column": {
-                "start": 15,
-                "end": 23
+                "start": 8,
+                "end": 11
               }
-            },
-            "arguments": [
-              {
-                "type": "NumberLiteral",
-                "value": 1,
-                "raw": "1",
-                "line": {
-                  "start": 61,
-                  "end": 61
-                },
-                "column": {
-                  "start": 24,
-                  "end": 25
-                }
-              },
-              {
-                "type": "NumberLiteral",
-                "value": 2,
-                "raw": "2",
-                "line": {
-                  "start": 61,
-                  "end": 61
-                },
-                "column": {
-                  "start": 27,
-                  "end": 28
-                }
-              }
-            ],
+            }
+          ],
+          "line": {
+            "start": 61,
+            "end": 61
+          },
+          "column": {
+            "start": 7,
+            "end": 12
+          }
+        },
+        "init": {
+          "type": "CallExpression",
+          "callee": {
+            "type": "Identifier",
+            "name": "firstTwo",
             "line": {
               "start": 61,
               "end": 61
             },
             "column": {
               "start": 15,
-              "end": 29
+              "end": 23
             }
+          },
+          "arguments": [
+            {
+              "type": "NumberLiteral",
+              "value": 1,
+              "raw": "1",
+              "line": {
+                "start": 61,
+                "end": 61
+              },
+              "column": {
+                "start": 24,
+                "end": 25
+              }
+            },
+            {
+              "type": "NumberLiteral",
+              "value": 2,
+              "raw": "2",
+              "line": {
+                "start": 61,
+                "end": 61
+              },
+              "column": {
+                "start": 27,
+                "end": 28
+              }
+            }
+          ],
+          "line": {
+            "start": 61,
+            "end": 61
+          },
+          "column": {
+            "start": 15,
+            "end": 29
           }
-        ],
+        },
         "line": {
           "start": 61,
           "end": 61
@@ -2932,112 +2900,108 @@
       {
         "type": "VariableDeclaration",
         "kind": "const",
-        "names": [
-          {
-            "type": "IdentifierPattern",
-            "name": "joined",
+        "name": {
+          "type": "IdentifierPattern",
+          "name": "joined",
+          "line": {
+            "start": 62,
+            "end": 62
+          },
+          "column": {
+            "start": 7,
+            "end": 13
+          },
+          "typeAnnotation": {
+            "type": "TypeReference",
+            "base": "string",
+            "typeArguments": [],
             "line": {
               "start": 62,
               "end": 62
             },
             "column": {
-              "start": 7,
-              "end": 13
-            },
-            "typeAnnotation": {
-              "type": "TypeReference",
-              "base": "string",
-              "typeArguments": [],
-              "line": {
-                "start": 62,
-                "end": 62
-              },
-              "column": {
-                "start": 15,
-                "end": 21
-              }
+              "start": 15,
+              "end": 21
             }
           }
-        ],
-        "init": [
-          {
-            "type": "CallExpression",
-            "callee": {
-              "type": "Identifier",
-              "name": "join",
-              "line": {
-                "start": 62,
-                "end": 62
-              },
-              "column": {
-                "start": 24,
-                "end": 28
-              }
-            },
-            "arguments": [
-              {
-                "type": "StringLiteral",
-                "value": "-",
-                "raw": "\"-\"",
-                "line": {
-                  "start": 62,
-                  "end": 62
-                },
-                "column": {
-                  "start": 29,
-                  "end": 32
-                }
-              },
-              {
-                "type": "StringLiteral",
-                "value": "a",
-                "raw": "\"a\"",
-                "line": {
-                  "start": 62,
-                  "end": 62
-                },
-                "column": {
-                  "start": 34,
-                  "end": 37
-                }
-              },
-              {
-                "type": "StringLiteral",
-                "value": "b",
-                "raw": "\"b\"",
-                "line": {
-                  "start": 62,
-                  "end": 62
-                },
-                "column": {
-                  "start": 39,
-                  "end": 42
-                }
-              },
-              {
-                "type": "StringLiteral",
-                "value": "c",
-                "raw": "\"c\"",
-                "line": {
-                  "start": 62,
-                  "end": 62
-                },
-                "column": {
-                  "start": 44,
-                  "end": 47
-                }
-              }
-            ],
+        },
+        "init": {
+          "type": "CallExpression",
+          "callee": {
+            "type": "Identifier",
+            "name": "join",
             "line": {
               "start": 62,
               "end": 62
             },
             "column": {
               "start": 24,
-              "end": 48
+              "end": 28
             }
+          },
+          "arguments": [
+            {
+              "type": "StringLiteral",
+              "value": "-",
+              "raw": "\"-\"",
+              "line": {
+                "start": 62,
+                "end": 62
+              },
+              "column": {
+                "start": 29,
+                "end": 32
+              }
+            },
+            {
+              "type": "StringLiteral",
+              "value": "a",
+              "raw": "\"a\"",
+              "line": {
+                "start": 62,
+                "end": 62
+              },
+              "column": {
+                "start": 34,
+                "end": 37
+              }
+            },
+            {
+              "type": "StringLiteral",
+              "value": "b",
+              "raw": "\"b\"",
+              "line": {
+                "start": 62,
+                "end": 62
+              },
+              "column": {
+                "start": 39,
+                "end": 42
+              }
+            },
+            {
+              "type": "StringLiteral",
+              "value": "c",
+              "raw": "\"c\"",
+              "line": {
+                "start": 62,
+                "end": 62
+              },
+              "column": {
+                "start": 44,
+                "end": 47
+              }
+            }
+          ],
+          "line": {
+            "start": 62,
+            "end": 62
+          },
+          "column": {
+            "start": 24,
+            "end": 48
           }
-        ],
+        },
         "line": {
           "start": 62,
           "end": 62
@@ -3050,99 +3014,95 @@
       {
         "type": "VariableDeclaration",
         "kind": "const",
-        "names": [
-          {
-            "type": "IdentifierPattern",
-            "name": "summed",
+        "name": {
+          "type": "IdentifierPattern",
+          "name": "summed",
+          "line": {
+            "start": 63,
+            "end": 63
+          },
+          "column": {
+            "start": 7,
+            "end": 13
+          },
+          "typeAnnotation": {
+            "type": "TypeReference",
+            "base": "number",
+            "typeArguments": [],
             "line": {
               "start": 63,
               "end": 63
             },
             "column": {
-              "start": 7,
-              "end": 13
-            },
-            "typeAnnotation": {
-              "type": "TypeReference",
-              "base": "number",
-              "typeArguments": [],
-              "line": {
-                "start": 63,
-                "end": 63
-              },
-              "column": {
-                "start": 15,
-                "end": 21
-              }
+              "start": 15,
+              "end": 21
             }
           }
-        ],
-        "init": [
-          {
-            "type": "CallExpression",
-            "callee": {
-              "type": "Identifier",
-              "name": "total",
-              "line": {
-                "start": 63,
-                "end": 63
-              },
-              "column": {
-                "start": 24,
-                "end": 29
-              }
-            },
-            "arguments": [
-              {
-                "type": "NumberLiteral",
-                "value": 1,
-                "raw": "1",
-                "line": {
-                  "start": 63,
-                  "end": 63
-                },
-                "column": {
-                  "start": 30,
-                  "end": 31
-                }
-              },
-              {
-                "type": "NumberLiteral",
-                "value": 2,
-                "raw": "2",
-                "line": {
-                  "start": 63,
-                  "end": 63
-                },
-                "column": {
-                  "start": 33,
-                  "end": 34
-                }
-              },
-              {
-                "type": "NumberLiteral",
-                "value": 3,
-                "raw": "3",
-                "line": {
-                  "start": 63,
-                  "end": 63
-                },
-                "column": {
-                  "start": 36,
-                  "end": 37
-                }
-              }
-            ],
+        },
+        "init": {
+          "type": "CallExpression",
+          "callee": {
+            "type": "Identifier",
+            "name": "total",
             "line": {
               "start": 63,
               "end": 63
             },
             "column": {
               "start": 24,
-              "end": 38
+              "end": 29
             }
+          },
+          "arguments": [
+            {
+              "type": "NumberLiteral",
+              "value": 1,
+              "raw": "1",
+              "line": {
+                "start": 63,
+                "end": 63
+              },
+              "column": {
+                "start": 30,
+                "end": 31
+              }
+            },
+            {
+              "type": "NumberLiteral",
+              "value": 2,
+              "raw": "2",
+              "line": {
+                "start": 63,
+                "end": 63
+              },
+              "column": {
+                "start": 33,
+                "end": 34
+              }
+            },
+            {
+              "type": "NumberLiteral",
+              "value": 3,
+              "raw": "3",
+              "line": {
+                "start": 63,
+                "end": 63
+              },
+              "column": {
+                "start": 36,
+                "end": 37
+              }
+            }
+          ],
+          "line": {
+            "start": 63,
+            "end": 63
+          },
+          "column": {
+            "start": 24,
+            "end": 38
           }
-        ],
+        },
         "line": {
           "start": 63,
           "end": 63
@@ -3155,99 +3115,44 @@
       {
         "type": "VariableDeclaration",
         "kind": "const",
-        "names": [
-          {
-            "type": "IdentifierPattern",
-            "name": "picked",
-            "line": {
-              "start": 64,
-              "end": 64
-            },
-            "column": {
-              "start": 7,
-              "end": 13
-            },
-            "typeAnnotation": {
-              "type": "UnionTypeNode",
-              "types": [
-                {
-                  "type": "TypeReference",
-                  "base": "number",
-                  "typeArguments": [],
-                  "line": {
-                    "start": 64,
-                    "end": 64
-                  },
-                  "column": {
-                    "start": 15,
-                    "end": 21
-                  }
-                },
-                {
-                  "type": "TypeReference",
-                  "base": "nil",
-                  "typeArguments": [],
-                  "line": {
-                    "start": 64,
-                    "end": 64
-                  },
-                  "column": {
-                    "start": 24,
-                    "end": 27
-                  }
-                }
-              ],
-              "line": {
-                "start": 64,
-                "end": 64
-              },
-              "column": {
-                "start": 15,
-                "end": 27
-              }
-            }
-          }
-        ],
-        "init": [
-          {
-            "type": "CallExpression",
-            "callee": {
-              "type": "Identifier",
-              "name": "firstOf",
-              "line": {
-                "start": 64,
-                "end": 64
-              },
-              "column": {
-                "start": 30,
-                "end": 37
-              }
-            },
-            "arguments": [
+        "name": {
+          "type": "IdentifierPattern",
+          "name": "picked",
+          "line": {
+            "start": 64,
+            "end": 64
+          },
+          "column": {
+            "start": 7,
+            "end": 13
+          },
+          "typeAnnotation": {
+            "type": "UnionTypeNode",
+            "types": [
               {
-                "type": "NumberLiteral",
-                "value": 1,
-                "raw": "1",
+                "type": "TypeReference",
+                "base": "number",
+                "typeArguments": [],
                 "line": {
                   "start": 64,
                   "end": 64
                 },
                 "column": {
-                  "start": 38,
-                  "end": 39
+                  "start": 15,
+                  "end": 21
                 }
               },
               {
-                "type": "NumberLiteral",
-                "value": 2,
-                "raw": "2",
+                "type": "TypeReference",
+                "base": "nil",
+                "typeArguments": [],
                 "line": {
                   "start": 64,
                   "end": 64
                 },
                 "column": {
-                  "start": 41,
-                  "end": 42
+                  "start": 24,
+                  "end": 27
                 }
               }
             ],
@@ -3256,11 +3161,62 @@
               "end": 64
             },
             "column": {
-              "start": 30,
-              "end": 43
+              "start": 15,
+              "end": 27
             }
           }
-        ],
+        },
+        "init": {
+          "type": "CallExpression",
+          "callee": {
+            "type": "Identifier",
+            "name": "firstOf",
+            "line": {
+              "start": 64,
+              "end": 64
+            },
+            "column": {
+              "start": 30,
+              "end": 37
+            }
+          },
+          "arguments": [
+            {
+              "type": "NumberLiteral",
+              "value": 1,
+              "raw": "1",
+              "line": {
+                "start": 64,
+                "end": 64
+              },
+              "column": {
+                "start": 38,
+                "end": 39
+              }
+            },
+            {
+              "type": "NumberLiteral",
+              "value": 2,
+              "raw": "2",
+              "line": {
+                "start": 64,
+                "end": 64
+              },
+              "column": {
+                "start": 41,
+                "end": 42
+              }
+            }
+          ],
+          "line": {
+            "start": 64,
+            "end": 64
+          },
+          "column": {
+            "start": 30,
+            "end": 43
+          }
+        },
         "line": {
           "start": 64,
           "end": 64
@@ -3273,86 +3229,44 @@
       {
         "type": "VariableDeclaration",
         "kind": "const",
-        "names": [
-          {
-            "type": "IdentifierPattern",
-            "name": "written",
-            "line": {
-              "start": 65,
-              "end": 65
-            },
-            "column": {
-              "start": 7,
-              "end": 14
-            },
-            "typeAnnotation": {
-              "type": "UnionTypeNode",
-              "types": [
-                {
-                  "type": "TypeReference",
-                  "base": "string",
-                  "typeArguments": [],
-                  "line": {
-                    "start": 65,
-                    "end": 65
-                  },
-                  "column": {
-                    "start": 16,
-                    "end": 22
-                  }
-                },
-                {
-                  "type": "TypeReference",
-                  "base": "nil",
-                  "typeArguments": [],
-                  "line": {
-                    "start": 65,
-                    "end": 65
-                  },
-                  "column": {
-                    "start": 25,
-                    "end": 28
-                  }
-                }
-              ],
-              "line": {
-                "start": 65,
-                "end": 65
-              },
-              "column": {
-                "start": 16,
-                "end": 28
-              }
-            }
-          }
-        ],
-        "init": [
-          {
-            "type": "CallExpression",
-            "callee": {
-              "type": "Identifier",
-              "name": "firstOf",
-              "line": {
-                "start": 65,
-                "end": 65
-              },
-              "column": {
-                "start": 31,
-                "end": 38
-              }
-            },
-            "arguments": [
+        "name": {
+          "type": "IdentifierPattern",
+          "name": "written",
+          "line": {
+            "start": 65,
+            "end": 65
+          },
+          "column": {
+            "start": 7,
+            "end": 14
+          },
+          "typeAnnotation": {
+            "type": "UnionTypeNode",
+            "types": [
               {
-                "type": "StringLiteral",
-                "value": "a",
-                "raw": "\"a\"",
+                "type": "TypeReference",
+                "base": "string",
+                "typeArguments": [],
                 "line": {
                   "start": 65,
                   "end": 65
                 },
                 "column": {
-                  "start": 39,
-                  "end": 42
+                  "start": 16,
+                  "end": 22
+                }
+              },
+              {
+                "type": "TypeReference",
+                "base": "nil",
+                "typeArguments": [],
+                "line": {
+                  "start": 65,
+                  "end": 65
+                },
+                "column": {
+                  "start": 25,
+                  "end": 28
                 }
               }
             ],
@@ -3361,11 +3275,49 @@
               "end": 65
             },
             "column": {
-              "start": 31,
-              "end": 43
+              "start": 16,
+              "end": 28
             }
           }
-        ],
+        },
+        "init": {
+          "type": "CallExpression",
+          "callee": {
+            "type": "Identifier",
+            "name": "firstOf",
+            "line": {
+              "start": 65,
+              "end": 65
+            },
+            "column": {
+              "start": 31,
+              "end": 38
+            }
+          },
+          "arguments": [
+            {
+              "type": "StringLiteral",
+              "value": "a",
+              "raw": "\"a\"",
+              "line": {
+                "start": 65,
+                "end": 65
+              },
+              "column": {
+                "start": 39,
+                "end": 42
+              }
+            }
+          ],
+          "line": {
+            "start": 65,
+            "end": 65
+          },
+          "column": {
+            "start": 31,
+            "end": 43
+          }
+        },
         "line": {
           "start": 65,
           "end": 65
@@ -3515,98 +3467,94 @@
       {
         "type": "VariableDeclaration",
         "kind": "const",
-        "names": [
-          {
-            "type": "IdentifierPattern",
-            "name": "names",
-            "line": {
-              "start": 71,
-              "end": 71
-            },
-            "column": {
-              "start": 7,
-              "end": 12
-            },
-            "typeAnnotation": {
-              "type": "ArrayTypeNode",
-              "element": {
-                "type": "TypeReference",
-                "base": "string",
-                "typeArguments": [],
-                "line": {
-                  "start": 71,
-                  "end": 71
-                },
-                "column": {
-                  "start": 14,
-                  "end": 20
-                }
-              },
+        "name": {
+          "type": "IdentifierPattern",
+          "name": "names",
+          "line": {
+            "start": 71,
+            "end": 71
+          },
+          "column": {
+            "start": 7,
+            "end": 12
+          },
+          "typeAnnotation": {
+            "type": "ArrayTypeNode",
+            "element": {
+              "type": "TypeReference",
+              "base": "string",
+              "typeArguments": [],
               "line": {
                 "start": 71,
                 "end": 71
               },
               "column": {
                 "start": 14,
-                "end": 22
+                "end": 20
               }
-            }
-          }
-        ],
-        "init": [
-          {
-            "type": "ArrayExpression",
-            "elements": [
-              {
-                "type": "StringLiteral",
-                "value": "a",
-                "raw": "\"a\"",
-                "line": {
-                  "start": 71,
-                  "end": 71
-                },
-                "column": {
-                  "start": 26,
-                  "end": 29
-                }
-              },
-              {
-                "type": "StringLiteral",
-                "value": "b",
-                "raw": "\"b\"",
-                "line": {
-                  "start": 71,
-                  "end": 71
-                },
-                "column": {
-                  "start": 31,
-                  "end": 34
-                }
-              },
-              {
-                "type": "StringLiteral",
-                "value": "c",
-                "raw": "\"c\"",
-                "line": {
-                  "start": 71,
-                  "end": 71
-                },
-                "column": {
-                  "start": 36,
-                  "end": 39
-                }
-              }
-            ],
+            },
             "line": {
               "start": 71,
               "end": 71
             },
             "column": {
-              "start": 25,
-              "end": 40
+              "start": 14,
+              "end": 22
             }
           }
-        ],
+        },
+        "init": {
+          "type": "ArrayExpression",
+          "elements": [
+            {
+              "type": "StringLiteral",
+              "value": "a",
+              "raw": "\"a\"",
+              "line": {
+                "start": 71,
+                "end": 71
+              },
+              "column": {
+                "start": 26,
+                "end": 29
+              }
+            },
+            {
+              "type": "StringLiteral",
+              "value": "b",
+              "raw": "\"b\"",
+              "line": {
+                "start": 71,
+                "end": 71
+              },
+              "column": {
+                "start": 31,
+                "end": 34
+              }
+            },
+            {
+              "type": "StringLiteral",
+              "value": "c",
+              "raw": "\"c\"",
+              "line": {
+                "start": 71,
+                "end": 71
+              },
+              "column": {
+                "start": 36,
+                "end": 39
+              }
+            }
+          ],
+          "line": {
+            "start": 71,
+            "end": 71
+          },
+          "column": {
+            "start": 25,
+            "end": 40
+          }
+        },
         "line": {
           "start": 71,
           "end": 71
@@ -3619,96 +3567,92 @@
       {
         "type": "VariableDeclaration",
         "kind": "const",
-        "names": [
-          {
-            "type": "IdentifierPattern",
-            "name": "spread",
+        "name": {
+          "type": "IdentifierPattern",
+          "name": "spread",
+          "line": {
+            "start": 73,
+            "end": 73
+          },
+          "column": {
+            "start": 7,
+            "end": 13
+          },
+          "typeAnnotation": {
+            "type": "TypeReference",
+            "base": "string",
+            "typeArguments": [],
             "line": {
               "start": 73,
               "end": 73
             },
             "column": {
-              "start": 7,
-              "end": 13
-            },
-            "typeAnnotation": {
-              "type": "TypeReference",
-              "base": "string",
-              "typeArguments": [],
-              "line": {
-                "start": 73,
-                "end": 73
-              },
-              "column": {
-                "start": 15,
-                "end": 21
-              }
+              "start": 15,
+              "end": 21
             }
           }
-        ],
-        "init": [
-          {
-            "type": "CallExpression",
-            "callee": {
-              "type": "Identifier",
-              "name": "join",
-              "line": {
-                "start": 73,
-                "end": 73
-              },
-              "column": {
-                "start": 24,
-                "end": 28
-              }
-            },
-            "arguments": [
-              {
-                "type": "StringLiteral",
-                "value": "-",
-                "raw": "\"-\"",
-                "line": {
-                  "start": 73,
-                  "end": 73
-                },
-                "column": {
-                  "start": 29,
-                  "end": 32
-                }
-              },
-              {
-                "type": "SpreadElement",
-                "argument": {
-                  "type": "Identifier",
-                  "name": "names",
-                  "line": {
-                    "start": 73,
-                    "end": 73
-                  },
-                  "column": {
-                    "start": 37,
-                    "end": 42
-                  }
-                },
-                "line": {
-                  "start": 73,
-                  "end": 73
-                },
-                "column": {
-                  "start": 34,
-                  "end": 42
-                }
-              }
-            ],
+        },
+        "init": {
+          "type": "CallExpression",
+          "callee": {
+            "type": "Identifier",
+            "name": "join",
             "line": {
               "start": 73,
               "end": 73
             },
             "column": {
               "start": 24,
-              "end": 43
+              "end": 28
             }
+          },
+          "arguments": [
+            {
+              "type": "StringLiteral",
+              "value": "-",
+              "raw": "\"-\"",
+              "line": {
+                "start": 73,
+                "end": 73
+              },
+              "column": {
+                "start": 29,
+                "end": 32
+              }
+            },
+            {
+              "type": "SpreadElement",
+              "argument": {
+                "type": "Identifier",
+                "name": "names",
+                "line": {
+                  "start": 73,
+                  "end": 73
+                },
+                "column": {
+                  "start": 37,
+                  "end": 42
+                }
+              },
+              "line": {
+                "start": 73,
+                "end": 73
+              },
+              "column": {
+                "start": 34,
+                "end": 42
+              }
+            }
+          ],
+          "line": {
+            "start": 73,
+            "end": 73
+          },
+          "column": {
+            "start": 24,
+            "end": 43
           }
-        ],
+        },
         "line": {
           "start": 73,
           "end": 73
@@ -3721,109 +3665,105 @@
       {
         "type": "VariableDeclaration",
         "kind": "const",
-        "names": [
-          {
-            "type": "IdentifierPattern",
-            "name": "around",
+        "name": {
+          "type": "IdentifierPattern",
+          "name": "around",
+          "line": {
+            "start": 74,
+            "end": 74
+          },
+          "column": {
+            "start": 7,
+            "end": 13
+          },
+          "typeAnnotation": {
+            "type": "TypeReference",
+            "base": "string",
+            "typeArguments": [],
             "line": {
               "start": 74,
               "end": 74
             },
             "column": {
-              "start": 7,
-              "end": 13
-            },
-            "typeAnnotation": {
-              "type": "TypeReference",
-              "base": "string",
-              "typeArguments": [],
-              "line": {
-                "start": 74,
-                "end": 74
-              },
-              "column": {
-                "start": 15,
-                "end": 21
-              }
+              "start": 15,
+              "end": 21
             }
           }
-        ],
-        "init": [
-          {
-            "type": "CallExpression",
-            "callee": {
-              "type": "Identifier",
-              "name": "join",
-              "line": {
-                "start": 74,
-                "end": 74
-              },
-              "column": {
-                "start": 24,
-                "end": 28
-              }
-            },
-            "arguments": [
-              {
-                "type": "StringLiteral",
-                "value": "-",
-                "raw": "\"-\"",
-                "line": {
-                  "start": 74,
-                  "end": 74
-                },
-                "column": {
-                  "start": 29,
-                  "end": 32
-                }
-              },
-              {
-                "type": "SpreadElement",
-                "argument": {
-                  "type": "Identifier",
-                  "name": "names",
-                  "line": {
-                    "start": 74,
-                    "end": 74
-                  },
-                  "column": {
-                    "start": 37,
-                    "end": 42
-                  }
-                },
-                "line": {
-                  "start": 74,
-                  "end": 74
-                },
-                "column": {
-                  "start": 34,
-                  "end": 42
-                }
-              },
-              {
-                "type": "StringLiteral",
-                "value": "z",
-                "raw": "\"z\"",
-                "line": {
-                  "start": 74,
-                  "end": 74
-                },
-                "column": {
-                  "start": 44,
-                  "end": 47
-                }
-              }
-            ],
+        },
+        "init": {
+          "type": "CallExpression",
+          "callee": {
+            "type": "Identifier",
+            "name": "join",
             "line": {
               "start": 74,
               "end": 74
             },
             "column": {
               "start": 24,
-              "end": 48
+              "end": 28
             }
+          },
+          "arguments": [
+            {
+              "type": "StringLiteral",
+              "value": "-",
+              "raw": "\"-\"",
+              "line": {
+                "start": 74,
+                "end": 74
+              },
+              "column": {
+                "start": 29,
+                "end": 32
+              }
+            },
+            {
+              "type": "SpreadElement",
+              "argument": {
+                "type": "Identifier",
+                "name": "names",
+                "line": {
+                  "start": 74,
+                  "end": 74
+                },
+                "column": {
+                  "start": 37,
+                  "end": 42
+                }
+              },
+              "line": {
+                "start": 74,
+                "end": 74
+              },
+              "column": {
+                "start": 34,
+                "end": 42
+              }
+            },
+            {
+              "type": "StringLiteral",
+              "value": "z",
+              "raw": "\"z\"",
+              "line": {
+                "start": 74,
+                "end": 74
+              },
+              "column": {
+                "start": 44,
+                "end": 47
+              }
+            }
+          ],
+          "line": {
+            "start": 74,
+            "end": 74
+          },
+          "column": {
+            "start": 24,
+            "end": 48
           }
-        ],
+        },
         "line": {
           "start": 74,
           "end": 74
@@ -3836,119 +3776,115 @@
       {
         "type": "VariableDeclaration",
         "kind": "const",
-        "names": [
-          {
-            "type": "IdentifierPattern",
-            "name": "twice",
+        "name": {
+          "type": "IdentifierPattern",
+          "name": "twice",
+          "line": {
+            "start": 75,
+            "end": 75
+          },
+          "column": {
+            "start": 7,
+            "end": 12
+          },
+          "typeAnnotation": {
+            "type": "TypeReference",
+            "base": "string",
+            "typeArguments": [],
             "line": {
               "start": 75,
               "end": 75
             },
             "column": {
-              "start": 7,
-              "end": 12
-            },
-            "typeAnnotation": {
-              "type": "TypeReference",
-              "base": "string",
-              "typeArguments": [],
-              "line": {
-                "start": 75,
-                "end": 75
-              },
-              "column": {
-                "start": 14,
-                "end": 20
-              }
+              "start": 14,
+              "end": 20
             }
           }
-        ],
-        "init": [
-          {
-            "type": "CallExpression",
-            "callee": {
-              "type": "Identifier",
-              "name": "join",
-              "line": {
-                "start": 75,
-                "end": 75
-              },
-              "column": {
-                "start": 23,
-                "end": 27
-              }
-            },
-            "arguments": [
-              {
-                "type": "StringLiteral",
-                "value": "-",
-                "raw": "\"-\"",
-                "line": {
-                  "start": 75,
-                  "end": 75
-                },
-                "column": {
-                  "start": 28,
-                  "end": 31
-                }
-              },
-              {
-                "type": "SpreadElement",
-                "argument": {
-                  "type": "Identifier",
-                  "name": "names",
-                  "line": {
-                    "start": 75,
-                    "end": 75
-                  },
-                  "column": {
-                    "start": 36,
-                    "end": 41
-                  }
-                },
-                "line": {
-                  "start": 75,
-                  "end": 75
-                },
-                "column": {
-                  "start": 33,
-                  "end": 41
-                }
-              },
-              {
-                "type": "SpreadElement",
-                "argument": {
-                  "type": "Identifier",
-                  "name": "names",
-                  "line": {
-                    "start": 75,
-                    "end": 75
-                  },
-                  "column": {
-                    "start": 46,
-                    "end": 51
-                  }
-                },
-                "line": {
-                  "start": 75,
-                  "end": 75
-                },
-                "column": {
-                  "start": 43,
-                  "end": 51
-                }
-              }
-            ],
+        },
+        "init": {
+          "type": "CallExpression",
+          "callee": {
+            "type": "Identifier",
+            "name": "join",
             "line": {
               "start": 75,
               "end": 75
             },
             "column": {
               "start": 23,
-              "end": 52
+              "end": 27
             }
+          },
+          "arguments": [
+            {
+              "type": "StringLiteral",
+              "value": "-",
+              "raw": "\"-\"",
+              "line": {
+                "start": 75,
+                "end": 75
+              },
+              "column": {
+                "start": 28,
+                "end": 31
+              }
+            },
+            {
+              "type": "SpreadElement",
+              "argument": {
+                "type": "Identifier",
+                "name": "names",
+                "line": {
+                  "start": 75,
+                  "end": 75
+                },
+                "column": {
+                  "start": 36,
+                  "end": 41
+                }
+              },
+              "line": {
+                "start": 75,
+                "end": 75
+              },
+              "column": {
+                "start": 33,
+                "end": 41
+              }
+            },
+            {
+              "type": "SpreadElement",
+              "argument": {
+                "type": "Identifier",
+                "name": "names",
+                "line": {
+                  "start": 75,
+                  "end": 75
+                },
+                "column": {
+                  "start": 46,
+                  "end": 51
+                }
+              },
+              "line": {
+                "start": 75,
+                "end": 75
+              },
+              "column": {
+                "start": 43,
+                "end": 51
+              }
+            }
+          ],
+          "line": {
+            "start": 75,
+            "end": 75
+          },
+          "column": {
+            "start": 23,
+            "end": 52
           }
-        ],
+        },
         "line": {
           "start": 75,
           "end": 75
@@ -4368,24 +4304,14 @@
       {
         "type": "VariableDeclaration",
         "kind": "const",
-        "names": [
-          {
-            "type": "ArrayPattern",
-            "elements": [
-              {
-                "type": "ArrayPatternElement",
-                "value": {
-                  "type": "IdentifierPattern",
-                  "name": "firstName",
-                  "line": {
-                    "start": 87,
-                    "end": 87
-                  },
-                  "column": {
-                    "start": 8,
-                    "end": 17
-                  }
-                },
+        "name": {
+          "type": "ArrayPattern",
+          "elements": [
+            {
+              "type": "ArrayPatternElement",
+              "value": {
+                "type": "IdentifierPattern",
+                "name": "firstName",
                 "line": {
                   "start": 87,
                   "end": 87
@@ -4395,20 +4321,20 @@
                   "end": 17
                 }
               },
-              {
-                "type": "ArrayPatternElement",
-                "value": {
-                  "type": "IdentifierPattern",
-                  "name": "secondName",
-                  "line": {
-                    "start": 87,
-                    "end": 87
-                  },
-                  "column": {
-                    "start": 19,
-                    "end": 29
-                  }
-                },
+              "line": {
+                "start": 87,
+                "end": 87
+              },
+              "column": {
+                "start": 8,
+                "end": 17
+              }
+            },
+            {
+              "type": "ArrayPatternElement",
+              "value": {
+                "type": "IdentifierPattern",
+                "name": "secondName",
                 "line": {
                   "start": 87,
                   "end": 87
@@ -4418,20 +4344,20 @@
                   "end": 29
                 }
               },
-              {
-                "type": "ArrayPatternElement",
-                "value": {
-                  "type": "IdentifierPattern",
-                  "name": "thirdName",
-                  "line": {
-                    "start": 87,
-                    "end": 87
-                  },
-                  "column": {
-                    "start": 31,
-                    "end": 40
-                  }
-                },
+              "line": {
+                "start": 87,
+                "end": 87
+              },
+              "column": {
+                "start": 19,
+                "end": 29
+              }
+            },
+            {
+              "type": "ArrayPatternElement",
+              "value": {
+                "type": "IdentifierPattern",
+                "name": "thirdName",
                 "line": {
                   "start": 87,
                   "end": 87
@@ -4440,44 +4366,50 @@
                   "start": 31,
                   "end": 40
                 }
-              }
-            ],
-            "line": {
-              "start": 87,
-              "end": 87
-            },
-            "column": {
-              "start": 7,
-              "end": 41
-            }
-          }
-        ],
-        "init": [
-          {
-            "type": "CallExpression",
-            "callee": {
-              "type": "Identifier",
-              "name": "threeNames",
+              },
               "line": {
                 "start": 87,
                 "end": 87
               },
               "column": {
-                "start": 44,
-                "end": 54
+                "start": 31,
+                "end": 40
               }
-            },
-            "arguments": [],
+            }
+          ],
+          "line": {
+            "start": 87,
+            "end": 87
+          },
+          "column": {
+            "start": 7,
+            "end": 41
+          }
+        },
+        "init": {
+          "type": "CallExpression",
+          "callee": {
+            "type": "Identifier",
+            "name": "threeNames",
             "line": {
               "start": 87,
               "end": 87
             },
             "column": {
               "start": 44,
-              "end": 56
+              "end": 54
             }
+          },
+          "arguments": [],
+          "line": {
+            "start": 87,
+            "end": 87
+          },
+          "column": {
+            "start": 44,
+            "end": 56
           }
-        ],
+        },
         "line": {
           "start": 87,
           "end": 87
@@ -4774,93 +4706,81 @@
       {
         "type": "VariableDeclaration",
         "kind": "const",
-        "names": [
-          {
-            "type": "IdentifierPattern",
-            "name": "double",
-            "line": {
-              "start": 101,
-              "end": 101
-            },
-            "column": {
-              "start": 7,
-              "end": 13
-            }
+        "name": {
+          "type": "IdentifierPattern",
+          "name": "double",
+          "line": {
+            "start": 101,
+            "end": 101
+          },
+          "column": {
+            "start": 7,
+            "end": 13
           }
-        ],
-        "init": [
-          {
-            "type": "FunctionExpression",
-            "func": {
-              "type": "FunctionBody",
-              "generics": [],
-              "params": [
-                {
-                  "type": "FunctionParameter",
-                  "name": "x",
-                  "typeAnnotation": {
-                    "type": "TypeReference",
-                    "base": "number",
-                    "typeArguments": [],
-                    "line": {
-                      "start": 101,
-                      "end": 101
-                    },
-                    "column": {
-                      "start": 20,
-                      "end": 26
-                    }
-                  },
+        },
+        "init": {
+          "type": "FunctionExpression",
+          "func": {
+            "type": "FunctionBody",
+            "generics": [],
+            "params": [
+              {
+                "type": "FunctionParameter",
+                "name": "x",
+                "typeAnnotation": {
+                  "type": "TypeReference",
+                  "base": "number",
+                  "typeArguments": [],
                   "line": {
                     "start": 101,
                     "end": 101
                   },
                   "column": {
-                    "start": 17,
+                    "start": 20,
                     "end": 26
                   }
+                },
+                "line": {
+                  "start": 101,
+                  "end": 101
+                },
+                "column": {
+                  "start": 17,
+                  "end": 26
                 }
-              ],
-              "hasVarargs": false,
-              "body": {
-                "type": "Block",
-                "statements": [
-                  {
-                    "type": "ReturnStatement",
-                    "argument": {
-                      "type": "BinaryExpression",
-                      "operator": "*",
-                      "left": {
-                        "type": "Identifier",
-                        "name": "x",
-                        "line": {
-                          "start": 101,
-                          "end": 101
-                        },
-                        "column": {
-                          "start": 31,
-                          "end": 32
-                        }
-                      },
-                      "right": {
-                        "type": "NumberLiteral",
-                        "value": 2,
-                        "raw": "2",
-                        "line": {
-                          "start": 101,
-                          "end": 101
-                        },
-                        "column": {
-                          "start": 35,
-                          "end": 36
-                        }
-                      },
+              }
+            ],
+            "hasVarargs": false,
+            "body": {
+              "type": "Block",
+              "statements": [
+                {
+                  "type": "ReturnStatement",
+                  "argument": {
+                    "type": "BinaryExpression",
+                    "operator": "*",
+                    "left": {
+                      "type": "Identifier",
+                      "name": "x",
                       "line": {
                         "start": 101,
                         "end": 101
                       },
                       "column": {
                         "start": 31,
+                        "end": 32
+                      }
+                    },
+                    "right": {
+                      "type": "NumberLiteral",
+                      "value": 2,
+                      "raw": "2",
+                      "line": {
+                        "start": 101,
+                        "end": 101
+                      },
+                      "column": {
+                        "start": 35,
                         "end": 36
                       }
                     },
@@ -4872,23 +4792,23 @@
                       "start": 31,
                       "end": 36
                     }
+                  },
+                  "line": {
+                    "start": 101,
+                    "end": 101
+                  },
+                  "column": {
+                    "start": 31,
+                    "end": 36
                   }
-                ],
-                "line": {
-                  "start": 101,
-                  "end": 101
-                },
-                "column": {
-                  "start": 31,
-                  "end": 36
                 }
-              },
+              ],
               "line": {
                 "start": 101,
                 "end": 101
               },
               "column": {
-                "start": 16,
+                "start": 31,
                 "end": 36
               }
             },
@@ -4900,8 +4820,16 @@
               "start": 16,
               "end": 36
             }
+          },
+          "line": {
+            "start": 101,
+            "end": 101
+          },
+          "column": {
+            "start": 16,
+            "end": 36
           }
-        ],
+        },
         "line": {
           "start": 101,
           "end": 101
@@ -4914,104 +4842,92 @@
       {
         "type": "VariableDeclaration",
         "kind": "const",
-        "names": [
-          {
-            "type": "IdentifierPattern",
-            "name": "add",
+        "name": {
+          "type": "IdentifierPattern",
+          "name": "add",
+          "line": {
+            "start": 102,
+            "end": 102
+          },
+          "column": {
+            "start": 7,
+            "end": 10
+          },
+          "typeAnnotation": {
+            "type": "TypeReference",
+            "base": "Reducer",
+            "typeArguments": [],
             "line": {
               "start": 102,
               "end": 102
             },
             "column": {
-              "start": 7,
-              "end": 10
-            },
-            "typeAnnotation": {
-              "type": "TypeReference",
-              "base": "Reducer",
-              "typeArguments": [],
-              "line": {
-                "start": 102,
-                "end": 102
-              },
-              "column": {
-                "start": 12,
-                "end": 19
-              }
+              "start": 12,
+              "end": 19
             }
           }
-        ],
-        "init": [
-          {
-            "type": "FunctionExpression",
-            "func": {
-              "type": "FunctionBody",
-              "generics": [],
-              "params": [
-                {
-                  "type": "FunctionParameter",
-                  "name": "a",
-                  "line": {
-                    "start": 102,
-                    "end": 102
-                  },
-                  "column": {
-                    "start": 23,
-                    "end": 24
-                  }
+        },
+        "init": {
+          "type": "FunctionExpression",
+          "func": {
+            "type": "FunctionBody",
+            "generics": [],
+            "params": [
+              {
+                "type": "FunctionParameter",
+                "name": "a",
+                "line": {
+                  "start": 102,
+                  "end": 102
                 },
-                {
-                  "type": "FunctionParameter",
-                  "name": "b",
-                  "line": {
-                    "start": 102,
-                    "end": 102
-                  },
-                  "column": {
-                    "start": 26,
-                    "end": 27
-                  }
+                "column": {
+                  "start": 23,
+                  "end": 24
                 }
-              ],
-              "hasVarargs": false,
-              "body": {
-                "type": "Block",
-                "statements": [
-                  {
-                    "type": "ReturnStatement",
-                    "argument": {
-                      "type": "BinaryExpression",
-                      "operator": "+",
-                      "left": {
-                        "type": "Identifier",
-                        "name": "a",
-                        "line": {
-                          "start": 102,
-                          "end": 102
-                        },
-                        "column": {
-                          "start": 32,
-                          "end": 33
-                        }
-                      },
-                      "right": {
-                        "type": "Identifier",
-                        "name": "b",
-                        "line": {
-                          "start": 102,
-                          "end": 102
-                        },
-                        "column": {
-                          "start": 36,
-                          "end": 37
-                        }
-                      },
+              },
+              {
+                "type": "FunctionParameter",
+                "name": "b",
+                "line": {
+                  "start": 102,
+                  "end": 102
+                },
+                "column": {
+                  "start": 26,
+                  "end": 27
+                }
+              }
+            ],
+            "hasVarargs": false,
+            "body": {
+              "type": "Block",
+              "statements": [
+                {
+                  "type": "ReturnStatement",
+                  "argument": {
+                    "type": "BinaryExpression",
+                    "operator": "+",
+                    "left": {
+                      "type": "Identifier",
+                      "name": "a",
                       "line": {
                         "start": 102,
                         "end": 102
                       },
                       "column": {
                         "start": 32,
+                        "end": 33
+                      }
+                    },
+                    "right": {
+                      "type": "Identifier",
+                      "name": "b",
+                      "line": {
+                        "start": 102,
+                        "end": 102
+                      },
+                      "column": {
+                        "start": 36,
                         "end": 37
                       }
                     },
@@ -5023,23 +4939,23 @@
                       "start": 32,
                       "end": 37
                     }
+                  },
+                  "line": {
+                    "start": 102,
+                    "end": 102
+                  },
+                  "column": {
+                    "start": 32,
+                    "end": 37
                   }
-                ],
-                "line": {
-                  "start": 102,
-                  "end": 102
-                },
-                "column": {
-                  "start": 32,
-                  "end": 37
                 }
-              },
+              ],
               "line": {
                 "start": 102,
                 "end": 102
               },
               "column": {
-                "start": 22,
+                "start": 32,
                 "end": 37
               }
             },
@@ -5051,8 +4967,16 @@
               "start": 22,
               "end": 37
             }
+          },
+          "line": {
+            "start": 102,
+            "end": 102
+          },
+          "column": {
+            "start": 22,
+            "end": 37
           }
-        ],
+        },
         "line": {
           "start": 102,
           "end": 102
@@ -5065,46 +4989,34 @@
       {
         "type": "VariableDeclaration",
         "kind": "const",
-        "names": [
-          {
-            "type": "IdentifierPattern",
-            "name": "nothing",
-            "line": {
-              "start": 103,
-              "end": 103
-            },
-            "column": {
-              "start": 7,
-              "end": 14
-            }
+        "name": {
+          "type": "IdentifierPattern",
+          "name": "nothing",
+          "line": {
+            "start": 103,
+            "end": 103
+          },
+          "column": {
+            "start": 7,
+            "end": 14
           }
-        ],
-        "init": [
-          {
-            "type": "FunctionExpression",
-            "func": {
-              "type": "FunctionBody",
-              "generics": [],
-              "params": [],
-              "hasVarargs": false,
-              "body": {
-                "type": "Block",
-                "statements": [
-                  {
-                    "type": "ReturnStatement",
-                    "argument": {
-                      "type": "NumberLiteral",
-                      "value": 0,
-                      "raw": "0",
-                      "line": {
-                        "start": 103,
-                        "end": 103
-                      },
-                      "column": {
-                        "start": 23,
-                        "end": 24
-                      }
-                    },
+        },
+        "init": {
+          "type": "FunctionExpression",
+          "func": {
+            "type": "FunctionBody",
+            "generics": [],
+            "params": [],
+            "hasVarargs": false,
+            "body": {
+              "type": "Block",
+              "statements": [
+                {
+                  "type": "ReturnStatement",
+                  "argument": {
+                    "type": "NumberLiteral",
+                    "value": 0,
+                    "raw": "0",
                     "line": {
                       "start": 103,
                       "end": 103
@@ -5113,23 +5025,23 @@
                       "start": 23,
                       "end": 24
                     }
+                  },
+                  "line": {
+                    "start": 103,
+                    "end": 103
+                  },
+                  "column": {
+                    "start": 23,
+                    "end": 24
                   }
-                ],
-                "line": {
-                  "start": 103,
-                  "end": 103
-                },
-                "column": {
-                  "start": 23,
-                  "end": 24
                 }
-              },
+              ],
               "line": {
                 "start": 103,
                 "end": 103
               },
               "column": {
-                "start": 17,
+                "start": 23,
                 "end": 24
               }
             },
@@ -5141,8 +5053,16 @@
               "start": 17,
               "end": 24
             }
+          },
+          "line": {
+            "start": 103,
+            "end": 103
+          },
+          "column": {
+            "start": 17,
+            "end": 24
           }
-        ],
+        },
         "line": {
           "start": 103,
           "end": 103
@@ -5155,109 +5075,97 @@
       {
         "type": "VariableDeclaration",
         "kind": "const",
-        "names": [
-          {
-            "type": "IdentifierPattern",
-            "name": "shown",
-            "line": {
-              "start": 104,
-              "end": 104
-            },
-            "column": {
-              "start": 7,
-              "end": 12
-            }
+        "name": {
+          "type": "IdentifierPattern",
+          "name": "shown",
+          "line": {
+            "start": 104,
+            "end": 104
+          },
+          "column": {
+            "start": 7,
+            "end": 12
           }
-        ],
-        "init": [
-          {
-            "type": "FunctionExpression",
-            "func": {
-              "type": "FunctionBody",
-              "generics": [],
-              "params": [
-                {
-                  "type": "FunctionParameter",
-                  "name": "n",
-                  "typeAnnotation": {
-                    "type": "TypeReference",
-                    "base": "number",
-                    "typeArguments": [],
-                    "line": {
-                      "start": 104,
-                      "end": 104
-                    },
-                    "column": {
-                      "start": 19,
-                      "end": 25
-                    }
-                  },
+        },
+        "init": {
+          "type": "FunctionExpression",
+          "func": {
+            "type": "FunctionBody",
+            "generics": [],
+            "params": [
+              {
+                "type": "FunctionParameter",
+                "name": "n",
+                "typeAnnotation": {
+                  "type": "TypeReference",
+                  "base": "number",
+                  "typeArguments": [],
                   "line": {
                     "start": 104,
                     "end": 104
                   },
                   "column": {
-                    "start": 16,
+                    "start": 19,
                     "end": 25
                   }
-                }
-              ],
-              "hasVarargs": false,
-              "returnType": {
-                "type": "TypeReference",
-                "base": "string",
-                "typeArguments": [],
+                },
                 "line": {
                   "start": 104,
                   "end": 104
                 },
                 "column": {
-                  "start": 28,
-                  "end": 34
+                  "start": 16,
+                  "end": 25
                 }
+              }
+            ],
+            "hasVarargs": false,
+            "returnType": {
+              "type": "TypeReference",
+              "base": "string",
+              "typeArguments": [],
+              "line": {
+                "start": 104,
+                "end": 104
               },
-              "body": {
-                "type": "Block",
-                "statements": [
-                  {
-                    "type": "ReturnStatement",
-                    "argument": {
-                      "type": "CallExpression",
-                      "callee": {
-                        "type": "Identifier",
-                        "name": "tostring",
-                        "line": {
-                          "start": 104,
-                          "end": 104
-                        },
-                        "column": {
-                          "start": 38,
-                          "end": 46
-                        }
-                      },
-                      "arguments": [
-                        {
-                          "type": "Identifier",
-                          "name": "n",
-                          "line": {
-                            "start": 104,
-                            "end": 104
-                          },
-                          "column": {
-                            "start": 47,
-                            "end": 48
-                          }
-                        }
-                      ],
+              "column": {
+                "start": 28,
+                "end": 34
+              }
+            },
+            "body": {
+              "type": "Block",
+              "statements": [
+                {
+                  "type": "ReturnStatement",
+                  "argument": {
+                    "type": "CallExpression",
+                    "callee": {
+                      "type": "Identifier",
+                      "name": "tostring",
                       "line": {
                         "start": 104,
                         "end": 104
                       },
                       "column": {
                         "start": 38,
-                        "end": 49
+                        "end": 46
                       }
                     },
+                    "arguments": [
+                      {
+                        "type": "Identifier",
+                        "name": "n",
+                        "line": {
+                          "start": 104,
+                          "end": 104
+                        },
+                        "column": {
+                          "start": 47,
+                          "end": 48
+                        }
+                      }
+                    ],
                     "line": {
                       "start": 104,
                       "end": 104
@@ -5266,23 +5174,23 @@
                       "start": 38,
                       "end": 49
                     }
+                  },
+                  "line": {
+                    "start": 104,
+                    "end": 104
+                  },
+                  "column": {
+                    "start": 38,
+                    "end": 49
                   }
-                ],
-                "line": {
-                  "start": 104,
-                  "end": 104
-                },
-                "column": {
-                  "start": 38,
-                  "end": 49
                 }
-              },
+              ],
               "line": {
                 "start": 104,
                 "end": 104
               },
               "column": {
-                "start": 15,
+                "start": 38,
                 "end": 49
               }
             },
@@ -5294,8 +5202,16 @@
               "start": 15,
               "end": 49
             }
+          },
+          "line": {
+            "start": 104,
+            "end": 104
+          },
+          "column": {
+            "start": 15,
+            "end": 49
           }
-        ],
+        },
         "line": {
           "start": 104,
           "end": 104
@@ -5582,108 +5498,96 @@
       {
         "type": "VariableDeclaration",
         "kind": "const",
-        "names": [
-          {
-            "type": "IdentifierPattern",
-            "name": "wrap",
-            "line": {
-              "start": 111,
-              "end": 111
-            },
-            "column": {
-              "start": 7,
-              "end": 11
-            }
+        "name": {
+          "type": "IdentifierPattern",
+          "name": "wrap",
+          "line": {
+            "start": 111,
+            "end": 111
+          },
+          "column": {
+            "start": 7,
+            "end": 11
           }
-        ],
-        "init": [
-          {
-            "type": "FunctionExpression",
-            "func": {
-              "type": "FunctionBody",
-              "generics": [],
-              "params": [
-                {
-                  "type": "FunctionParameter",
-                  "name": "n",
-                  "typeAnnotation": {
-                    "type": "TypeReference",
-                    "base": "number",
-                    "typeArguments": [],
-                    "line": {
-                      "start": 111,
-                      "end": 111
-                    },
-                    "column": {
-                      "start": 18,
-                      "end": 24
-                    }
-                  },
+        },
+        "init": {
+          "type": "FunctionExpression",
+          "func": {
+            "type": "FunctionBody",
+            "generics": [],
+            "params": [
+              {
+                "type": "FunctionParameter",
+                "name": "n",
+                "typeAnnotation": {
+                  "type": "TypeReference",
+                  "base": "number",
+                  "typeArguments": [],
                   "line": {
                     "start": 111,
                     "end": 111
                   },
                   "column": {
-                    "start": 15,
+                    "start": 18,
                     "end": 24
                   }
+                },
+                "line": {
+                  "start": 111,
+                  "end": 111
+                },
+                "column": {
+                  "start": 15,
+                  "end": 24
                 }
-              ],
-              "hasVarargs": false,
-              "body": {
-                "type": "Block",
-                "statements": [
-                  {
-                    "type": "ReturnStatement",
-                    "argument": {
-                      "type": "ParenthesizedExpression",
-                      "expression": {
-                        "type": "TableExpression",
-                        "fields": [
-                          {
-                            "type": "TableFieldNamed",
-                            "key": {
-                              "type": "Identifier",
-                              "name": "value",
-                              "line": {
-                                "start": 111,
-                                "end": 111
-                              },
-                              "column": {
-                                "start": 32,
-                                "end": 37
-                              }
+              }
+            ],
+            "hasVarargs": false,
+            "body": {
+              "type": "Block",
+              "statements": [
+                {
+                  "type": "ReturnStatement",
+                  "argument": {
+                    "type": "ParenthesizedExpression",
+                    "expression": {
+                      "type": "TableExpression",
+                      "fields": [
+                        {
+                          "type": "TableFieldNamed",
+                          "key": {
+                            "type": "Identifier",
+                            "name": "value",
+                            "line": {
+                              "start": 111,
+                              "end": 111
                             },
-                            "value": {
-                              "type": "Identifier",
-                              "name": "n",
-                              "line": {
-                                "start": 111,
-                                "end": 111
-                              },
-                              "column": {
-                                "start": 39,
-                                "end": 40
-                              }
+                            "column": {
+                              "start": 32,
+                              "end": 37
+                            }
+                          },
+                          "value": {
+                            "type": "Identifier",
+                            "name": "n",
+                            "line": {
+                              "start": 111,
+                              "end": 111
+                            },
+                            "column": {
+                              "start": 39,
+                              "end": 40
                             }
                           }
-                        ],
-                        "line": {
-                          "start": 111,
-                          "end": 111
-                        },
-                        "column": {
-                          "start": 30,
-                          "end": 42
                         }
-                      },
+                      ],
                       "line": {
                         "start": 111,
                         "end": 111
                       },
                       "column": {
-                        "start": 29,
-                        "end": 43
+                        "start": 30,
+                        "end": 42
                       }
                     },
                     "line": {
@@ -5694,23 +5598,23 @@
                       "start": 29,
                       "end": 43
                     }
+                  },
+                  "line": {
+                    "start": 111,
+                    "end": 111
+                  },
+                  "column": {
+                    "start": 29,
+                    "end": 43
                   }
-                ],
-                "line": {
-                  "start": 111,
-                  "end": 111
-                },
-                "column": {
-                  "start": 29,
-                  "end": 43
                 }
-              },
+              ],
               "line": {
                 "start": 111,
                 "end": 111
               },
               "column": {
-                "start": 14,
+                "start": 29,
                 "end": 43
               }
             },
@@ -5722,8 +5626,16 @@
               "start": 14,
               "end": 43
             }
+          },
+          "line": {
+            "start": 111,
+            "end": 111
+          },
+          "column": {
+            "start": 14,
+            "end": 43
           }
-        ],
+        },
         "line": {
           "start": 111,
           "end": 111
@@ -5736,67 +5648,138 @@
       {
         "type": "VariableDeclaration",
         "kind": "const",
-        "names": [
-          {
-            "type": "IdentifierPattern",
-            "name": "logged",
-            "line": {
-              "start": 112,
-              "end": 112
-            },
-            "column": {
-              "start": 7,
-              "end": 13
-            }
+        "name": {
+          "type": "IdentifierPattern",
+          "name": "logged",
+          "line": {
+            "start": 112,
+            "end": 112
+          },
+          "column": {
+            "start": 7,
+            "end": 13
           }
-        ],
-        "init": [
-          {
-            "type": "FunctionExpression",
-            "func": {
-              "type": "FunctionBody",
-              "generics": [],
-              "params": [
-                {
-                  "type": "FunctionParameter",
-                  "name": "n",
-                  "typeAnnotation": {
-                    "type": "TypeReference",
-                    "base": "number",
-                    "typeArguments": [],
-                    "line": {
-                      "start": 112,
-                      "end": 112
-                    },
-                    "column": {
-                      "start": 20,
-                      "end": 26
-                    }
-                  },
+        },
+        "init": {
+          "type": "FunctionExpression",
+          "func": {
+            "type": "FunctionBody",
+            "generics": [],
+            "params": [
+              {
+                "type": "FunctionParameter",
+                "name": "n",
+                "typeAnnotation": {
+                  "type": "TypeReference",
+                  "base": "number",
+                  "typeArguments": [],
                   "line": {
                     "start": 112,
                     "end": 112
                   },
                   "column": {
-                    "start": 17,
+                    "start": 20,
                     "end": 26
                   }
+                },
+                "line": {
+                  "start": 112,
+                  "end": 112
+                },
+                "column": {
+                  "start": 17,
+                  "end": 26
                 }
-              ],
-              "hasVarargs": false,
-              "body": {
-                "type": "Block",
-                "statements": [
-                  {
-                    "type": "VariableDeclaration",
-                    "kind": "const",
-                    "names": [
+              }
+            ],
+            "hasVarargs": false,
+            "body": {
+              "type": "Block",
+              "statements": [
+                {
+                  "type": "VariableDeclaration",
+                  "kind": "const",
+                  "name": {
+                    "type": "IdentifierPattern",
+                    "name": "doubled",
+                    "line": {
+                      "start": 113,
+                      "end": 113
+                    },
+                    "column": {
+                      "start": 11,
+                      "end": 18
+                    }
+                  },
+                  "init": {
+                    "type": "BinaryExpression",
+                    "operator": "*",
+                    "left": {
+                      "type": "Identifier",
+                      "name": "n",
+                      "line": {
+                        "start": 113,
+                        "end": 113
+                      },
+                      "column": {
+                        "start": 21,
+                        "end": 22
+                      }
+                    },
+                    "right": {
+                      "type": "NumberLiteral",
+                      "value": 2,
+                      "raw": "2",
+                      "line": {
+                        "start": 113,
+                        "end": 113
+                      },
+                      "column": {
+                        "start": 25,
+                        "end": 26
+                      }
+                    },
+                    "line": {
+                      "start": 113,
+                      "end": 113
+                    },
+                    "column": {
+                      "start": 21,
+                      "end": 26
+                    }
+                  },
+                  "line": {
+                    "start": 113,
+                    "end": 113
+                  },
+                  "column": {
+                    "start": 5,
+                    "end": 26
+                  }
+                },
+                {
+                  "type": "CallStatement",
+                  "expression": {
+                    "type": "CallExpression",
+                    "callee": {
+                      "type": "Identifier",
+                      "name": "print",
+                      "line": {
+                        "start": 114,
+                        "end": 114
+                      },
+                      "column": {
+                        "start": 5,
+                        "end": 10
+                      }
+                    },
+                    "arguments": [
                       {
-                        "type": "IdentifierPattern",
+                        "type": "Identifier",
                         "name": "doubled",
                         "line": {
-                          "start": 113,
-                          "end": 113
+                          "start": 114,
+                          "end": 114
                         },
                         "column": {
                           "start": 11,
@@ -5804,93 +5787,6 @@
                         }
                       }
                     ],
-                    "init": [
-                      {
-                        "type": "BinaryExpression",
-                        "operator": "*",
-                        "left": {
-                          "type": "Identifier",
-                          "name": "n",
-                          "line": {
-                            "start": 113,
-                            "end": 113
-                          },
-                          "column": {
-                            "start": 21,
-                            "end": 22
-                          }
-                        },
-                        "right": {
-                          "type": "NumberLiteral",
-                          "value": 2,
-                          "raw": "2",
-                          "line": {
-                            "start": 113,
-                            "end": 113
-                          },
-                          "column": {
-                            "start": 25,
-                            "end": 26
-                          }
-                        },
-                        "line": {
-                          "start": 113,
-                          "end": 113
-                        },
-                        "column": {
-                          "start": 21,
-                          "end": 26
-                        }
-                      }
-                    ],
-                    "line": {
-                      "start": 113,
-                      "end": 113
-                    },
-                    "column": {
-                      "start": 5,
-                      "end": 26
-                    }
-                  },
-                  {
-                    "type": "CallStatement",
-                    "expression": {
-                      "type": "CallExpression",
-                      "callee": {
-                        "type": "Identifier",
-                        "name": "print",
-                        "line": {
-                          "start": 114,
-                          "end": 114
-                        },
-                        "column": {
-                          "start": 5,
-                          "end": 10
-                        }
-                      },
-                      "arguments": [
-                        {
-                          "type": "Identifier",
-                          "name": "doubled",
-                          "line": {
-                            "start": 114,
-                            "end": 114
-                          },
-                          "column": {
-                            "start": 11,
-                            "end": 18
-                          }
-                        }
-                      ],
-                      "line": {
-                        "start": 114,
-                        "end": 114
-                      },
-                      "column": {
-                        "start": 5,
-                        "end": 19
-                      }
-                    },
                     "line": {
                       "start": 114,
                       "end": 114
@@ -5900,46 +5796,46 @@
                       "end": 19
                     }
                   },
-                  {
-                    "type": "ReturnStatement",
-                    "argument": {
-                      "type": "Identifier",
-                      "name": "doubled",
-                      "line": {
-                        "start": 115,
-                        "end": 115
-                      },
-                      "column": {
-                        "start": 12,
-                        "end": 19
-                      }
-                    },
+                  "line": {
+                    "start": 114,
+                    "end": 114
+                  },
+                  "column": {
+                    "start": 5,
+                    "end": 19
+                  }
+                },
+                {
+                  "type": "ReturnStatement",
+                  "argument": {
+                    "type": "Identifier",
+                    "name": "doubled",
                     "line": {
                       "start": 115,
                       "end": 115
                     },
                     "column": {
-                      "start": 5,
+                      "start": 12,
                       "end": 19
                     }
+                  },
+                  "line": {
+                    "start": 115,
+                    "end": 115
+                  },
+                  "column": {
+                    "start": 5,
+                    "end": 19
                   }
-                ],
-                "line": {
-                  "start": 113,
-                  "end": 115
-                },
-                "column": {
-                  "start": 5,
-                  "end": 19
                 }
-              },
+              ],
               "line": {
-                "start": 112,
-                "end": 116
+                "start": 113,
+                "end": 115
               },
               "column": {
-                "start": 16,
-                "end": 2
+                "start": 5,
+                "end": 19
               }
             },
             "line": {
@@ -5950,8 +5846,16 @@
               "start": 16,
               "end": 2
             }
+          },
+          "line": {
+            "start": 112,
+            "end": 116
+          },
+          "column": {
+            "start": 16,
+            "end": 2
           }
-        ],
+        },
         "line": {
           "start": 112,
           "end": 116
@@ -5964,73 +5868,69 @@
       {
         "type": "VariableDeclaration",
         "kind": "const",
-        "names": [
-          {
-            "type": "IdentifierPattern",
-            "name": "doubledOnce",
+        "name": {
+          "type": "IdentifierPattern",
+          "name": "doubledOnce",
+          "line": {
+            "start": 118,
+            "end": 118
+          },
+          "column": {
+            "start": 7,
+            "end": 18
+          },
+          "typeAnnotation": {
+            "type": "TypeReference",
+            "base": "number",
+            "typeArguments": [],
             "line": {
               "start": 118,
               "end": 118
             },
             "column": {
-              "start": 7,
-              "end": 18
-            },
-            "typeAnnotation": {
-              "type": "TypeReference",
-              "base": "number",
-              "typeArguments": [],
-              "line": {
-                "start": 118,
-                "end": 118
-              },
-              "column": {
-                "start": 20,
-                "end": 26
-              }
+              "start": 20,
+              "end": 26
             }
           }
-        ],
-        "init": [
-          {
-            "type": "CallExpression",
-            "callee": {
-              "type": "Identifier",
-              "name": "double",
-              "line": {
-                "start": 118,
-                "end": 118
-              },
-              "column": {
-                "start": 29,
-                "end": 35
-              }
-            },
-            "arguments": [
-              {
-                "type": "NumberLiteral",
-                "value": 21,
-                "raw": "21",
-                "line": {
-                  "start": 118,
-                  "end": 118
-                },
-                "column": {
-                  "start": 36,
-                  "end": 38
-                }
-              }
-            ],
+        },
+        "init": {
+          "type": "CallExpression",
+          "callee": {
+            "type": "Identifier",
+            "name": "double",
             "line": {
               "start": 118,
               "end": 118
             },
             "column": {
               "start": 29,
-              "end": 39
+              "end": 35
             }
+          },
+          "arguments": [
+            {
+              "type": "NumberLiteral",
+              "value": 21,
+              "raw": "21",
+              "line": {
+                "start": 118,
+                "end": 118
+              },
+              "column": {
+                "start": 36,
+                "end": 38
+              }
+            }
+          ],
+          "line": {
+            "start": 118,
+            "end": 118
+          },
+          "column": {
+            "start": 29,
+            "end": 39
           }
-        ],
+        },
         "line": {
           "start": 118,
           "end": 118
@@ -6043,86 +5943,82 @@
       {
         "type": "VariableDeclaration",
         "kind": "const",
-        "names": [
-          {
-            "type": "IdentifierPattern",
-            "name": "addedUp",
+        "name": {
+          "type": "IdentifierPattern",
+          "name": "addedUp",
+          "line": {
+            "start": 119,
+            "end": 119
+          },
+          "column": {
+            "start": 7,
+            "end": 14
+          },
+          "typeAnnotation": {
+            "type": "TypeReference",
+            "base": "number",
+            "typeArguments": [],
             "line": {
               "start": 119,
               "end": 119
             },
             "column": {
-              "start": 7,
-              "end": 14
-            },
-            "typeAnnotation": {
-              "type": "TypeReference",
-              "base": "number",
-              "typeArguments": [],
-              "line": {
-                "start": 119,
-                "end": 119
-              },
-              "column": {
-                "start": 16,
-                "end": 22
-              }
+              "start": 16,
+              "end": 22
             }
           }
-        ],
-        "init": [
-          {
-            "type": "CallExpression",
-            "callee": {
-              "type": "Identifier",
-              "name": "add",
-              "line": {
-                "start": 119,
-                "end": 119
-              },
-              "column": {
-                "start": 25,
-                "end": 28
-              }
-            },
-            "arguments": [
-              {
-                "type": "NumberLiteral",
-                "value": 1,
-                "raw": "1",
-                "line": {
-                  "start": 119,
-                  "end": 119
-                },
-                "column": {
-                  "start": 29,
-                  "end": 30
-                }
-              },
-              {
-                "type": "NumberLiteral",
-                "value": 2,
-                "raw": "2",
-                "line": {
-                  "start": 119,
-                  "end": 119
-                },
-                "column": {
-                  "start": 32,
-                  "end": 33
-                }
-              }
-            ],
+        },
+        "init": {
+          "type": "CallExpression",
+          "callee": {
+            "type": "Identifier",
+            "name": "add",
             "line": {
               "start": 119,
               "end": 119
             },
             "column": {
               "start": 25,
-              "end": 34
+              "end": 28
             }
+          },
+          "arguments": [
+            {
+              "type": "NumberLiteral",
+              "value": 1,
+              "raw": "1",
+              "line": {
+                "start": 119,
+                "end": 119
+              },
+              "column": {
+                "start": 29,
+                "end": 30
+              }
+            },
+            {
+              "type": "NumberLiteral",
+              "value": 2,
+              "raw": "2",
+              "line": {
+                "start": 119,
+                "end": 119
+              },
+              "column": {
+                "start": 32,
+                "end": 33
+              }
+            }
+          ],
+          "line": {
+            "start": 119,
+            "end": 119
+          },
+          "column": {
+            "start": 25,
+            "end": 34
           }
-        ],
+        },
         "line": {
           "start": 119,
           "end": 119
@@ -6135,98 +6031,56 @@
       {
         "type": "VariableDeclaration",
         "kind": "const",
-        "names": [
-          {
-            "type": "IdentifierPattern",
-            "name": "wrapped",
-            "line": {
-              "start": 120,
-              "end": 120
-            },
-            "column": {
-              "start": 7,
-              "end": 14
-            },
-            "typeAnnotation": {
-              "type": "TableTypeNode",
-              "properties": [
-                {
-                  "type": "TableTypeProperty",
+        "name": {
+          "type": "IdentifierPattern",
+          "name": "wrapped",
+          "line": {
+            "start": 120,
+            "end": 120
+          },
+          "column": {
+            "start": 7,
+            "end": 14
+          },
+          "typeAnnotation": {
+            "type": "TableTypeNode",
+            "properties": [
+              {
+                "type": "TableTypeProperty",
+                "name": "value",
+                "key": {
+                  "type": "Identifier",
                   "name": "value",
-                  "key": {
-                    "type": "Identifier",
-                    "name": "value",
-                    "line": {
-                      "start": 120,
-                      "end": 120
-                    },
-                    "column": {
-                      "start": 18,
-                      "end": 23
-                    }
-                  },
-                  "valueType": {
-                    "type": "TypeReference",
-                    "base": "number",
-                    "typeArguments": [],
-                    "line": {
-                      "start": 120,
-                      "end": 120
-                    },
-                    "column": {
-                      "start": 25,
-                      "end": 31
-                    }
-                  },
-                  "optional": false,
                   "line": {
                     "start": 120,
                     "end": 120
                   },
                   "column": {
                     "start": 18,
+                    "end": 23
+                  }
+                },
+                "valueType": {
+                  "type": "TypeReference",
+                  "base": "number",
+                  "typeArguments": [],
+                  "line": {
+                    "start": 120,
+                    "end": 120
+                  },
+                  "column": {
+                    "start": 25,
                     "end": 31
                   }
-                }
-              ],
-              "line": {
-                "start": 120,
-                "end": 120
-              },
-              "column": {
-                "start": 16,
-                "end": 33
-              }
-            }
-          }
-        ],
-        "init": [
-          {
-            "type": "CallExpression",
-            "callee": {
-              "type": "Identifier",
-              "name": "wrap",
-              "line": {
-                "start": 120,
-                "end": 120
-              },
-              "column": {
-                "start": 36,
-                "end": 40
-              }
-            },
-            "arguments": [
-              {
-                "type": "NumberLiteral",
-                "value": 1,
-                "raw": "1",
+                },
+                "optional": false,
                 "line": {
                   "start": 120,
                   "end": 120
                 },
                 "column": {
-                  "start": 41,
-                  "end": 42
+                  "start": 18,
+                  "end": 31
                 }
               }
             ],
@@ -6235,11 +6089,49 @@
               "end": 120
             },
             "column": {
-              "start": 36,
-              "end": 43
+              "start": 16,
+              "end": 33
             }
           }
-        ],
+        },
+        "init": {
+          "type": "CallExpression",
+          "callee": {
+            "type": "Identifier",
+            "name": "wrap",
+            "line": {
+              "start": 120,
+              "end": 120
+            },
+            "column": {
+              "start": 36,
+              "end": 40
+            }
+          },
+          "arguments": [
+            {
+              "type": "NumberLiteral",
+              "value": 1,
+              "raw": "1",
+              "line": {
+                "start": 120,
+                "end": 120
+              },
+              "column": {
+                "start": 41,
+                "end": 42
+              }
+            }
+          ],
+          "line": {
+            "start": 120,
+            "end": 120
+          },
+          "column": {
+            "start": 36,
+            "end": 43
+          }
+        },
         "line": {
           "start": 120,
           "end": 120
@@ -6252,73 +6144,69 @@
       {
         "type": "VariableDeclaration",
         "kind": "const",
-        "names": [
-          {
-            "type": "IdentifierPattern",
-            "name": "said",
+        "name": {
+          "type": "IdentifierPattern",
+          "name": "said",
+          "line": {
+            "start": 121,
+            "end": 121
+          },
+          "column": {
+            "start": 7,
+            "end": 11
+          },
+          "typeAnnotation": {
+            "type": "TypeReference",
+            "base": "string",
+            "typeArguments": [],
             "line": {
               "start": 121,
               "end": 121
             },
             "column": {
-              "start": 7,
-              "end": 11
-            },
-            "typeAnnotation": {
-              "type": "TypeReference",
-              "base": "string",
-              "typeArguments": [],
-              "line": {
-                "start": 121,
-                "end": 121
-              },
-              "column": {
-                "start": 13,
-                "end": 19
-              }
+              "start": 13,
+              "end": 19
             }
           }
-        ],
-        "init": [
-          {
-            "type": "CallExpression",
-            "callee": {
-              "type": "Identifier",
-              "name": "shown",
-              "line": {
-                "start": 121,
-                "end": 121
-              },
-              "column": {
-                "start": 22,
-                "end": 27
-              }
-            },
-            "arguments": [
-              {
-                "type": "NumberLiteral",
-                "value": 1,
-                "raw": "1",
-                "line": {
-                  "start": 121,
-                  "end": 121
-                },
-                "column": {
-                  "start": 28,
-                  "end": 29
-                }
-              }
-            ],
+        },
+        "init": {
+          "type": "CallExpression",
+          "callee": {
+            "type": "Identifier",
+            "name": "shown",
             "line": {
               "start": 121,
               "end": 121
             },
             "column": {
               "start": 22,
-              "end": 30
+              "end": 27
             }
+          },
+          "arguments": [
+            {
+              "type": "NumberLiteral",
+              "value": 1,
+              "raw": "1",
+              "line": {
+                "start": 121,
+                "end": 121
+              },
+              "column": {
+                "start": 28,
+                "end": 29
+              }
+            }
+          ],
+          "line": {
+            "start": 121,
+            "end": 121
+          },
+          "column": {
+            "start": 22,
+            "end": 30
           }
-        ],
+        },
         "line": {
           "start": 121,
           "end": 121

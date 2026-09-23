@@ -1,6 +1,6 @@
 import type {
     Program, Block, Statement, Expression, TypeNode,
-    Identifier, FunctionBody, FunctionSignature, BindingTarget, GenericTypeParameter,
+    Identifier, FunctionBody, FunctionSignature, BindingTarget, GenericTypeParameter, VariableDeclaration,
     ObjectPattern, ArrayPattern, ObjectPatternProperty, ReturnStatement,
     TableExpression, ArrayExpression, IfStatement, TypePredicateNode, DeclareClassStatement, DeclareStatement,
     ClassDeclaration, TypeAliasStatement, ExportTypeAliasStatement, ClassExpression, ClassLike, ClassMember,
@@ -220,7 +220,7 @@ export function moduleExports(
                     })
                 }
             }
-            else for (const target of declaration.names) exportPattern(target)
+            else exportPattern(declaration.name)
         } else if (stmt.type === "ExportTypeAliasStatement") {
             const name = stmt.alias.name.name
             const type = types.aliases.get(name)
@@ -525,16 +525,12 @@ const METAMETHOD_RETURNS: Record<string, Type> = {
 function assignedFields(block: Block): Set<string> {
     const names = new Set<string>()
     walkNodes(block, node => {
-        const record = node as { type?: string; targets?: unknown[]; target?: unknown }
-        const targets = record.type === "AssignmentStatement" ? record.targets
-            : record.type === "CompoundAssignmentStatement" ? [record.target]
-            : undefined
-        for (const target of targets ?? []) {
-            const member = target as { type?: string; object?: { type?: string; name?: string }; property?: { name?: string } }
-            if (member.type === "MemberExpression" && member.object?.type === "Identifier" &&
-                member.object.name === "this" && member.property?.name) {
-                names.add(member.property.name)
-            }
+        const record = node as { type?: string; target?: unknown }
+        if (record.type !== "AssignmentStatement" && record.type !== "CompoundAssignmentStatement") return
+        const member = record.target as { type?: string; object?: { type?: string; name?: string }; property?: { name?: string } }
+        if (member.type === "MemberExpression" && member.object?.type === "Identifier" &&
+            member.object.name === "this" && member.property?.name) {
+            names.add(member.property.name)
         }
     })
     return names
@@ -1119,13 +1115,11 @@ class TypeAnalyzer {
     private readonly classDisplayNames = new WeakMap<ClassLike, string>()
 
     /** `const Name = class ... end` — the name the class will be known by. */
-    private nameClassExpressions(stmt: { names: readonly BindingTarget[]; init: readonly Expression[] }): void {
-        stmt.names.forEach((target, i) => {
-            const value = stmt.init[i]
-            if (target.type === "IdentifierPattern" && value?.type === "ClassExpression" && !value.name) {
-                this.classDisplayNames.set(value, target.name)
-            }
-        })
+    private nameClassExpressions(stmt: VariableDeclaration): void {
+        const value = stmt.init
+        if (stmt.name.type === "IdentifierPattern" && value?.type === "ClassExpression" && !value.name) {
+            this.classDisplayNames.set(value, stmt.name.name)
+        }
     }
 
     private classTypeParams(stmt: ClassLike): readonly GenericTypeParameter[] {
@@ -2633,47 +2627,42 @@ class TypeAnalyzer {
         switch (stmt.type) {
             case "VariableDeclaration": {
                 this.nameClassExpressions(stmt)
-                stmt.names.forEach((target, i) => {
-                    if (target.type === "IdentifierPattern" && target.typeAnnotation && stmt.init[i]) {
-                        this.applyContext(stmt.init[i], this.resolveType(target.typeAnnotation))
+                const target = stmt.name
+                const source = stmt.init
+                if (target.type === "IdentifierPattern" && target.typeAnnotation && source) {
+                    this.applyContext(source, this.resolveType(target.typeAnnotation))
+                }
+                const inferred = source ? this.infer(source, env) : nilType
+                if (this.emitDiagnostics && target.type === "IdentifierPattern" &&
+                    target.typeAnnotation && source) {
+                    const declared = this.resolveType(target.typeAnnotation)
+                    if (declared.kind !== "any" && !this.namesNothing(declared) &&
+                        !this.fitsAnnotation(source, declared, inferred, env)) {
+                        this.diagnostics.push({
+                            node: stmt,
+                            message: `Type '${briefType(inferred)}' is not assignable to '${briefType(declared)}'`
+                                + this.explainMismatch(inferred, declared),
+                        })
+                    } else if (declared.kind !== "any") {
+                        this.reportExcessProperties(source, declared)
                     }
-                })
-                const { types: valueTypes, sources } = this.valueList(stmt.init, env)
-                this.checkValueCount(stmt, stmt.names.length, stmt.init, valueTypes)
-                stmt.names.forEach((target, i) => {
-                    const inferred = valueTypes[i] ?? (stmt.init.length ? unknownType : nilType)
-                    const source = sources[i]
-                    if (this.emitDiagnostics && target.type === "IdentifierPattern" &&
-                        target.typeAnnotation && source) {
-                        const declared = this.resolveType(target.typeAnnotation)
-                        if (declared.kind !== "any" && !this.namesNothing(declared) &&
-                            !this.fitsAnnotation(source, declared, inferred, env)) {
-                            this.diagnostics.push({
-                                node: stmt,
-                                message: `Type '${briefType(inferred)}' is not assignable to '${briefType(declared)}'`
-                                    + this.explainMismatch(inferred, declared),
-                            })
-                        } else if (declared.kind !== "any") {
-                            this.reportExcessProperties(source, declared)
-                        }
-                    }
-                    // `let`   -> widen (`let n = 1` : number)
-                    // `const` -> keep top-level literal (`const n = 1` : 1), TS-style
-                    // `... as const` init -> keep everything narrow + freeze
-                    // Widening applies to *fresh* literal types only, as in
-                    // TypeScript: `let n = 1` is `number`, but `let s = shape`
-                    // keeps whatever `shape` was narrowed to rather than
-                    // widening its literal members back out.
-                    const mode: BindMode = this.initIsAsConst(source) ? "asconst"
-                        : !isFreshLiteralExpr(source) ? "keep"
-                        : stmt.kind === "const" ? "const" : "widen"
-                    this.bindPattern(target, inferred, env, mode)
-                    if (stmt.kind === "const") {
-                        this.correlateDestructuring(target, inferred, env)
-                        this.correlateIndexed(target, source, env)
-                        this.aliasReference(target, source)
-                    }
-                })
+                }
+                // `let`   -> widen (`let n = 1` : number)
+                // `const` -> keep top-level literal (`const n = 1` : 1), TS-style
+                // `... as const` init -> keep everything narrow + freeze
+                // Widening applies to *fresh* literal types only, as in
+                // TypeScript: `let n = 1` is `number`, but `let s = shape`
+                // keeps whatever `shape` was narrowed to rather than
+                // widening its literal members back out.
+                const mode: BindMode = this.initIsAsConst(source) ? "asconst"
+                    : !isFreshLiteralExpr(source) ? "keep"
+                    : stmt.kind === "const" ? "const" : "widen"
+                this.bindPattern(target, inferred, env, mode)
+                if (stmt.kind === "const") {
+                    this.correlateDestructuring(target, inferred, env)
+                    this.correlateIndexed(target, source, env)
+                    this.aliasReference(target, source)
+                }
                 return
             }
 
@@ -2750,53 +2739,46 @@ class TypeAnalyzer {
             }
 
             case "AssignmentStatement": {
-                stmt.targets.forEach((target, i) => {
-                    const value = stmt.values[i]
-                    if (!value) return
-                    if (target.type === "MemberExpression" || target.type === "IndexExpression") {
-                        this.applyContext(value, this.infer(target, env))
-                    } else if (target.type === "Identifier") {
-                        const id = this.bindingIdOf(target)
-                        if (id !== undefined && this.annotated.has(id)) this.applyContext(value, this.bindingType.get(id))
-                    }
-                })
-                const { types: valueTypes, sources } = this.valueList(stmt.values, env)
-                this.checkValueCount(stmt, stmt.targets.length, stmt.values, valueTypes)
-                stmt.targets.forEach((target, i) => {
-                    const vt = valueTypes[i] ?? unknownType
-                    const source = sources[i]
-                    if (target.type === "Identifier") {
-                        const id = this.bindingIdOf(target)
-                        if (id !== undefined) {
-                            this.uncorrelate(id)
-                            const next = isFreshLiteralExpr(source) ? widen(vt) : vt
-                            if (this.annotated.has(id)) {
-                                const declared = this.bindingType.get(id)!
-                                if (this.emitDiagnostics && !isAssignable(next, declared) && declared.kind !== "any") {
-                                    this.diagnostics.push({
-                                        node: stmt,
-                                        message: `Type '${briefType(next)}' is not assignable to '${briefType(declared)}'`
-                                            + this.explainMismatch(next, declared),
-                                    })
-                                }
-                                this.setBinding(env, id, narrowTo(declared, next))
-                            } else {
-                                this.setBinding(env, id, next)
-                                this.bindingType.set(id, union([this.bindingType.get(id) ?? next, next]))
+                const target = stmt.target
+                const source = stmt.value
+                if (target.type === "MemberExpression" || target.type === "IndexExpression") {
+                    this.applyContext(source, this.infer(target, env))
+                } else if (target.type === "Identifier") {
+                    const id = this.bindingIdOf(target)
+                    if (id !== undefined && this.annotated.has(id)) this.applyContext(source, this.bindingType.get(id))
+                }
+                const vt = this.infer(source, env)
+                if (target.type === "Identifier") {
+                    const id = this.bindingIdOf(target)
+                    if (id !== undefined) {
+                        this.uncorrelate(id)
+                        const next = isFreshLiteralExpr(source) ? widen(vt) : vt
+                        if (this.annotated.has(id)) {
+                            const declared = this.bindingType.get(id)!
+                            if (this.emitDiagnostics && !isAssignable(next, declared) && declared.kind !== "any") {
+                                this.diagnostics.push({
+                                    node: stmt,
+                                    message: `Type '${briefType(next)}' is not assignable to '${briefType(declared)}'`
+                                        + this.explainMismatch(next, declared),
+                                })
                             }
+                            this.setBinding(env, id, narrowTo(declared, next))
+                        } else {
+                            this.setBinding(env, id, next)
+                            this.bindingType.set(id, union([this.bindingType.get(id) ?? next, next]))
                         }
-                    } else if (target.type === "MemberExpression" || target.type === "IndexExpression") {
-                        this.infer(target, env)
-                        this.checkReadonlyAssign(target, env)
-                        // The old narrowing of this path (and anything under it)
-                        // described the previous value.
-                        this.assignToRef(target, isFreshLiteralExpr(source) ? widen(vt) : vt, env)
-                    } else if (target.type === "ObjectPattern" || target.type === "ArrayPattern") {
-                        // Destructuring assignment: narrow the existing bindings
-                        // to the destructured slices of the assigned value.
-                        this.reassignPattern(target, vt, env)
                     }
-                })
+                } else if (target.type === "MemberExpression" || target.type === "IndexExpression") {
+                    this.infer(target, env)
+                    this.checkReadonlyAssign(target, env)
+                    // The old narrowing of this path (and anything under it)
+                    // described the previous value.
+                    this.assignToRef(target, isFreshLiteralExpr(source) ? widen(vt) : vt, env)
+                } else if (target.type === "ObjectPattern" || target.type === "ArrayPattern") {
+                    // Destructuring assignment: narrow the existing bindings
+                    // to the destructured slices of the assigned value.
+                    this.reassignPattern(target, vt, env)
+                }
                 return
             }
 
@@ -3002,71 +2984,6 @@ class TypeAnalyzer {
             case "DeclareStatement":
                 return
         }
-    }
-
-    /** Flatten an expression list into the values it actually produces.
-     *
-     *  Lua's adjustment rule: every expression but the last contributes one
-     *  value, and the last contributes all of its values if it is a call or
-     *  `...`. That is what makes `local ok, err = pcall(f)` work, and it is
-     *  why `local x = f()` takes only the first value.
-     *
-     *  `sources` maps each produced value back to the expression it came from
-     *  (undefined for the 2nd and later values of a multi-value call), so the
-     *  caller can still do contextual typing against the written expression. */
-    private valueList(
-        exprs: readonly Expression[],
-        env: FlowEnv,
-    ): { types: Type[]; sources: (Expression | undefined)[] } {
-        const types: Type[] = []
-        const sources: (Expression | undefined)[] = []
-        exprs.forEach((e, i) => {
-            const t = this.infer(e, env)
-            const last = i === exprs.length - 1
-            if (e.type === "SpreadElement") {
-                // A tuple holds a known value at each position; an array holds
-                // an unknown number of one kind, and at the end of the list it
-                // fills whatever room is left.
-                const held = this.typeOf.get(e.argument)
-                const expanded = held && this.expand(held)
-                if (expanded?.kind === "tuple") {
-                    for (const element of expanded.elements) {
-                        types.push(element)
-                        sources.push(e)
-                    }
-                    return
-                }
-                types.push(t)
-                sources.push(e)
-                return
-            }
-            void last
-            types.push(t)
-            sources.push(e)
-        })
-        return { types, sources }
-    }
-
-    /** `const a, b = x, y` pairs names with values, one each. A call is one
-     *  value — several come back as an array — so `const a, b = f()` is a
-     *  name short of a value, and says how to take them apart. */
-    private checkValueCount(
-        node: Statement,
-        names: number,
-        values: readonly Expression[],
-        types: readonly Type[],
-    ): void {
-        if (!this.emitDiagnostics || !values.length || types.length >= names) return
-        const last = values[values.length - 1]
-        const lastType = types[types.length - 1] && this.expand(types[types.length - 1])
-        const call = last.type === "CallExpression" || last.type === "MethodCallExpression"
-        this.diagnostics.push({
-            node,
-            message: call && (lastType?.kind === "tuple" || lastType?.kind === "array")
-                ? `A call is one value, here an array: take its parts with '[${
-                    Array.from({ length: names }, (_, i) => String.fromCharCode(97 + i)).join(", ")}] = ...'`
-                : `${names} names, but ${types.length} ${types.length === 1 ? "value" : "values"}: each name needs one`,
-        })
     }
 
     /** Run `visit` with a fresh place to collect `break` states, and return
@@ -5511,7 +5428,26 @@ class TypeAnalyzer {
         }
         const read = this.expand(type)
         if (read.kind === "unknown" && read.declared) this.reportUnknownAccess(object)
-        return { type, shortCircuits: inChain !== undefined || link.optional === true }
+        // A `?.` on an object that cannot be nil never short-circuits: on a
+        // `BoolValue`, `v?.Value` is `boolean`, not `boolean | nil`.
+        const optionalNil = link.optional === true && this.mayBeNil(inChain ?? full)
+        return { type, shortCircuits: inChain !== undefined || optionalNil }
+    }
+
+    /** Whether a value of `raw` can be nil — `includesNil`, and also the types
+     *  that do not say: `any`, `unknown`, an unconstrained type parameter. */
+    private mayBeNil(raw: Type): boolean {
+        const t = this.expand(raw)
+        switch (t.kind) {
+            case "primitive": return t.name === "nil"
+            case "any": case "unknown": return true
+            case "typeParam": return t.constraint === undefined || this.mayBeNil(t.constraint)
+            case "union": return t.types.some(m => this.mayBeNil(m))
+            case "never": case "literal": case "array": case "tuple": case "object":
+            case "function": case "intersection": case "templateLiteral":
+                return false
+            default: return true
+        }
     }
 
     /** Objects already reported as possibly nil: a loop body is visited more
@@ -6628,18 +6564,17 @@ class TypeAnalyzer {
     // does. The walk reaching the declaration later types it for real.
 
     /** Declarations a reference may meet before the walk does. */
-    private aheadDeclarations?: Map<BindingId, { statement: Statement; index: number }>
+    private aheadDeclarations?: Map<BindingId, Statement>
     private readonly computingAhead = new Set<BindingId>()
 
     private declaredAhead(id: BindingId): Type | undefined {
         this.aheadDeclarations ??= this.indexAheadDeclarations()
-        const found = this.aheadDeclarations.get(id)
-        if (!found || this.computingAhead.has(id)) return undefined
+        const statement = this.aheadDeclarations.get(id)
+        if (!statement || this.computingAhead.has(id)) return undefined
         this.computingAhead.add(id)
         const wasEmitting = this.emitDiagnostics
         this.emitDiagnostics = false
         try {
-            const { statement, index } = found
             let type: Type | undefined
             if (statement.type === "DeclareStatement") {
                 type = this.resolveType(statement.valueType)
@@ -6650,11 +6585,11 @@ class TypeAnalyzer {
             } else if (statement.type === "ClassDeclaration") {
                 type = this.classValueType(statement)
             } else if (statement.type === "VariableDeclaration") {
-                const target = statement.names[index]
+                const target = statement.name
                 if (target.type === "IdentifierPattern" && target.typeAnnotation) {
                     type = this.resolveType(target.typeAnnotation)
-                } else if (statement.init[index]) {
-                    const value = this.infer(statement.init[index], new Map())
+                } else if (statement.init) {
+                    const value = this.infer(statement.init, new Map())
                     type = statement.kind === "const" ? value : widen(value)
                 }
             }
@@ -6668,16 +6603,15 @@ class TypeAnalyzer {
 
     /** Every function declaration, and every plain name the module declares
      *  at its top level. */
-    private indexAheadDeclarations(): Map<BindingId, { statement: Statement; index: number }> {
-        const out = new Map<BindingId, { statement: Statement; index: number }>()
+    private indexAheadDeclarations(): Map<BindingId, Statement> {
+        const out = new Map<BindingId, Statement>()
         for (const statement of this.program.body.statements) {
             const declaration = statement.type === "ExportStatement" ? statement.declaration : statement
             if (declaration.type !== "VariableDeclaration") continue
-            declaration.names.forEach((target, index) => {
-                if (target.type !== "IdentifierPattern") return
-                const id = this.bindingIdByName(target.name, target)
-                if (id !== undefined) out.set(id, { statement: declaration, index })
-            })
+            const target = declaration.name
+            if (target.type !== "IdentifierPattern") continue
+            const id = this.bindingIdByName(target.name, target)
+            if (id !== undefined) out.set(id, declaration)
         }
         const visit = (node: unknown): void => {
             if (!node || typeof node !== "object") return
@@ -6688,11 +6622,11 @@ class TypeAnalyzer {
             const record = node as { type?: string; name?: Identifier }
             if (record.type === "ClassDeclaration" && record.name) {
                 const id = this.bindingIdByName(record.name.name, record.name)
-                if (id !== undefined) out.set(id, { statement: node as Statement, index: 0 })
+                if (id !== undefined) out.set(id, node as Statement)
             }
             if (record.type === "FunctionDeclaration" && record.name) {
                 const id = this.bindingIdByName(record.name.name, record.name)
-                if (id !== undefined) out.set(id, { statement: node as Statement, index: 0 })
+                if (id !== undefined) out.set(id, node as Statement)
             }
             for (const [key, value] of Object.entries(node)) {
                 if (key !== "line" && key !== "column" && value && typeof value === "object") visit(value)
@@ -6701,7 +6635,7 @@ class TypeAnalyzer {
         visit(this.program.body)
         for (const [name, statement] of this.deferredDeclares) {
             const id = this.scopes.globalsByName.get(name)
-            if (id !== undefined) out.set(id, { statement, index: 0 })
+            if (id !== undefined) out.set(id, statement)
         }
         return out
     }

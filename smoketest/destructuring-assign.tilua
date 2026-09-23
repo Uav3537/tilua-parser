@@ -2,9 +2,13 @@
 -- A statement that starts with `[` needs a leading `;` after another
 -- statement, same as Lua's `a = b \n [c] = d` ambiguity rule.
 
-let a, b, c = 0, 0, 0
-let first, rest = nil, nil
-let outer, inner = nil, nil
+let a = 0
+let b = 0
+let c = 0
+let first = nil
+let rest = nil
+let outer = nil
+let inner = nil
 
 const src = { a: 1, b: 2, c: 3 }
 const nums = [10, 20, 30]

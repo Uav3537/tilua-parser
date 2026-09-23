@@ -189,47 +189,43 @@
               {
                 "type": "VariableDeclaration",
                 "kind": "const",
-                "names": [
-                  {
-                    "type": "IdentifierPattern",
-                    "name": "present",
+                "name": {
+                  "type": "IdentifierPattern",
+                  "name": "present",
+                  "line": {
+                    "start": 11,
+                    "end": 11
+                  },
+                  "column": {
+                    "start": 11,
+                    "end": 18
+                  },
+                  "typeAnnotation": {
+                    "type": "TypeReference",
+                    "base": "string",
+                    "typeArguments": [],
                     "line": {
                       "start": 11,
                       "end": 11
                     },
                     "column": {
-                      "start": 11,
-                      "end": 18
-                    },
-                    "typeAnnotation": {
-                      "type": "TypeReference",
-                      "base": "string",
-                      "typeArguments": [],
-                      "line": {
-                        "start": 11,
-                        "end": 11
-                      },
-                      "column": {
-                        "start": 20,
-                        "end": 26
-                      }
+                      "start": 20,
+                      "end": 26
                     }
                   }
-                ],
-                "init": [
-                  {
-                    "type": "Identifier",
-                    "name": "v",
-                    "line": {
-                      "start": 11,
-                      "end": 11
-                    },
-                    "column": {
-                      "start": 29,
-                      "end": 30
-                    }
+                },
+                "init": {
+                  "type": "Identifier",
+                  "name": "v",
+                  "line": {
+                    "start": 11,
+                    "end": 11
+                  },
+                  "column": {
+                    "start": 29,
+                    "end": 30
                   }
-                ],
+                },
                 "line": {
                   "start": 11,
                   "end": 11
@@ -475,47 +471,43 @@
               {
                 "type": "VariableDeclaration",
                 "kind": "const",
-                "names": [
-                  {
-                    "type": "IdentifierPattern",
-                    "name": "absent",
+                "name": {
+                  "type": "IdentifierPattern",
+                  "name": "absent",
+                  "line": {
+                    "start": 17,
+                    "end": 17
+                  },
+                  "column": {
+                    "start": 11,
+                    "end": 17
+                  },
+                  "typeAnnotation": {
+                    "type": "TypeReference",
+                    "base": "nil",
+                    "typeArguments": [],
                     "line": {
                       "start": 17,
                       "end": 17
                     },
                     "column": {
-                      "start": 11,
-                      "end": 17
-                    },
-                    "typeAnnotation": {
-                      "type": "TypeReference",
-                      "base": "nil",
-                      "typeArguments": [],
-                      "line": {
-                        "start": 17,
-                        "end": 17
-                      },
-                      "column": {
-                        "start": 19,
-                        "end": 22
-                      }
+                      "start": 19,
+                      "end": 22
                     }
                   }
-                ],
-                "init": [
-                  {
-                    "type": "Identifier",
-                    "name": "v",
-                    "line": {
-                      "start": 17,
-                      "end": 17
-                    },
-                    "column": {
-                      "start": 25,
-                      "end": 26
-                    }
+                },
+                "init": {
+                  "type": "Identifier",
+                  "name": "v",
+                  "line": {
+                    "start": 17,
+                    "end": 17
+                  },
+                  "column": {
+                    "start": 25,
+                    "end": 26
                   }
-                ],
+                },
                 "line": {
                   "start": 17,
                   "end": 17
@@ -787,47 +779,43 @@
               {
                 "type": "VariableDeclaration",
                 "kind": "const",
-                "names": [
-                  {
-                    "type": "IdentifierPattern",
-                    "name": "present",
+                "name": {
+                  "type": "IdentifierPattern",
+                  "name": "present",
+                  "line": {
+                    "start": 26,
+                    "end": 26
+                  },
+                  "column": {
+                    "start": 11,
+                    "end": 18
+                  },
+                  "typeAnnotation": {
+                    "type": "TypeReference",
+                    "base": "string",
+                    "typeArguments": [],
                     "line": {
                       "start": 26,
                       "end": 26
                     },
                     "column": {
-                      "start": 11,
-                      "end": 18
-                    },
-                    "typeAnnotation": {
-                      "type": "TypeReference",
-                      "base": "string",
-                      "typeArguments": [],
-                      "line": {
-                        "start": 26,
-                        "end": 26
-                      },
-                      "column": {
-                        "start": 20,
-                        "end": 26
-                      }
-                    }
-                  }
-                ],
-                "init": [
-                  {
-                    "type": "Identifier",
-                    "name": "v",
-                    "line": {
-                      "start": 26,
+                      "start": 20,
                       "end": 26
-                    },
-                    "column": {
-                      "start": 29,
-                      "end": 30
                     }
                   }
-                ],
+                },
+                "init": {
+                  "type": "Identifier",
+                  "name": "v",
+                  "line": {
+                    "start": 26,
+                    "end": 26
+                  },
+                  "column": {
+                    "start": 29,
+                    "end": 30
+                  }
+                },
                 "line": {
                   "start": 26,
                   "end": 26
@@ -1000,35 +988,31 @@
               {
                 "type": "VariableDeclaration",
                 "kind": "let",
-                "names": [
-                  {
-                    "type": "IdentifierPattern",
-                    "name": "total",
-                    "line": {
-                      "start": 33,
-                      "end": 33
-                    },
-                    "column": {
-                      "start": 9,
-                      "end": 14
-                    }
+                "name": {
+                  "type": "IdentifierPattern",
+                  "name": "total",
+                  "line": {
+                    "start": 33,
+                    "end": 33
+                  },
+                  "column": {
+                    "start": 9,
+                    "end": 14
                   }
-                ],
-                "init": [
-                  {
-                    "type": "NumberLiteral",
-                    "value": 0,
-                    "raw": "0",
-                    "line": {
-                      "start": 33,
-                      "end": 33
-                    },
-                    "column": {
-                      "start": 17,
-                      "end": 18
-                    }
+                },
+                "init": {
+                  "type": "NumberLiteral",
+                  "value": 0,
+                  "raw": "0",
+                  "line": {
+                    "start": 33,
+                    "end": 33
+                  },
+                  "column": {
+                    "start": 17,
+                    "end": 18
                   }
-                ],
+                },
                 "line": {
                   "start": 33,
                   "end": 33
@@ -1154,47 +1138,43 @@
                     {
                       "type": "VariableDeclaration",
                       "kind": "const",
-                      "names": [
-                        {
-                          "type": "IdentifierPattern",
-                          "name": "present",
+                      "name": {
+                        "type": "IdentifierPattern",
+                        "name": "present",
+                        "line": {
+                          "start": 36,
+                          "end": 36
+                        },
+                        "column": {
+                          "start": 15,
+                          "end": 22
+                        },
+                        "typeAnnotation": {
+                          "type": "TypeReference",
+                          "base": "string",
+                          "typeArguments": [],
                           "line": {
                             "start": 36,
                             "end": 36
                           },
                           "column": {
-                            "start": 15,
-                            "end": 22
-                          },
-                          "typeAnnotation": {
-                            "type": "TypeReference",
-                            "base": "string",
-                            "typeArguments": [],
-                            "line": {
-                              "start": 36,
-                              "end": 36
-                            },
-                            "column": {
-                              "start": 24,
-                              "end": 30
-                            }
+                            "start": 24,
+                            "end": 30
                           }
                         }
-                      ],
-                      "init": [
-                        {
-                          "type": "Identifier",
-                          "name": "item",
-                          "line": {
-                            "start": 36,
-                            "end": 36
-                          },
-                          "column": {
-                            "start": 33,
-                            "end": 37
-                          }
+                      },
+                      "init": {
+                        "type": "Identifier",
+                        "name": "item",
+                        "line": {
+                          "start": 36,
+                          "end": 36
+                        },
+                        "column": {
+                          "start": 33,
+                          "end": 37
                         }
-                      ],
+                      },
                       "line": {
                         "start": 36,
                         "end": 36
@@ -1206,8 +1186,22 @@
                     },
                     {
                       "type": "AssignmentStatement",
-                      "targets": [
-                        {
+                      "target": {
+                        "type": "Identifier",
+                        "name": "total",
+                        "line": {
+                          "start": 37,
+                          "end": 37
+                        },
+                        "column": {
+                          "start": 9,
+                          "end": 14
+                        }
+                      },
+                      "value": {
+                        "type": "BinaryExpression",
+                        "operator": "+",
+                        "left": {
                           "type": "Identifier",
                           "name": "total",
                           "line": {
@@ -1215,48 +1209,22 @@
                             "end": 37
                           },
                           "column": {
-                            "start": 9,
-                            "end": 14
+                            "start": 17,
+                            "end": 22
                           }
-                        }
-                      ],
-                      "values": [
-                        {
-                          "type": "BinaryExpression",
-                          "operator": "+",
-                          "left": {
+                        },
+                        "right": {
+                          "type": "UnaryExpression",
+                          "operator": "#",
+                          "argument": {
                             "type": "Identifier",
-                            "name": "total",
+                            "name": "present",
                             "line": {
                               "start": 37,
                               "end": 37
                             },
                             "column": {
-                              "start": 17,
-                              "end": 22
-                            }
-                          },
-                          "right": {
-                            "type": "UnaryExpression",
-                            "operator": "#",
-                            "argument": {
-                              "type": "Identifier",
-                              "name": "present",
-                              "line": {
-                                "start": 37,
-                                "end": 37
-                              },
-                              "column": {
-                                "start": 26,
-                                "end": 33
-                              }
-                            },
-                            "line": {
-                              "start": 37,
-                              "end": 37
-                            },
-                            "column": {
-                              "start": 25,
+                              "start": 26,
                               "end": 33
                             }
                           },
@@ -1265,11 +1233,19 @@
                             "end": 37
                           },
                           "column": {
-                            "start": 17,
+                            "start": 25,
                             "end": 33
                           }
+                        },
+                        "line": {
+                          "start": 37,
+                          "end": 37
+                        },
+                        "column": {
+                          "start": 17,
+                          "end": 33
                         }
-                      ],
+                      },
                       "line": {
                         "start": 37,
                         "end": 37
@@ -1461,35 +1437,31 @@
               {
                 "type": "VariableDeclaration",
                 "kind": "let",
-                "names": [
-                  {
-                    "type": "IdentifierPattern",
-                    "name": "seen",
-                    "line": {
-                      "start": 44,
-                      "end": 44
-                    },
-                    "column": {
-                      "start": 9,
-                      "end": 13
-                    }
+                "name": {
+                  "type": "IdentifierPattern",
+                  "name": "seen",
+                  "line": {
+                    "start": 44,
+                    "end": 44
+                  },
+                  "column": {
+                    "start": 9,
+                    "end": 13
                   }
-                ],
-                "init": [
-                  {
-                    "type": "NumberLiteral",
-                    "value": 0,
-                    "raw": "0",
-                    "line": {
-                      "start": 44,
-                      "end": 44
-                    },
-                    "column": {
-                      "start": 16,
-                      "end": 17
-                    }
+                },
+                "init": {
+                  "type": "NumberLiteral",
+                  "value": 0,
+                  "raw": "0",
+                  "line": {
+                    "start": 44,
+                    "end": 44
+                  },
+                  "column": {
+                    "start": 16,
+                    "end": 17
                   }
-                ],
+                },
                 "line": {
                   "start": 44,
                   "end": 44
@@ -1615,47 +1587,43 @@
                     {
                       "type": "VariableDeclaration",
                       "kind": "const",
-                      "names": [
-                        {
-                          "type": "IdentifierPattern",
-                          "name": "present",
+                      "name": {
+                        "type": "IdentifierPattern",
+                        "name": "present",
+                        "line": {
+                          "start": 47,
+                          "end": 47
+                        },
+                        "column": {
+                          "start": 15,
+                          "end": 22
+                        },
+                        "typeAnnotation": {
+                          "type": "TypeReference",
+                          "base": "string",
+                          "typeArguments": [],
                           "line": {
                             "start": 47,
                             "end": 47
                           },
                           "column": {
-                            "start": 15,
-                            "end": 22
-                          },
-                          "typeAnnotation": {
-                            "type": "TypeReference",
-                            "base": "string",
-                            "typeArguments": [],
-                            "line": {
-                              "start": 47,
-                              "end": 47
-                            },
-                            "column": {
-                              "start": 24,
-                              "end": 30
-                            }
+                            "start": 24,
+                            "end": 30
                           }
                         }
-                      ],
-                      "init": [
-                        {
-                          "type": "Identifier",
-                          "name": "item",
-                          "line": {
-                            "start": 47,
-                            "end": 47
-                          },
-                          "column": {
-                            "start": 33,
-                            "end": 37
-                          }
+                      },
+                      "init": {
+                        "type": "Identifier",
+                        "name": "item",
+                        "line": {
+                          "start": 47,
+                          "end": 47
+                        },
+                        "column": {
+                          "start": 33,
+                          "end": 37
                         }
-                      ],
+                      },
                       "line": {
                         "start": 47,
                         "end": 47
@@ -1667,8 +1635,22 @@
                     },
                     {
                       "type": "AssignmentStatement",
-                      "targets": [
-                        {
+                      "target": {
+                        "type": "Identifier",
+                        "name": "seen",
+                        "line": {
+                          "start": 48,
+                          "end": 48
+                        },
+                        "column": {
+                          "start": 9,
+                          "end": 13
+                        }
+                      },
+                      "value": {
+                        "type": "BinaryExpression",
+                        "operator": "+",
+                        "left": {
                           "type": "Identifier",
                           "name": "seen",
                           "line": {
@@ -1676,48 +1658,22 @@
                             "end": 48
                           },
                           "column": {
-                            "start": 9,
-                            "end": 13
+                            "start": 16,
+                            "end": 20
                           }
-                        }
-                      ],
-                      "values": [
-                        {
-                          "type": "BinaryExpression",
-                          "operator": "+",
-                          "left": {
+                        },
+                        "right": {
+                          "type": "UnaryExpression",
+                          "operator": "#",
+                          "argument": {
                             "type": "Identifier",
-                            "name": "seen",
+                            "name": "present",
                             "line": {
                               "start": 48,
                               "end": 48
                             },
                             "column": {
-                              "start": 16,
-                              "end": 20
-                            }
-                          },
-                          "right": {
-                            "type": "UnaryExpression",
-                            "operator": "#",
-                            "argument": {
-                              "type": "Identifier",
-                              "name": "present",
-                              "line": {
-                                "start": 48,
-                                "end": 48
-                              },
-                              "column": {
-                                "start": 24,
-                                "end": 31
-                              }
-                            },
-                            "line": {
-                              "start": 48,
-                              "end": 48
-                            },
-                            "column": {
-                              "start": 23,
+                              "start": 24,
                               "end": 31
                             }
                           },
@@ -1726,11 +1682,19 @@
                             "end": 48
                           },
                           "column": {
-                            "start": 16,
+                            "start": 23,
                             "end": 31
                           }
+                        },
+                        "line": {
+                          "start": 48,
+                          "end": 48
+                        },
+                        "column": {
+                          "start": 16,
+                          "end": 31
                         }
-                      ],
+                      },
                       "line": {
                         "start": 48,
                         "end": 48
@@ -1999,35 +1963,31 @@
                     },
                     {
                       "type": "AssignmentStatement",
-                      "targets": [
-                        {
-                          "type": "Identifier",
-                          "name": "v",
-                          "line": {
-                            "start": 58,
-                            "end": 58
-                          },
-                          "column": {
-                            "start": 9,
-                            "end": 10
-                          }
+                      "target": {
+                        "type": "Identifier",
+                        "name": "v",
+                        "line": {
+                          "start": 58,
+                          "end": 58
+                        },
+                        "column": {
+                          "start": 9,
+                          "end": 10
                         }
-                      ],
-                      "values": [
-                        {
-                          "type": "StringLiteral",
-                          "value": "fallback",
-                          "raw": "\"fallback\"",
-                          "line": {
-                            "start": 58,
-                            "end": 58
-                          },
-                          "column": {
-                            "start": 13,
-                            "end": 23
-                          }
+                      },
+                      "value": {
+                        "type": "StringLiteral",
+                        "value": "fallback",
+                        "raw": "\"fallback\"",
+                        "line": {
+                          "start": 58,
+                          "end": 58
+                        },
+                        "column": {
+                          "start": 13,
+                          "end": 23
                         }
-                      ],
+                      },
                       "line": {
                         "start": 58,
                         "end": 58
@@ -2059,47 +2019,43 @@
               {
                 "type": "VariableDeclaration",
                 "kind": "const",
-                "names": [
-                  {
-                    "type": "IdentifierPattern",
-                    "name": "settled",
+                "name": {
+                  "type": "IdentifierPattern",
+                  "name": "settled",
+                  "line": {
+                    "start": 60,
+                    "end": 60
+                  },
+                  "column": {
+                    "start": 11,
+                    "end": 18
+                  },
+                  "typeAnnotation": {
+                    "type": "TypeReference",
+                    "base": "string",
+                    "typeArguments": [],
                     "line": {
                       "start": 60,
                       "end": 60
                     },
                     "column": {
-                      "start": 11,
-                      "end": 18
-                    },
-                    "typeAnnotation": {
-                      "type": "TypeReference",
-                      "base": "string",
-                      "typeArguments": [],
-                      "line": {
-                        "start": 60,
-                        "end": 60
-                      },
-                      "column": {
-                        "start": 20,
-                        "end": 26
-                      }
+                      "start": 20,
+                      "end": 26
                     }
                   }
-                ],
-                "init": [
-                  {
-                    "type": "Identifier",
-                    "name": "v",
-                    "line": {
-                      "start": 60,
-                      "end": 60
-                    },
-                    "column": {
-                      "start": 29,
-                      "end": 30
-                    }
+                },
+                "init": {
+                  "type": "Identifier",
+                  "name": "v",
+                  "line": {
+                    "start": 60,
+                    "end": 60
+                  },
+                  "column": {
+                    "start": 29,
+                    "end": 30
                   }
-                ],
+                },
                 "line": {
                   "start": 60,
                   "end": 60
@@ -2254,35 +2210,31 @@
                   "statements": [
                     {
                       "type": "AssignmentStatement",
-                      "targets": [
-                        {
-                          "type": "Identifier",
-                          "name": "v",
-                          "line": {
-                            "start": 67,
-                            "end": 67
-                          },
-                          "column": {
-                            "start": 9,
-                            "end": 10
-                          }
+                      "target": {
+                        "type": "Identifier",
+                        "name": "v",
+                        "line": {
+                          "start": 67,
+                          "end": 67
+                        },
+                        "column": {
+                          "start": 9,
+                          "end": 10
                         }
-                      ],
-                      "values": [
-                        {
-                          "type": "StringLiteral",
-                          "value": "fallback",
-                          "raw": "\"fallback\"",
-                          "line": {
-                            "start": 67,
-                            "end": 67
-                          },
-                          "column": {
-                            "start": 13,
-                            "end": 23
-                          }
+                      },
+                      "value": {
+                        "type": "StringLiteral",
+                        "value": "fallback",
+                        "raw": "\"fallback\"",
+                        "line": {
+                          "start": 67,
+                          "end": 67
+                        },
+                        "column": {
+                          "start": 13,
+                          "end": 23
                         }
-                      ],
+                      },
                       "line": {
                         "start": 67,
                         "end": 67
@@ -2349,47 +2301,43 @@
               {
                 "type": "VariableDeclaration",
                 "kind": "const",
-                "names": [
-                  {
-                    "type": "IdentifierPattern",
-                    "name": "settled",
+                "name": {
+                  "type": "IdentifierPattern",
+                  "name": "settled",
+                  "line": {
+                    "start": 69,
+                    "end": 69
+                  },
+                  "column": {
+                    "start": 11,
+                    "end": 18
+                  },
+                  "typeAnnotation": {
+                    "type": "TypeReference",
+                    "base": "string",
+                    "typeArguments": [],
                     "line": {
                       "start": 69,
                       "end": 69
                     },
                     "column": {
-                      "start": 11,
-                      "end": 18
-                    },
-                    "typeAnnotation": {
-                      "type": "TypeReference",
-                      "base": "string",
-                      "typeArguments": [],
-                      "line": {
-                        "start": 69,
-                        "end": 69
-                      },
-                      "column": {
-                        "start": 20,
-                        "end": 26
-                      }
+                      "start": 20,
+                      "end": 26
                     }
                   }
-                ],
-                "init": [
-                  {
-                    "type": "Identifier",
-                    "name": "v",
-                    "line": {
-                      "start": 69,
-                      "end": 69
-                    },
-                    "column": {
-                      "start": 29,
-                      "end": 30
-                    }
+                },
+                "init": {
+                  "type": "Identifier",
+                  "name": "v",
+                  "line": {
+                    "start": 69,
+                    "end": 69
+                  },
+                  "column": {
+                    "start": 29,
+                    "end": 30
                   }
-                ],
+                },
                 "line": {
                   "start": 69,
                   "end": 69
@@ -2636,47 +2584,43 @@
               {
                 "type": "VariableDeclaration",
                 "kind": "const",
-                "names": [
-                  {
-                    "type": "IdentifierPattern",
-                    "name": "present",
+                "name": {
+                  "type": "IdentifierPattern",
+                  "name": "present",
+                  "line": {
+                    "start": 78,
+                    "end": 78
+                  },
+                  "column": {
+                    "start": 11,
+                    "end": 18
+                  },
+                  "typeAnnotation": {
+                    "type": "TypeReference",
+                    "base": "string",
+                    "typeArguments": [],
                     "line": {
                       "start": 78,
                       "end": 78
                     },
                     "column": {
-                      "start": 11,
-                      "end": 18
-                    },
-                    "typeAnnotation": {
-                      "type": "TypeReference",
-                      "base": "string",
-                      "typeArguments": [],
-                      "line": {
-                        "start": 78,
-                        "end": 78
-                      },
-                      "column": {
-                        "start": 20,
-                        "end": 26
-                      }
+                      "start": 20,
+                      "end": 26
                     }
                   }
-                ],
-                "init": [
-                  {
-                    "type": "Identifier",
-                    "name": "v",
-                    "line": {
-                      "start": 78,
-                      "end": 78
-                    },
-                    "column": {
-                      "start": 29,
-                      "end": 30
-                    }
+                },
+                "init": {
+                  "type": "Identifier",
+                  "name": "v",
+                  "line": {
+                    "start": 78,
+                    "end": 78
+                  },
+                  "column": {
+                    "start": 29,
+                    "end": 30
                   }
-                ],
+                },
                 "line": {
                   "start": 78,
                   "end": 78
@@ -3158,35 +3102,31 @@
               {
                 "type": "VariableDeclaration",
                 "kind": "let",
-                "names": [
-                  {
-                    "type": "IdentifierPattern",
-                    "name": "total",
-                    "line": {
-                      "start": 90,
-                      "end": 90
-                    },
-                    "column": {
-                      "start": 9,
-                      "end": 14
-                    }
+                "name": {
+                  "type": "IdentifierPattern",
+                  "name": "total",
+                  "line": {
+                    "start": 90,
+                    "end": 90
+                  },
+                  "column": {
+                    "start": 9,
+                    "end": 14
                   }
-                ],
-                "init": [
-                  {
-                    "type": "NumberLiteral",
-                    "value": 0,
-                    "raw": "0",
-                    "line": {
-                      "start": 90,
-                      "end": 90
-                    },
-                    "column": {
-                      "start": 17,
-                      "end": 18
-                    }
+                },
+                "init": {
+                  "type": "NumberLiteral",
+                  "value": 0,
+                  "raw": "0",
+                  "line": {
+                    "start": 90,
+                    "end": 90
+                  },
+                  "column": {
+                    "start": 17,
+                    "end": 18
                   }
-                ],
+                },
                 "line": {
                   "start": 90,
                   "end": 90
@@ -3312,47 +3252,43 @@
                     {
                       "type": "VariableDeclaration",
                       "kind": "const",
-                      "names": [
-                        {
-                          "type": "IdentifierPattern",
-                          "name": "present",
+                      "name": {
+                        "type": "IdentifierPattern",
+                        "name": "present",
+                        "line": {
+                          "start": 93,
+                          "end": 93
+                        },
+                        "column": {
+                          "start": 15,
+                          "end": 22
+                        },
+                        "typeAnnotation": {
+                          "type": "TypeReference",
+                          "base": "string",
+                          "typeArguments": [],
                           "line": {
                             "start": 93,
                             "end": 93
                           },
                           "column": {
-                            "start": 15,
-                            "end": 22
-                          },
-                          "typeAnnotation": {
-                            "type": "TypeReference",
-                            "base": "string",
-                            "typeArguments": [],
-                            "line": {
-                              "start": 93,
-                              "end": 93
-                            },
-                            "column": {
-                              "start": 24,
-                              "end": 30
-                            }
+                            "start": 24,
+                            "end": 30
                           }
                         }
-                      ],
-                      "init": [
-                        {
-                          "type": "Identifier",
-                          "name": "item",
-                          "line": {
-                            "start": 93,
-                            "end": 93
-                          },
-                          "column": {
-                            "start": 33,
-                            "end": 37
-                          }
+                      },
+                      "init": {
+                        "type": "Identifier",
+                        "name": "item",
+                        "line": {
+                          "start": 93,
+                          "end": 93
+                        },
+                        "column": {
+                          "start": 33,
+                          "end": 37
                         }
-                      ],
+                      },
                       "line": {
                         "start": 93,
                         "end": 93
@@ -3364,8 +3300,22 @@
                     },
                     {
                       "type": "AssignmentStatement",
-                      "targets": [
-                        {
+                      "target": {
+                        "type": "Identifier",
+                        "name": "total",
+                        "line": {
+                          "start": 94,
+                          "end": 94
+                        },
+                        "column": {
+                          "start": 9,
+                          "end": 14
+                        }
+                      },
+                      "value": {
+                        "type": "BinaryExpression",
+                        "operator": "+",
+                        "left": {
                           "type": "Identifier",
                           "name": "total",
                           "line": {
@@ -3373,48 +3323,22 @@
                             "end": 94
                           },
                           "column": {
-                            "start": 9,
-                            "end": 14
+                            "start": 17,
+                            "end": 22
                           }
-                        }
-                      ],
-                      "values": [
-                        {
-                          "type": "BinaryExpression",
-                          "operator": "+",
-                          "left": {
+                        },
+                        "right": {
+                          "type": "UnaryExpression",
+                          "operator": "#",
+                          "argument": {
                             "type": "Identifier",
-                            "name": "total",
+                            "name": "present",
                             "line": {
                               "start": 94,
                               "end": 94
                             },
                             "column": {
-                              "start": 17,
-                              "end": 22
-                            }
-                          },
-                          "right": {
-                            "type": "UnaryExpression",
-                            "operator": "#",
-                            "argument": {
-                              "type": "Identifier",
-                              "name": "present",
-                              "line": {
-                                "start": 94,
-                                "end": 94
-                              },
-                              "column": {
-                                "start": 26,
-                                "end": 33
-                              }
-                            },
-                            "line": {
-                              "start": 94,
-                              "end": 94
-                            },
-                            "column": {
-                              "start": 25,
+                              "start": 26,
                               "end": 33
                             }
                           },
@@ -3423,11 +3347,19 @@
                             "end": 94
                           },
                           "column": {
-                            "start": 17,
+                            "start": 25,
                             "end": 33
                           }
+                        },
+                        "line": {
+                          "start": 94,
+                          "end": 94
+                        },
+                        "column": {
+                          "start": 17,
+                          "end": 33
                         }
-                      ],
+                      },
                       "line": {
                         "start": 94,
                         "end": 94
@@ -3571,35 +3503,31 @@
               {
                 "type": "VariableDeclaration",
                 "kind": "let",
-                "names": [
-                  {
-                    "type": "IdentifierPattern",
-                    "name": "total",
-                    "line": {
-                      "start": 101,
-                      "end": 101
-                    },
-                    "column": {
-                      "start": 9,
-                      "end": 14
-                    }
+                "name": {
+                  "type": "IdentifierPattern",
+                  "name": "total",
+                  "line": {
+                    "start": 101,
+                    "end": 101
+                  },
+                  "column": {
+                    "start": 9,
+                    "end": 14
                   }
-                ],
-                "init": [
-                  {
-                    "type": "NumberLiteral",
-                    "value": 0,
-                    "raw": "0",
-                    "line": {
-                      "start": 101,
-                      "end": 101
-                    },
-                    "column": {
-                      "start": 17,
-                      "end": 18
-                    }
+                },
+                "init": {
+                  "type": "NumberLiteral",
+                  "value": 0,
+                  "raw": "0",
+                  "line": {
+                    "start": 101,
+                    "end": 101
+                  },
+                  "column": {
+                    "start": 17,
+                    "end": 18
                   }
-                ],
+                },
                 "line": {
                   "start": 101,
                   "end": 101

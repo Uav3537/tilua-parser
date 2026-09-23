@@ -1,6 +1,7 @@
 -- Object literals: `{}` is objects only, JS colon syntax (`a: 1`, not `a = 1`).
 
-const x, y = 10, 20
+const x = 10
+const y = 20
 
 const point = { x: 1, y: 2 }
 const shorthand = { x, y }

@@ -99,46 +99,42 @@
                         {
                           "type": "VariableDeclaration",
                           "kind": "const",
-                          "names": [
-                            {
-                              "type": "IdentifierPattern",
-                              "name": "one",
+                          "name": {
+                            "type": "IdentifierPattern",
+                            "name": "one",
+                            "line": {
+                              "start": 16,
+                              "end": 16
+                            },
+                            "column": {
+                              "start": 15,
+                              "end": 18
+                            },
+                            "typeAnnotation": {
+                              "type": "TypeLiteralNumber",
+                              "value": 1,
                               "line": {
                                 "start": 16,
                                 "end": 16
                               },
                               "column": {
-                                "start": 15,
-                                "end": 18
-                              },
-                              "typeAnnotation": {
-                                "type": "TypeLiteralNumber",
-                                "value": 1,
-                                "line": {
-                                  "start": 16,
-                                  "end": 16
-                                },
-                                "column": {
-                                  "start": 20,
-                                  "end": 21
-                                }
+                                "start": 20,
+                                "end": 21
                               }
                             }
-                          ],
-                          "init": [
-                            {
-                              "type": "Identifier",
-                              "name": "a",
-                              "line": {
-                                "start": 16,
-                                "end": 16
-                              },
-                              "column": {
-                                "start": 24,
-                                "end": 25
-                              }
+                          },
+                          "init": {
+                            "type": "Identifier",
+                            "name": "a",
+                            "line": {
+                              "start": 16,
+                              "end": 16
+                            },
+                            "column": {
+                              "start": 24,
+                              "end": 25
                             }
-                          ],
+                          },
                           "line": {
                             "start": 16,
                             "end": 16
@@ -203,70 +199,66 @@
               {
                 "type": "VariableDeclaration",
                 "kind": "const",
-                "names": [
-                  {
-                    "type": "IdentifierPattern",
-                    "name": "notOne",
-                    "line": {
-                      "start": 20,
-                      "end": 20
-                    },
-                    "column": {
-                      "start": 11,
-                      "end": 17
-                    },
-                    "typeAnnotation": {
-                      "type": "DifferenceTypeNode",
-                      "base": {
-                        "type": "TypeReference",
-                        "base": "unknown",
-                        "typeArguments": [],
-                        "line": {
-                          "start": 20,
-                          "end": 20
-                        },
-                        "column": {
-                          "start": 19,
-                          "end": 26
-                        }
-                      },
-                      "excluded": {
-                        "type": "TypeLiteralNumber",
-                        "value": 1,
-                        "line": {
-                          "start": 20,
-                          "end": 20
-                        },
-                        "column": {
-                          "start": 29,
-                          "end": 30
-                        }
-                      },
+                "name": {
+                  "type": "IdentifierPattern",
+                  "name": "notOne",
+                  "line": {
+                    "start": 20,
+                    "end": 20
+                  },
+                  "column": {
+                    "start": 11,
+                    "end": 17
+                  },
+                  "typeAnnotation": {
+                    "type": "DifferenceTypeNode",
+                    "base": {
+                      "type": "TypeReference",
+                      "base": "unknown",
+                      "typeArguments": [],
                       "line": {
                         "start": 20,
                         "end": 20
                       },
                       "column": {
                         "start": 19,
+                        "end": 26
+                      }
+                    },
+                    "excluded": {
+                      "type": "TypeLiteralNumber",
+                      "value": 1,
+                      "line": {
+                        "start": 20,
+                        "end": 20
+                      },
+                      "column": {
+                        "start": 29,
                         "end": 30
                       }
-                    }
-                  }
-                ],
-                "init": [
-                  {
-                    "type": "Identifier",
-                    "name": "a",
+                    },
                     "line": {
                       "start": 20,
                       "end": 20
                     },
                     "column": {
-                      "start": 33,
-                      "end": 34
+                      "start": 19,
+                      "end": 30
                     }
                   }
-                ],
+                },
+                "init": {
+                  "type": "Identifier",
+                  "name": "a",
+                  "line": {
+                    "start": 20,
+                    "end": 20
+                  },
+                  "column": {
+                    "start": 33,
+                    "end": 34
+                  }
+                },
                 "line": {
                   "start": 20,
                   "end": 20
@@ -324,34 +316,30 @@
                         {
                           "type": "VariableDeclaration",
                           "kind": "const",
-                          "names": [
-                            {
-                              "type": "IdentifierPattern",
-                              "name": "two",
-                              "line": {
-                                "start": 24,
-                                "end": 24
-                              },
-                              "column": {
-                                "start": 15,
-                                "end": 18
-                              }
+                          "name": {
+                            "type": "IdentifierPattern",
+                            "name": "two",
+                            "line": {
+                              "start": 24,
+                              "end": 24
+                            },
+                            "column": {
+                              "start": 15,
+                              "end": 18
                             }
-                          ],
-                          "init": [
-                            {
-                              "type": "Identifier",
-                              "name": "a",
-                              "line": {
-                                "start": 24,
-                                "end": 24
-                              },
-                              "column": {
-                                "start": 21,
-                                "end": 22
-                              }
+                          },
+                          "init": {
+                            "type": "Identifier",
+                            "name": "a",
+                            "line": {
+                              "start": 24,
+                              "end": 24
+                            },
+                            "column": {
+                              "start": 21,
+                              "end": 22
                             }
-                          ],
+                          },
                           "line": {
                             "start": 24,
                             "end": 24
@@ -416,79 +404,69 @@
               {
                 "type": "VariableDeclaration",
                 "kind": "const",
-                "names": [
-                  {
-                    "type": "IdentifierPattern",
-                    "name": "neither",
-                    "line": {
-                      "start": 27,
-                      "end": 27
-                    },
-                    "column": {
-                      "start": 11,
-                      "end": 18
-                    },
-                    "typeAnnotation": {
-                      "type": "DifferenceTypeNode",
-                      "base": {
-                        "type": "TypeReference",
-                        "base": "unknown",
-                        "typeArguments": [],
-                        "line": {
-                          "start": 27,
-                          "end": 27
-                        },
-                        "column": {
-                          "start": 20,
-                          "end": 27
-                        }
+                "name": {
+                  "type": "IdentifierPattern",
+                  "name": "neither",
+                  "line": {
+                    "start": 27,
+                    "end": 27
+                  },
+                  "column": {
+                    "start": 11,
+                    "end": 18
+                  },
+                  "typeAnnotation": {
+                    "type": "DifferenceTypeNode",
+                    "base": {
+                      "type": "TypeReference",
+                      "base": "unknown",
+                      "typeArguments": [],
+                      "line": {
+                        "start": 27,
+                        "end": 27
                       },
-                      "excluded": {
-                        "type": "ParenthesizedTypeNode",
-                        "typeAnnotation": {
-                          "type": "UnionTypeNode",
-                          "types": [
-                            {
-                              "type": "TypeLiteralNumber",
-                              "value": 1,
-                              "line": {
-                                "start": 27,
-                                "end": 27
-                              },
-                              "column": {
-                                "start": 31,
-                                "end": 32
-                              }
+                      "column": {
+                        "start": 20,
+                        "end": 27
+                      }
+                    },
+                    "excluded": {
+                      "type": "ParenthesizedTypeNode",
+                      "typeAnnotation": {
+                        "type": "UnionTypeNode",
+                        "types": [
+                          {
+                            "type": "TypeLiteralNumber",
+                            "value": 1,
+                            "line": {
+                              "start": 27,
+                              "end": 27
                             },
-                            {
-                              "type": "TypeLiteralNumber",
-                              "value": 2,
-                              "line": {
-                                "start": 27,
-                                "end": 27
-                              },
-                              "column": {
-                                "start": 35,
-                                "end": 36
-                              }
+                            "column": {
+                              "start": 31,
+                              "end": 32
                             }
-                          ],
-                          "line": {
-                            "start": 27,
-                            "end": 27
                           },
-                          "column": {
-                            "start": 31,
-                            "end": 36
+                          {
+                            "type": "TypeLiteralNumber",
+                            "value": 2,
+                            "line": {
+                              "start": 27,
+                              "end": 27
+                            },
+                            "column": {
+                              "start": 35,
+                              "end": 36
+                            }
                           }
-                        },
+                        ],
                         "line": {
                           "start": 27,
                           "end": 27
                         },
                         "column": {
-                          "start": 30,
-                          "end": 37
+                          "start": 31,
+                          "end": 36
                         }
                       },
                       "line": {
@@ -496,26 +474,32 @@
                         "end": 27
                       },
                       "column": {
-                        "start": 20,
+                        "start": 30,
                         "end": 37
                       }
-                    }
-                  }
-                ],
-                "init": [
-                  {
-                    "type": "Identifier",
-                    "name": "a",
+                    },
                     "line": {
                       "start": 27,
                       "end": 27
                     },
                     "column": {
-                      "start": 40,
-                      "end": 41
+                      "start": 20,
+                      "end": 37
                     }
                   }
-                ],
+                },
+                "init": {
+                  "type": "Identifier",
+                  "name": "a",
+                  "line": {
+                    "start": 27,
+                    "end": 27
+                  },
+                  "column": {
+                    "start": 40,
+                    "end": 41
+                  }
+                },
                 "line": {
                   "start": 27,
                   "end": 27
@@ -648,80 +632,70 @@
                         {
                           "type": "VariableDeclaration",
                           "kind": "const",
-                          "names": [
-                            {
-                              "type": "IdentifierPattern",
-                              "name": "kept",
-                              "line": {
-                                "start": 35,
-                                "end": 35
-                              },
-                              "column": {
-                                "start": 15,
-                                "end": 19
-                              },
-                              "typeAnnotation": {
-                                "type": "DifferenceTypeNode",
-                                "base": {
-                                  "type": "TypeReference",
-                                  "base": "unknown",
-                                  "typeArguments": [],
-                                  "line": {
-                                    "start": 35,
-                                    "end": 35
-                                  },
-                                  "column": {
-                                    "start": 21,
-                                    "end": 28
-                                  }
+                          "name": {
+                            "type": "IdentifierPattern",
+                            "name": "kept",
+                            "line": {
+                              "start": 35,
+                              "end": 35
+                            },
+                            "column": {
+                              "start": 15,
+                              "end": 19
+                            },
+                            "typeAnnotation": {
+                              "type": "DifferenceTypeNode",
+                              "base": {
+                                "type": "TypeReference",
+                                "base": "unknown",
+                                "typeArguments": [],
+                                "line": {
+                                  "start": 35,
+                                  "end": 35
                                 },
-                                "excluded": {
-                                  "type": "ParenthesizedTypeNode",
-                                  "typeAnnotation": {
-                                    "type": "UnionTypeNode",
-                                    "types": [
-                                      {
-                                        "type": "TypeReference",
-                                        "base": "nil",
-                                        "typeArguments": [],
-                                        "line": {
-                                          "start": 35,
-                                          "end": 35
-                                        },
-                                        "column": {
-                                          "start": 32,
-                                          "end": 35
-                                        }
+                                "column": {
+                                  "start": 21,
+                                  "end": 28
+                                }
+                              },
+                              "excluded": {
+                                "type": "ParenthesizedTypeNode",
+                                "typeAnnotation": {
+                                  "type": "UnionTypeNode",
+                                  "types": [
+                                    {
+                                      "type": "TypeReference",
+                                      "base": "nil",
+                                      "typeArguments": [],
+                                      "line": {
+                                        "start": 35,
+                                        "end": 35
                                       },
-                                      {
-                                        "type": "TypeLiteralBoolean",
-                                        "value": false,
-                                        "line": {
-                                          "start": 35,
-                                          "end": 35
-                                        },
-                                        "column": {
-                                          "start": 38,
-                                          "end": 43
-                                        }
+                                      "column": {
+                                        "start": 32,
+                                        "end": 35
                                       }
-                                    ],
-                                    "line": {
-                                      "start": 35,
-                                      "end": 35
                                     },
-                                    "column": {
-                                      "start": 32,
-                                      "end": 43
+                                    {
+                                      "type": "TypeLiteralBoolean",
+                                      "value": false,
+                                      "line": {
+                                        "start": 35,
+                                        "end": 35
+                                      },
+                                      "column": {
+                                        "start": 38,
+                                        "end": 43
+                                      }
                                     }
-                                  },
+                                  ],
                                   "line": {
                                     "start": 35,
                                     "end": 35
                                   },
                                   "column": {
-                                    "start": 31,
-                                    "end": 44
+                                    "start": 32,
+                                    "end": 43
                                   }
                                 },
                                 "line": {
@@ -729,26 +703,32 @@
                                   "end": 35
                                 },
                                 "column": {
-                                  "start": 21,
+                                  "start": 31,
                                   "end": 44
                                 }
-                              }
-                            }
-                          ],
-                          "init": [
-                            {
-                              "type": "Identifier",
-                              "name": "b",
+                              },
                               "line": {
                                 "start": 35,
                                 "end": 35
                               },
                               "column": {
-                                "start": 47,
-                                "end": 48
+                                "start": 21,
+                                "end": 44
                               }
                             }
-                          ],
+                          },
+                          "init": {
+                            "type": "Identifier",
+                            "name": "b",
+                            "line": {
+                              "start": 35,
+                              "end": 35
+                            },
+                            "column": {
+                              "start": 47,
+                              "end": 48
+                            }
+                          },
                           "line": {
                             "start": 35,
                             "end": 35
@@ -813,72 +793,68 @@
               {
                 "type": "VariableDeclaration",
                 "kind": "const",
-                "names": [
-                  {
-                    "type": "IdentifierPattern",
-                    "name": "gone",
-                    "line": {
-                      "start": 38,
-                      "end": 38
-                    },
-                    "column": {
-                      "start": 11,
-                      "end": 15
-                    },
-                    "typeAnnotation": {
-                      "type": "UnionTypeNode",
-                      "types": [
-                        {
-                          "type": "TypeReference",
-                          "base": "nil",
-                          "typeArguments": [],
-                          "line": {
-                            "start": 38,
-                            "end": 38
-                          },
-                          "column": {
-                            "start": 17,
-                            "end": 20
-                          }
+                "name": {
+                  "type": "IdentifierPattern",
+                  "name": "gone",
+                  "line": {
+                    "start": 38,
+                    "end": 38
+                  },
+                  "column": {
+                    "start": 11,
+                    "end": 15
+                  },
+                  "typeAnnotation": {
+                    "type": "UnionTypeNode",
+                    "types": [
+                      {
+                        "type": "TypeReference",
+                        "base": "nil",
+                        "typeArguments": [],
+                        "line": {
+                          "start": 38,
+                          "end": 38
                         },
-                        {
-                          "type": "TypeLiteralBoolean",
-                          "value": false,
-                          "line": {
-                            "start": 38,
-                            "end": 38
-                          },
-                          "column": {
-                            "start": 23,
-                            "end": 28
-                          }
+                        "column": {
+                          "start": 17,
+                          "end": 20
                         }
-                      ],
-                      "line": {
-                        "start": 38,
-                        "end": 38
                       },
-                      "column": {
-                        "start": 17,
-                        "end": 28
+                      {
+                        "type": "TypeLiteralBoolean",
+                        "value": false,
+                        "line": {
+                          "start": 38,
+                          "end": 38
+                        },
+                        "column": {
+                          "start": 23,
+                          "end": 28
+                        }
                       }
-                    }
-                  }
-                ],
-                "init": [
-                  {
-                    "type": "Identifier",
-                    "name": "b",
+                    ],
                     "line": {
                       "start": 38,
                       "end": 38
                     },
                     "column": {
-                      "start": 31,
-                      "end": 32
+                      "start": 17,
+                      "end": 28
                     }
                   }
-                ],
+                },
+                "init": {
+                  "type": "Identifier",
+                  "name": "b",
+                  "line": {
+                    "start": 38,
+                    "end": 38
+                  },
+                  "column": {
+                    "start": 31,
+                    "end": 32
+                  }
+                },
                 "line": {
                   "start": 38,
                   "end": 38
@@ -1033,71 +1009,67 @@
                         {
                           "type": "VariableDeclaration",
                           "kind": "const",
-                          "names": [
-                            {
-                              "type": "IdentifierPattern",
-                              "name": "present",
-                              "line": {
-                                "start": 45,
-                                "end": 45
-                              },
-                              "column": {
-                                "start": 15,
-                                "end": 22
-                              },
-                              "typeAnnotation": {
-                                "type": "DifferenceTypeNode",
-                                "base": {
-                                  "type": "TypeReference",
-                                  "base": "unknown",
-                                  "typeArguments": [],
-                                  "line": {
-                                    "start": 45,
-                                    "end": 45
-                                  },
-                                  "column": {
-                                    "start": 24,
-                                    "end": 31
-                                  }
-                                },
-                                "excluded": {
-                                  "type": "TypeReference",
-                                  "base": "nil",
-                                  "typeArguments": [],
-                                  "line": {
-                                    "start": 45,
-                                    "end": 45
-                                  },
-                                  "column": {
-                                    "start": 34,
-                                    "end": 37
-                                  }
-                                },
+                          "name": {
+                            "type": "IdentifierPattern",
+                            "name": "present",
+                            "line": {
+                              "start": 45,
+                              "end": 45
+                            },
+                            "column": {
+                              "start": 15,
+                              "end": 22
+                            },
+                            "typeAnnotation": {
+                              "type": "DifferenceTypeNode",
+                              "base": {
+                                "type": "TypeReference",
+                                "base": "unknown",
+                                "typeArguments": [],
                                 "line": {
                                   "start": 45,
                                   "end": 45
                                 },
                                 "column": {
                                   "start": 24,
+                                  "end": 31
+                                }
+                              },
+                              "excluded": {
+                                "type": "TypeReference",
+                                "base": "nil",
+                                "typeArguments": [],
+                                "line": {
+                                  "start": 45,
+                                  "end": 45
+                                },
+                                "column": {
+                                  "start": 34,
                                   "end": 37
                                 }
-                              }
-                            }
-                          ],
-                          "init": [
-                            {
-                              "type": "Identifier",
-                              "name": "v",
+                              },
                               "line": {
                                 "start": 45,
                                 "end": 45
                               },
                               "column": {
-                                "start": 40,
-                                "end": 41
+                                "start": 24,
+                                "end": 37
                               }
                             }
-                          ],
+                          },
+                          "init": {
+                            "type": "Identifier",
+                            "name": "v",
+                            "line": {
+                              "start": 45,
+                              "end": 45
+                            },
+                            "column": {
+                              "start": 40,
+                              "end": 41
+                            }
+                          },
                           "line": {
                             "start": 45,
                             "end": 45
@@ -1214,147 +1186,123 @@
       {
         "type": "VariableDeclaration",
         "kind": "const",
-        "names": [
-          {
-            "type": "IdentifierPattern",
-            "name": "fromUnion",
+        "name": {
+          "type": "IdentifierPattern",
+          "name": "fromUnion",
+          "line": {
+            "start": 53,
+            "end": 53
+          },
+          "column": {
+            "start": 7,
+            "end": 16
+          },
+          "typeAnnotation": {
+            "type": "UnionTypeNode",
+            "types": [
+              {
+                "type": "TypeLiteralString",
+                "value": "a",
+                "line": {
+                  "start": 53,
+                  "end": 53
+                },
+                "column": {
+                  "start": 18,
+                  "end": 21
+                }
+              },
+              {
+                "type": "TypeLiteralString",
+                "value": "c",
+                "line": {
+                  "start": 53,
+                  "end": 53
+                },
+                "column": {
+                  "start": 24,
+                  "end": 27
+                }
+              }
+            ],
             "line": {
               "start": 53,
               "end": 53
             },
             "column": {
-              "start": 7,
-              "end": 16
-            },
-            "typeAnnotation": {
-              "type": "UnionTypeNode",
-              "types": [
-                {
-                  "type": "TypeLiteralString",
-                  "value": "a",
-                  "line": {
-                    "start": 53,
-                    "end": 53
-                  },
-                  "column": {
-                    "start": 18,
-                    "end": 21
-                  }
-                },
-                {
-                  "type": "TypeLiteralString",
-                  "value": "c",
-                  "line": {
-                    "start": 53,
-                    "end": 53
-                  },
-                  "column": {
-                    "start": 24,
-                    "end": 27
-                  }
-                }
-              ],
-              "line": {
-                "start": 53,
-                "end": 53
-              },
-              "column": {
-                "start": 18,
-                "end": 27
-              }
+              "start": 18,
+              "end": 27
             }
           }
-        ],
-        "init": [
-          {
-            "type": "TypeAssertionExpression",
-            "expression": {
-              "type": "StringLiteral",
-              "value": "a",
-              "raw": "\"a\"",
-              "line": {
-                "start": 53,
-                "end": 53
-              },
-              "column": {
-                "start": 30,
-                "end": 33
-              }
+        },
+        "init": {
+          "type": "TypeAssertionExpression",
+          "expression": {
+            "type": "StringLiteral",
+            "value": "a",
+            "raw": "\"a\"",
+            "line": {
+              "start": 53,
+              "end": 53
             },
+            "column": {
+              "start": 30,
+              "end": 33
+            }
+          },
+          "typeAnnotation": {
+            "type": "ParenthesizedTypeNode",
             "typeAnnotation": {
-              "type": "ParenthesizedTypeNode",
-              "typeAnnotation": {
-                "type": "DifferenceTypeNode",
-                "base": {
-                  "type": "ParenthesizedTypeNode",
-                  "typeAnnotation": {
-                    "type": "UnionTypeNode",
-                    "types": [
-                      {
-                        "type": "TypeLiteralString",
-                        "value": "a",
-                        "line": {
-                          "start": 53,
-                          "end": 53
-                        },
-                        "column": {
-                          "start": 39,
-                          "end": 42
-                        }
+              "type": "DifferenceTypeNode",
+              "base": {
+                "type": "ParenthesizedTypeNode",
+                "typeAnnotation": {
+                  "type": "UnionTypeNode",
+                  "types": [
+                    {
+                      "type": "TypeLiteralString",
+                      "value": "a",
+                      "line": {
+                        "start": 53,
+                        "end": 53
                       },
-                      {
-                        "type": "TypeLiteralString",
-                        "value": "b",
-                        "line": {
-                          "start": 53,
-                          "end": 53
-                        },
-                        "column": {
-                          "start": 45,
-                          "end": 48
-                        }
-                      },
-                      {
-                        "type": "TypeLiteralString",
-                        "value": "c",
-                        "line": {
-                          "start": 53,
-                          "end": 53
-                        },
-                        "column": {
-                          "start": 51,
-                          "end": 54
-                        }
+                      "column": {
+                        "start": 39,
+                        "end": 42
                       }
-                    ],
-                    "line": {
-                      "start": 53,
-                      "end": 53
                     },
-                    "column": {
-                      "start": 39,
-                      "end": 54
+                    {
+                      "type": "TypeLiteralString",
+                      "value": "b",
+                      "line": {
+                        "start": 53,
+                        "end": 53
+                      },
+                      "column": {
+                        "start": 45,
+                        "end": 48
+                      }
+                    },
+                    {
+                      "type": "TypeLiteralString",
+                      "value": "c",
+                      "line": {
+                        "start": 53,
+                        "end": 53
+                      },
+                      "column": {
+                        "start": 51,
+                        "end": 54
+                      }
                     }
-                  },
+                  ],
                   "line": {
                     "start": 53,
                     "end": 53
                   },
                   "column": {
-                    "start": 38,
-                    "end": 55
-                  }
-                },
-                "excluded": {
-                  "type": "TypeLiteralString",
-                  "value": "b",
-                  "line": {
-                    "start": 53,
-                    "end": 53
-                  },
-                  "column": {
-                    "start": 58,
-                    "end": 61
+                    "start": 39,
+                    "end": 54
                   }
                 },
                 "line": {
@@ -1363,6 +1311,18 @@
                 },
                 "column": {
                   "start": 38,
+                  "end": 55
+                }
+              },
+              "excluded": {
+                "type": "TypeLiteralString",
+                "value": "b",
+                "line": {
+                  "start": 53,
+                  "end": 53
+                },
+                "column": {
+                  "start": 58,
                   "end": 61
                 }
               },
@@ -1371,8 +1331,8 @@
                 "end": 53
               },
               "column": {
-                "start": 37,
-                "end": 62
+                "start": 38,
+                "end": 61
               }
             },
             "line": {
@@ -1380,11 +1340,19 @@
               "end": 53
             },
             "column": {
-              "start": 30,
+              "start": 37,
               "end": 62
             }
+          },
+          "line": {
+            "start": 53,
+            "end": 53
+          },
+          "column": {
+            "start": 30,
+            "end": 62
           }
-        ],
+        },
         "line": {
           "start": 53,
           "end": 53
@@ -1397,84 +1365,72 @@
       {
         "type": "VariableDeclaration",
         "kind": "const",
-        "names": [
-          {
-            "type": "IdentifierPattern",
-            "name": "stillString",
+        "name": {
+          "type": "IdentifierPattern",
+          "name": "stillString",
+          "line": {
+            "start": 57,
+            "end": 57
+          },
+          "column": {
+            "start": 7,
+            "end": 18
+          },
+          "typeAnnotation": {
+            "type": "TypeReference",
+            "base": "string",
+            "typeArguments": [],
             "line": {
               "start": 57,
               "end": 57
             },
             "column": {
-              "start": 7,
-              "end": 18
-            },
-            "typeAnnotation": {
-              "type": "TypeReference",
-              "base": "string",
-              "typeArguments": [],
-              "line": {
-                "start": 57,
-                "end": 57
-              },
-              "column": {
-                "start": 20,
-                "end": 26
-              }
+              "start": 20,
+              "end": 26
             }
           }
-        ],
-        "init": [
-          {
-            "type": "TypeAssertionExpression",
-            "expression": {
-              "type": "StringLiteral",
-              "value": "b",
-              "raw": "\"b\"",
-              "line": {
-                "start": 57,
-                "end": 57
-              },
-              "column": {
-                "start": 29,
-                "end": 32
-              }
+        },
+        "init": {
+          "type": "TypeAssertionExpression",
+          "expression": {
+            "type": "StringLiteral",
+            "value": "b",
+            "raw": "\"b\"",
+            "line": {
+              "start": 57,
+              "end": 57
             },
+            "column": {
+              "start": 29,
+              "end": 32
+            }
+          },
+          "typeAnnotation": {
+            "type": "ParenthesizedTypeNode",
             "typeAnnotation": {
-              "type": "ParenthesizedTypeNode",
-              "typeAnnotation": {
-                "type": "DifferenceTypeNode",
-                "base": {
-                  "type": "TypeReference",
-                  "base": "string",
-                  "typeArguments": [],
-                  "line": {
-                    "start": 57,
-                    "end": 57
-                  },
-                  "column": {
-                    "start": 37,
-                    "end": 43
-                  }
-                },
-                "excluded": {
-                  "type": "TypeLiteralString",
-                  "value": "a",
-                  "line": {
-                    "start": 57,
-                    "end": 57
-                  },
-                  "column": {
-                    "start": 46,
-                    "end": 49
-                  }
-                },
+              "type": "DifferenceTypeNode",
+              "base": {
+                "type": "TypeReference",
+                "base": "string",
+                "typeArguments": [],
                 "line": {
                   "start": 57,
                   "end": 57
                 },
                 "column": {
                   "start": 37,
+                  "end": 43
+                }
+              },
+              "excluded": {
+                "type": "TypeLiteralString",
+                "value": "a",
+                "line": {
+                  "start": 57,
+                  "end": 57
+                },
+                "column": {
+                  "start": 46,
                   "end": 49
                 }
               },
@@ -1483,8 +1439,8 @@
                 "end": 57
               },
               "column": {
-                "start": 36,
-                "end": 50
+                "start": 37,
+                "end": 49
               }
             },
             "line": {
@@ -1492,11 +1448,19 @@
               "end": 57
             },
             "column": {
-              "start": 29,
+              "start": 36,
               "end": 50
             }
+          },
+          "line": {
+            "start": 57,
+            "end": 57
+          },
+          "column": {
+            "start": 29,
+            "end": 50
           }
-        ],
+        },
         "line": {
           "start": 57,
           "end": 57
@@ -1509,18 +1473,71 @@
       {
         "type": "VariableDeclaration",
         "kind": "const",
-        "names": [
-          {
-            "type": "IdentifierPattern",
-            "name": "stillOpaque",
+        "name": {
+          "type": "IdentifierPattern",
+          "name": "stillOpaque",
+          "line": {
+            "start": 60,
+            "end": 60
+          },
+          "column": {
+            "start": 7,
+            "end": 18
+          },
+          "typeAnnotation": {
+            "type": "DifferenceTypeNode",
+            "base": {
+              "type": "TypeReference",
+              "base": "unknown",
+              "typeArguments": [],
+              "line": {
+                "start": 60,
+                "end": 60
+              },
+              "column": {
+                "start": 20,
+                "end": 27
+              }
+            },
+            "excluded": {
+              "type": "TypeLiteralNumber",
+              "value": 1,
+              "line": {
+                "start": 60,
+                "end": 60
+              },
+              "column": {
+                "start": 30,
+                "end": 31
+              }
+            },
             "line": {
               "start": 60,
               "end": 60
             },
             "column": {
-              "start": 7,
-              "end": 18
+              "start": 20,
+              "end": 31
+            }
+          }
+        },
+        "init": {
+          "type": "TypeAssertionExpression",
+          "expression": {
+            "type": "NumberLiteral",
+            "value": 2,
+            "raw": "2",
+            "line": {
+              "start": 60,
+              "end": 60
             },
+            "column": {
+              "start": 34,
+              "end": 35
+            }
+          },
+          "typeAnnotation": {
+            "type": "ParenthesizedTypeNode",
             "typeAnnotation": {
               "type": "DifferenceTypeNode",
               "base": {
@@ -1532,8 +1549,8 @@
                   "end": 60
                 },
                 "column": {
-                  "start": 20,
-                  "end": 27
+                  "start": 40,
+                  "end": 47
                 }
               },
               "excluded": {
@@ -1544,72 +1561,7 @@
                   "end": 60
                 },
                 "column": {
-                  "start": 30,
-                  "end": 31
-                }
-              },
-              "line": {
-                "start": 60,
-                "end": 60
-              },
-              "column": {
-                "start": 20,
-                "end": 31
-              }
-            }
-          }
-        ],
-        "init": [
-          {
-            "type": "TypeAssertionExpression",
-            "expression": {
-              "type": "NumberLiteral",
-              "value": 2,
-              "raw": "2",
-              "line": {
-                "start": 60,
-                "end": 60
-              },
-              "column": {
-                "start": 34,
-                "end": 35
-              }
-            },
-            "typeAnnotation": {
-              "type": "ParenthesizedTypeNode",
-              "typeAnnotation": {
-                "type": "DifferenceTypeNode",
-                "base": {
-                  "type": "TypeReference",
-                  "base": "unknown",
-                  "typeArguments": [],
-                  "line": {
-                    "start": 60,
-                    "end": 60
-                  },
-                  "column": {
-                    "start": 40,
-                    "end": 47
-                  }
-                },
-                "excluded": {
-                  "type": "TypeLiteralNumber",
-                  "value": 1,
-                  "line": {
-                    "start": 60,
-                    "end": 60
-                  },
-                  "column": {
-                    "start": 50,
-                    "end": 51
-                  }
-                },
-                "line": {
-                  "start": 60,
-                  "end": 60
-                },
-                "column": {
-                  "start": 40,
+                  "start": 50,
                   "end": 51
                 }
               },
@@ -1618,8 +1570,8 @@
                 "end": 60
               },
               "column": {
-                "start": 39,
-                "end": 52
+                "start": 40,
+                "end": 51
               }
             },
             "line": {
@@ -1627,11 +1579,19 @@
               "end": 60
             },
             "column": {
-              "start": 34,
+              "start": 39,
               "end": 52
             }
+          },
+          "line": {
+            "start": 60,
+            "end": 60
+          },
+          "column": {
+            "start": 34,
+            "end": 52
           }
-        ],
+        },
         "line": {
           "start": 60,
           "end": 60

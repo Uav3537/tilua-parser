@@ -25,8 +25,8 @@ const [label, ...values] = atLeastOne()
 const labelIsString: string = label
 const valuesAreNumbers: number[] = values
 
--- Names paired with values stay what they were: one value each.
-const x: number, y: string = 1, "b"
+-- Several names are taken from an array, like any other.
+const [x, y] = [1, "b"]
 
 -- A `while` exits when its condition fails, so what the condition ruled out
 -- holds afterwards — unless a `break` can skip that.

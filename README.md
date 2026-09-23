@@ -593,9 +593,17 @@ An array is a table, at runtime as much as in the types: `return [a, b]` is
 a Roblox method such as `FindPartOnRay` — the type library puts a function of
 its own in place of that global or method, which answers one value, as its
 type says. A tuple may end in a rest,
-`[string, ...number[]]`: that many, then any number more. `const a, b = 1, 2`
-still pairs names with values one each; `const a, b = f()` is a name short,
-and says to write `const [a, b] = f()`.
+`[string, ...number[]]`: that many, then any number more.
+
+A declaration and an assignment take one value, and a call is one value
+wherever it is written — an argument, a `return`. Luau's `local a, b = 1, 2`
+is an error that says to write `const [a, b] = [1, 2]`. Where a Luau function
+answers several values and nothing gathers them, ask for all of them by making
+the call an array's last element:
+
+```luau
+const [a, b] = [require(module)]    -- { require(module) }: every value
+```
 
 **A loop takes one value too** — `for (const item in source)`, and several are
 an array the pattern takes apart:

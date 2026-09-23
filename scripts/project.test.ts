@@ -1111,7 +1111,7 @@ const a: A = { p: 1 }`).errors.length,
         const methods = parse("type StringMethods = { upper: (self: string) => string }")
         const shape = (code: string): unknown => {
             const statement = (parse(code).body.statements.at(-1) ?? {}) as unknown as Record<string, unknown>
-            const node = statement.type === "VariableDeclaration" ? (statement.init as unknown[])[0]
+            const node = statement.type === "VariableDeclaration" ? statement.init
                 : statement.type === "CallStatement" ? statement.expression
                 : statement
             const describe = (e: any): string =>
@@ -1971,7 +1971,7 @@ function g() {
 
     // Optional chaining: `a?.b` and `a?:m()` are nil when `a` is.
     const chains = parse("const x = a?.b.c\nconst y = a?:m(1)?.n\nconst z = c ?a:b")
-    const [cx, cy, cz] = chains.body.statements.map(s => (s as { init: any[] }).init[0])
+    const [cx, cy, cz] = chains.body.statements.map(s => (s as { init: any }).init)
     check("optional chains: `?.` and `?:` mark their link",
         [cx.object.optional, cx.optional, cy.optional, cy.object.optional, cz.type],
         [true, undefined, true, true, "IfElseExpression"])
@@ -2504,11 +2504,25 @@ function g() {
     check("spread: a generic reads what it holds through one",
         [generic.errors, generic.bindings.picked], [[], "number | nil"])
 
-    // A spread goes in a call's arguments or an array. A list of values —
-    // a declaration's, an assignment's — pairs one value with each name.
-    check("spread: not in a list of values",
-        parseWithRecovery("declare pair: string[]\nconst a, b = ...pair").errors.map(e => e.message),
-        ["A spread goes in a call's arguments or an array: take values out of an array with a destructuring, 'const [a, b] = xs' (2:14)"])
+    // A spread goes in a call's arguments or an array, not where one value is.
+    check("spread: not where one value goes",
+        parseWithRecovery("declare pair: string[]\nconst a = ...pair").errors.map(e => e.message),
+        ["A spread goes in a call's arguments or an array: take values out of an array with a destructuring, 'const [a, b] = xs' (2:11)"])
+
+    // One name, one value: several are an array, taken apart with a
+    // destructuring. Written the Luau way, it is read as that destructuring.
+    {
+        const recovered = parseWithRecovery("let a, b = 1, 2\nconst c, d = f()\nlet e = 0\ne, a = 1, 2")
+        const [ab, cd] = recovered.program.body.statements as any[]
+        check("declarations and assignments: one value each", [
+            recovered.errors.map(e => e.message),
+            [ab.name.type, ab.init.type, cd.name.type, cd.init.type],
+        ], [[
+            "A declaration takes one value: take several from an array, 'let [a, b] = [x, y]' (1:1)",
+            "A declaration takes one value: take several from an array, 'const [a, b] = [x, y]' (2:1)",
+            "An assignment takes one value: take several from an array, '[a, b] = [x, y]' (4:1)",
+        ], ["ArrayPattern", "ArrayExpression", "ArrayPattern", "CallExpression"]])
+    }
 
     // Several results are an array, and a destructuring takes them apart.
     const tupled = analyze([
@@ -2520,12 +2534,10 @@ function g() {
         "    return nums",
         "}",
         "const [label, ...rest] = mixed()",
-        "const one, two = mixed()",
     ].join("\n"))
-    check("tuples: returned, taken apart, and a call is one value",
+    check("tuples: returned, and taken apart",
         [tupled.errors, tupled.bindings.label, tupled.bindings.rest], [[
             "Type 'number[]' is not assignable to '[string, string]'",
-            "A call is one value, here an array: take its parts with '[a, b] = ...'",
         ], "string", "number[]"])
 }
 
@@ -3195,7 +3207,7 @@ function g() {
                     : n.type === "MethodCallExpression" ? `method(${describe(n.object)}:${n.method.name})`
                         : n.type === "CallExpression" ? `call(${describe(n.callee)})`
                             : n.type === "Identifier" ? n.name : n.type
-            return describe(statement.init[0])
+            return describe(statement.init)
         }
         check("ternary: a call in the alternate is not a method call on the consequent", [
             shape("const x = c ? a : b()"),
@@ -3334,6 +3346,33 @@ function g() {
         ["Argument of type '{ a: number }' is not assignable to parameter of type 'Big', missing b: string"],
         ["Argument of type '{ a: number, b: number }' is not assignable to parameter of type 'Big', 'b' is number, not string"],
     ])
+
+    // Assignment is a statement: an arrow whose body is one assigns, and
+    // returns nothing.
+    {
+        const code = ["let a = 0", "const f = () => a = 1", "const g = () => a += 2"].join("\n")
+        check("arrow: an assignment body", [
+            analyze(code).errors,
+            (parse(code).body.statements[1] as any).init.func.body.statements[0].type,
+            (parse(code).body.statements[2] as any).init.func.body.statements[0].type,
+        ], [[], "AssignmentStatement", "CompoundAssignmentStatement"])
+    }
+
+    // `?.` adds nil only when the object can be nil.
+    {
+        const { a, b, c, d } = analyze([
+            "type BoolValue = { Value: boolean }",
+            "declare sure: BoolValue",
+            "declare maybe: BoolValue | nil",
+            "declare deep: { inner: BoolValue | nil }",
+            "const a = sure.Value",
+            "const b = sure?.Value",
+            "const c = maybe?.Value",
+            "const d = deep?.inner?.Value",
+        ].join("\n")).bindings
+        check("optional chain: nil only from an object that can be nil",
+            { a, b, c, d }, { a: "boolean", b: "boolean", c: "boolean | nil", d: "boolean | nil" })
+    }
 }
 
 for (const failure of failures) console.log(`FAIL ${failure}`)

@@ -16,5 +16,5 @@ v: string | nil
 v: string | nil
 values: number[]
 valuesAreNumbers: number[]
-x: number
-y: string
+x: number | string
+y: number | string

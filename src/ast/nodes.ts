@@ -154,14 +154,17 @@ export interface ErrorStatement extends BaseNode {
     type: "ErrorStatement"
 }
 
-/** `const x = 1` / `let x, y = a, b` — the only variable-binding form in tilua
- *  (Luau's `local` is gone). `const` bindings are immutable and infer literal
- *  types (`const n = 1` → `1`); `let` bindings are mutable and widen. */
+/** `const x = 1` / `let [a, b] = pair` — the only variable-binding form in
+ *  tilua (Luau's `local` is gone). One name, or one pattern, and one value:
+ *  several are taken from an array with a destructuring. `const` bindings are
+ *  immutable and infer literal types (`const n = 1` → `1`); `let` bindings
+ *  are mutable and widen. */
 export interface VariableDeclaration extends BaseNode {
     type: "VariableDeclaration"
     kind: "const" | "let"
-    names: BindingTarget[]
-    init: Expression[]
+    name: BindingTarget
+    /** Absent only on `let x`. */
+    init?: Expression
 }
 
 // ============================================================
@@ -390,10 +393,11 @@ export interface SuperExpression extends BaseNode {
     type: "SuperExpression"
 }
 
+/** `x = v` / `[a, b] = [b, a]` — one target, one value. */
 export interface AssignmentStatement extends BaseNode {
     type: "AssignmentStatement"
-    targets: (Expression | ObjectPattern | ArrayPattern)[]
-    values: Expression[]
+    target: Expression | ObjectPattern | ArrayPattern
+    value: Expression
 }
 
 export interface CompoundAssignmentStatement extends BaseNode {
@@ -660,9 +664,7 @@ export interface ArrayExpression extends BaseNode {
  *  only produces one in those two places.
  *
  *  Lua spreads with `table.unpack`, which only yields every value when it is
- *  written last; anywhere else the compiler builds the whole list first. Bare
- *  `...` is unaffected — that is the vararg pack, and `f(...)` passes it on
- *  as it always did. */
+ *  written last; anywhere else the compiler builds the whole list first. */
 export interface SpreadElement extends BaseNode {
     type: "SpreadElement"
     argument: Expression

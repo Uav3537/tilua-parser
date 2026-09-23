@@ -8,35 +8,31 @@
         "declaration": {
           "type": "VariableDeclaration",
           "kind": "const",
-          "names": [
-            {
-              "type": "IdentifierPattern",
-              "name": "VERSION",
-              "line": {
-                "start": 3,
-                "end": 3
-              },
-              "column": {
-                "start": 14,
-                "end": 21
-              }
+          "name": {
+            "type": "IdentifierPattern",
+            "name": "VERSION",
+            "line": {
+              "start": 3,
+              "end": 3
+            },
+            "column": {
+              "start": 14,
+              "end": 21
             }
-          ],
-          "init": [
-            {
-              "type": "NumberLiteral",
-              "value": 3,
-              "raw": "3",
-              "line": {
-                "start": 3,
-                "end": 3
-              },
-              "column": {
-                "start": 24,
-                "end": 25
-              }
+          },
+          "init": {
+            "type": "NumberLiteral",
+            "value": 3,
+            "raw": "3",
+            "line": {
+              "start": 3,
+              "end": 3
+            },
+            "column": {
+              "start": 24,
+              "end": 25
             }
-          ],
+          },
           "line": {
             "start": 3,
             "end": 3

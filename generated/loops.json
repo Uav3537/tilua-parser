@@ -6,152 +6,148 @@
       {
         "type": "VariableDeclaration",
         "kind": "const",
-        "names": [
-          {
-            "type": "IdentifierPattern",
-            "name": "pairsList",
-            "line": {
-              "start": 4,
-              "end": 4
-            },
-            "column": {
-              "start": 7,
-              "end": 16
-            }
+        "name": {
+          "type": "IdentifierPattern",
+          "name": "pairsList",
+          "line": {
+            "start": 4,
+            "end": 4
+          },
+          "column": {
+            "start": 7,
+            "end": 16
           }
-        ],
-        "init": [
-          {
-            "type": "ArrayExpression",
-            "elements": [
-              {
-                "type": "ArrayExpression",
-                "elements": [
-                  {
-                    "type": "StringLiteral",
-                    "value": "a",
-                    "raw": "\"a\"",
-                    "line": {
-                      "start": 4,
-                      "end": 4
-                    },
-                    "column": {
-                      "start": 21,
-                      "end": 24
-                    }
+        },
+        "init": {
+          "type": "ArrayExpression",
+          "elements": [
+            {
+              "type": "ArrayExpression",
+              "elements": [
+                {
+                  "type": "StringLiteral",
+                  "value": "a",
+                  "raw": "\"a\"",
+                  "line": {
+                    "start": 4,
+                    "end": 4
                   },
-                  {
-                    "type": "NumberLiteral",
-                    "value": 1,
-                    "raw": "1",
-                    "line": {
-                      "start": 4,
-                      "end": 4
-                    },
-                    "column": {
-                      "start": 26,
-                      "end": 27
-                    }
+                  "column": {
+                    "start": 21,
+                    "end": 24
                   }
-                ],
-                "line": {
-                  "start": 4,
-                  "end": 4
                 },
-                "column": {
-                  "start": 20,
-                  "end": 28
+                {
+                  "type": "NumberLiteral",
+                  "value": 1,
+                  "raw": "1",
+                  "line": {
+                    "start": 4,
+                    "end": 4
+                  },
+                  "column": {
+                    "start": 26,
+                    "end": 27
+                  }
                 }
+              ],
+              "line": {
+                "start": 4,
+                "end": 4
               },
-              {
-                "type": "ArrayExpression",
-                "elements": [
-                  {
-                    "type": "StringLiteral",
-                    "value": "b",
-                    "raw": "\"b\"",
-                    "line": {
-                      "start": 4,
-                      "end": 4
-                    },
-                    "column": {
-                      "start": 31,
-                      "end": 34
-                    }
-                  },
-                  {
-                    "type": "NumberLiteral",
-                    "value": 2,
-                    "raw": "2",
-                    "line": {
-                      "start": 4,
-                      "end": 4
-                    },
-                    "column": {
-                      "start": 36,
-                      "end": 37
-                    }
-                  }
-                ],
-                "line": {
-                  "start": 4,
-                  "end": 4
-                },
-                "column": {
-                  "start": 30,
-                  "end": 38
-                }
-              },
-              {
-                "type": "ArrayExpression",
-                "elements": [
-                  {
-                    "type": "StringLiteral",
-                    "value": "c",
-                    "raw": "\"c\"",
-                    "line": {
-                      "start": 4,
-                      "end": 4
-                    },
-                    "column": {
-                      "start": 41,
-                      "end": 44
-                    }
-                  },
-                  {
-                    "type": "NumberLiteral",
-                    "value": 3,
-                    "raw": "3",
-                    "line": {
-                      "start": 4,
-                      "end": 4
-                    },
-                    "column": {
-                      "start": 46,
-                      "end": 47
-                    }
-                  }
-                ],
-                "line": {
-                  "start": 4,
-                  "end": 4
-                },
-                "column": {
-                  "start": 40,
-                  "end": 48
-                }
+              "column": {
+                "start": 20,
+                "end": 28
               }
-            ],
-            "line": {
-              "start": 4,
-              "end": 4
             },
-            "column": {
-              "start": 19,
-              "end": 49
+            {
+              "type": "ArrayExpression",
+              "elements": [
+                {
+                  "type": "StringLiteral",
+                  "value": "b",
+                  "raw": "\"b\"",
+                  "line": {
+                    "start": 4,
+                    "end": 4
+                  },
+                  "column": {
+                    "start": 31,
+                    "end": 34
+                  }
+                },
+                {
+                  "type": "NumberLiteral",
+                  "value": 2,
+                  "raw": "2",
+                  "line": {
+                    "start": 4,
+                    "end": 4
+                  },
+                  "column": {
+                    "start": 36,
+                    "end": 37
+                  }
+                }
+              ],
+              "line": {
+                "start": 4,
+                "end": 4
+              },
+              "column": {
+                "start": 30,
+                "end": 38
+              }
+            },
+            {
+              "type": "ArrayExpression",
+              "elements": [
+                {
+                  "type": "StringLiteral",
+                  "value": "c",
+                  "raw": "\"c\"",
+                  "line": {
+                    "start": 4,
+                    "end": 4
+                  },
+                  "column": {
+                    "start": 41,
+                    "end": 44
+                  }
+                },
+                {
+                  "type": "NumberLiteral",
+                  "value": 3,
+                  "raw": "3",
+                  "line": {
+                    "start": 4,
+                    "end": 4
+                  },
+                  "column": {
+                    "start": 46,
+                    "end": 47
+                  }
+                }
+              ],
+              "line": {
+                "start": 4,
+                "end": 4
+              },
+              "column": {
+                "start": 40,
+                "end": 48
+              }
             }
+          ],
+          "line": {
+            "start": 4,
+            "end": 4
+          },
+          "column": {
+            "start": 19,
+            "end": 49
           }
-        ],
+        },
         "line": {
           "start": 4,
           "end": 4
@@ -164,173 +160,169 @@
       {
         "type": "VariableDeclaration",
         "kind": "const",
-        "names": [
-          {
-            "type": "IdentifierPattern",
-            "name": "records",
-            "line": {
-              "start": 5,
-              "end": 5
-            },
-            "column": {
-              "start": 7,
-              "end": 14
-            }
+        "name": {
+          "type": "IdentifierPattern",
+          "name": "records",
+          "line": {
+            "start": 5,
+            "end": 5
+          },
+          "column": {
+            "start": 7,
+            "end": 14
           }
-        ],
-        "init": [
-          {
-            "type": "ArrayExpression",
-            "elements": [
-              {
-                "type": "TableExpression",
-                "fields": [
-                  {
-                    "type": "TableFieldNamed",
-                    "key": {
-                      "type": "Identifier",
-                      "name": "id",
-                      "line": {
-                        "start": 6,
-                        "end": 6
-                      },
-                      "column": {
-                        "start": 7,
-                        "end": 9
-                      }
+        },
+        "init": {
+          "type": "ArrayExpression",
+          "elements": [
+            {
+              "type": "TableExpression",
+              "fields": [
+                {
+                  "type": "TableFieldNamed",
+                  "key": {
+                    "type": "Identifier",
+                    "name": "id",
+                    "line": {
+                      "start": 6,
+                      "end": 6
                     },
-                    "value": {
-                      "type": "NumberLiteral",
-                      "value": 1,
-                      "raw": "1",
-                      "line": {
-                        "start": 6,
-                        "end": 6
-                      },
-                      "column": {
-                        "start": 11,
-                        "end": 12
-                      }
+                    "column": {
+                      "start": 7,
+                      "end": 9
                     }
                   },
-                  {
-                    "type": "TableFieldNamed",
-                    "key": {
-                      "type": "Identifier",
-                      "name": "label",
-                      "line": {
-                        "start": 6,
-                        "end": 6
-                      },
-                      "column": {
-                        "start": 14,
-                        "end": 19
-                      }
+                  "value": {
+                    "type": "NumberLiteral",
+                    "value": 1,
+                    "raw": "1",
+                    "line": {
+                      "start": 6,
+                      "end": 6
                     },
-                    "value": {
-                      "type": "StringLiteral",
-                      "value": "one",
-                      "raw": "\"one\"",
-                      "line": {
-                        "start": 6,
-                        "end": 6
-                      },
-                      "column": {
-                        "start": 21,
-                        "end": 26
-                      }
+                    "column": {
+                      "start": 11,
+                      "end": 12
                     }
                   }
-                ],
-                "line": {
-                  "start": 6,
-                  "end": 6
                 },
-                "column": {
-                  "start": 5,
-                  "end": 28
+                {
+                  "type": "TableFieldNamed",
+                  "key": {
+                    "type": "Identifier",
+                    "name": "label",
+                    "line": {
+                      "start": 6,
+                      "end": 6
+                    },
+                    "column": {
+                      "start": 14,
+                      "end": 19
+                    }
+                  },
+                  "value": {
+                    "type": "StringLiteral",
+                    "value": "one",
+                    "raw": "\"one\"",
+                    "line": {
+                      "start": 6,
+                      "end": 6
+                    },
+                    "column": {
+                      "start": 21,
+                      "end": 26
+                    }
+                  }
                 }
+              ],
+              "line": {
+                "start": 6,
+                "end": 6
               },
-              {
-                "type": "TableExpression",
-                "fields": [
-                  {
-                    "type": "TableFieldNamed",
-                    "key": {
-                      "type": "Identifier",
-                      "name": "id",
-                      "line": {
-                        "start": 7,
-                        "end": 7
-                      },
-                      "column": {
-                        "start": 7,
-                        "end": 9
-                      }
+              "column": {
+                "start": 5,
+                "end": 28
+              }
+            },
+            {
+              "type": "TableExpression",
+              "fields": [
+                {
+                  "type": "TableFieldNamed",
+                  "key": {
+                    "type": "Identifier",
+                    "name": "id",
+                    "line": {
+                      "start": 7,
+                      "end": 7
                     },
-                    "value": {
-                      "type": "NumberLiteral",
-                      "value": 2,
-                      "raw": "2",
-                      "line": {
-                        "start": 7,
-                        "end": 7
-                      },
-                      "column": {
-                        "start": 11,
-                        "end": 12
-                      }
+                    "column": {
+                      "start": 7,
+                      "end": 9
                     }
                   },
-                  {
-                    "type": "TableFieldNamed",
-                    "key": {
-                      "type": "Identifier",
-                      "name": "label",
-                      "line": {
-                        "start": 7,
-                        "end": 7
-                      },
-                      "column": {
-                        "start": 14,
-                        "end": 19
-                      }
+                  "value": {
+                    "type": "NumberLiteral",
+                    "value": 2,
+                    "raw": "2",
+                    "line": {
+                      "start": 7,
+                      "end": 7
                     },
-                    "value": {
-                      "type": "StringLiteral",
-                      "value": "two",
-                      "raw": "\"two\"",
-                      "line": {
-                        "start": 7,
-                        "end": 7
-                      },
-                      "column": {
-                        "start": 21,
-                        "end": 26
-                      }
+                    "column": {
+                      "start": 11,
+                      "end": 12
                     }
                   }
-                ],
-                "line": {
-                  "start": 7,
-                  "end": 7
                 },
-                "column": {
-                  "start": 5,
-                  "end": 28
+                {
+                  "type": "TableFieldNamed",
+                  "key": {
+                    "type": "Identifier",
+                    "name": "label",
+                    "line": {
+                      "start": 7,
+                      "end": 7
+                    },
+                    "column": {
+                      "start": 14,
+                      "end": 19
+                    }
+                  },
+                  "value": {
+                    "type": "StringLiteral",
+                    "value": "two",
+                    "raw": "\"two\"",
+                    "line": {
+                      "start": 7,
+                      "end": 7
+                    },
+                    "column": {
+                      "start": 21,
+                      "end": 26
+                    }
+                  }
                 }
+              ],
+              "line": {
+                "start": 7,
+                "end": 7
+              },
+              "column": {
+                "start": 5,
+                "end": 28
               }
-            ],
-            "line": {
-              "start": 5,
-              "end": 8
-            },
-            "column": {
-              "start": 17,
-              "end": 2
             }
+          ],
+          "line": {
+            "start": 5,
+            "end": 8
+          },
+          "column": {
+            "start": 17,
+            "end": 2
           }
-        ],
+        },
         "line": {
           "start": 5,
           "end": 8
@@ -1313,35 +1305,31 @@
               {
                 "type": "VariableDeclaration",
                 "kind": "let",
-                "names": [
-                  {
-                    "type": "IdentifierPattern",
-                    "name": "n",
-                    "line": {
-                      "start": 35,
-                      "end": 35
-                    },
-                    "column": {
-                      "start": 9,
-                      "end": 10
-                    }
+                "name": {
+                  "type": "IdentifierPattern",
+                  "name": "n",
+                  "line": {
+                    "start": 35,
+                    "end": 35
+                  },
+                  "column": {
+                    "start": 9,
+                    "end": 10
                   }
-                ],
-                "init": [
-                  {
-                    "type": "NumberLiteral",
-                    "value": 0,
-                    "raw": "0",
-                    "line": {
-                      "start": 35,
-                      "end": 35
-                    },
-                    "column": {
-                      "start": 13,
-                      "end": 14
-                    }
+                },
+                "init": {
+                  "type": "NumberLiteral",
+                  "value": 0,
+                  "raw": "0",
+                  "line": {
+                    "start": 35,
+                    "end": 35
+                  },
+                  "column": {
+                    "start": 13,
+                    "end": 14
                   }
-                ],
+                },
                 "line": {
                   "start": 35,
                   "end": 35

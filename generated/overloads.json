@@ -574,60 +574,56 @@
       {
         "type": "VariableDeclaration",
         "kind": "const",
-        "names": [
-          {
-            "type": "IdentifierPattern",
-            "name": "a",
-            "line": {
-              "start": 16,
-              "end": 16
-            },
-            "column": {
-              "start": 7,
-              "end": 8
-            }
+        "name": {
+          "type": "IdentifierPattern",
+          "name": "a",
+          "line": {
+            "start": 16,
+            "end": 16
+          },
+          "column": {
+            "start": 7,
+            "end": 8
           }
-        ],
-        "init": [
-          {
-            "type": "CallExpression",
-            "callee": {
-              "type": "Identifier",
-              "name": "len",
-              "line": {
-                "start": 16,
-                "end": 16
-              },
-              "column": {
-                "start": 11,
-                "end": 14
-              }
-            },
-            "arguments": [
-              {
-                "type": "StringLiteral",
-                "value": "hi",
-                "raw": "\"hi\"",
-                "line": {
-                  "start": 16,
-                  "end": 16
-                },
-                "column": {
-                  "start": 15,
-                  "end": 19
-                }
-              }
-            ],
+        },
+        "init": {
+          "type": "CallExpression",
+          "callee": {
+            "type": "Identifier",
+            "name": "len",
             "line": {
               "start": 16,
               "end": 16
             },
             "column": {
               "start": 11,
-              "end": 20
+              "end": 14
             }
+          },
+          "arguments": [
+            {
+              "type": "StringLiteral",
+              "value": "hi",
+              "raw": "\"hi\"",
+              "line": {
+                "start": 16,
+                "end": 16
+              },
+              "column": {
+                "start": 15,
+                "end": 19
+              }
+            }
+          ],
+          "line": {
+            "start": 16,
+            "end": 16
+          },
+          "column": {
+            "start": 11,
+            "end": 20
           }
-        ],
+        },
         "line": {
           "start": 16,
           "end": 16
@@ -640,99 +636,95 @@
       {
         "type": "VariableDeclaration",
         "kind": "const",
-        "names": [
-          {
-            "type": "IdentifierPattern",
-            "name": "b",
-            "line": {
-              "start": 17,
-              "end": 17
-            },
-            "column": {
-              "start": 7,
-              "end": 8
-            }
+        "name": {
+          "type": "IdentifierPattern",
+          "name": "b",
+          "line": {
+            "start": 17,
+            "end": 17
+          },
+          "column": {
+            "start": 7,
+            "end": 8
           }
-        ],
-        "init": [
-          {
-            "type": "CallExpression",
-            "callee": {
-              "type": "Identifier",
-              "name": "reverse",
-              "line": {
-                "start": 17,
-                "end": 17
-              },
-              "column": {
-                "start": 11,
-                "end": 18
-              }
-            },
-            "arguments": [
-              {
-                "type": "ArrayExpression",
-                "elements": [
-                  {
-                    "type": "NumberLiteral",
-                    "value": 1,
-                    "raw": "1",
-                    "line": {
-                      "start": 17,
-                      "end": 17
-                    },
-                    "column": {
-                      "start": 20,
-                      "end": 21
-                    }
-                  },
-                  {
-                    "type": "NumberLiteral",
-                    "value": 2,
-                    "raw": "2",
-                    "line": {
-                      "start": 17,
-                      "end": 17
-                    },
-                    "column": {
-                      "start": 23,
-                      "end": 24
-                    }
-                  },
-                  {
-                    "type": "NumberLiteral",
-                    "value": 3,
-                    "raw": "3",
-                    "line": {
-                      "start": 17,
-                      "end": 17
-                    },
-                    "column": {
-                      "start": 26,
-                      "end": 27
-                    }
-                  }
-                ],
-                "line": {
-                  "start": 17,
-                  "end": 17
-                },
-                "column": {
-                  "start": 19,
-                  "end": 28
-                }
-              }
-            ],
+        },
+        "init": {
+          "type": "CallExpression",
+          "callee": {
+            "type": "Identifier",
+            "name": "reverse",
             "line": {
               "start": 17,
               "end": 17
             },
             "column": {
               "start": 11,
-              "end": 29
+              "end": 18
             }
+          },
+          "arguments": [
+            {
+              "type": "ArrayExpression",
+              "elements": [
+                {
+                  "type": "NumberLiteral",
+                  "value": 1,
+                  "raw": "1",
+                  "line": {
+                    "start": 17,
+                    "end": 17
+                  },
+                  "column": {
+                    "start": 20,
+                    "end": 21
+                  }
+                },
+                {
+                  "type": "NumberLiteral",
+                  "value": 2,
+                  "raw": "2",
+                  "line": {
+                    "start": 17,
+                    "end": 17
+                  },
+                  "column": {
+                    "start": 23,
+                    "end": 24
+                  }
+                },
+                {
+                  "type": "NumberLiteral",
+                  "value": 3,
+                  "raw": "3",
+                  "line": {
+                    "start": 17,
+                    "end": 17
+                  },
+                  "column": {
+                    "start": 26,
+                    "end": 27
+                  }
+                }
+              ],
+              "line": {
+                "start": 17,
+                "end": 17
+              },
+              "column": {
+                "start": 19,
+                "end": 28
+              }
+            }
+          ],
+          "line": {
+            "start": 17,
+            "end": 17
+          },
+          "column": {
+            "start": 11,
+            "end": 29
           }
-        ],
+        },
         "line": {
           "start": 17,
           "end": 17
@@ -745,60 +737,56 @@
       {
         "type": "VariableDeclaration",
         "kind": "const",
-        "names": [
-          {
-            "type": "IdentifierPattern",
-            "name": "c",
-            "line": {
-              "start": 18,
-              "end": 18
-            },
-            "column": {
-              "start": 7,
-              "end": 8
-            }
+        "name": {
+          "type": "IdentifierPattern",
+          "name": "c",
+          "line": {
+            "start": 18,
+            "end": 18
+          },
+          "column": {
+            "start": 7,
+            "end": 8
           }
-        ],
-        "init": [
-          {
-            "type": "CallExpression",
-            "callee": {
-              "type": "Identifier",
-              "name": "reverse",
-              "line": {
-                "start": 18,
-                "end": 18
-              },
-              "column": {
-                "start": 11,
-                "end": 18
-              }
-            },
-            "arguments": [
-              {
-                "type": "StringLiteral",
-                "value": "abc",
-                "raw": "\"abc\"",
-                "line": {
-                  "start": 18,
-                  "end": 18
-                },
-                "column": {
-                  "start": 19,
-                  "end": 24
-                }
-              }
-            ],
+        },
+        "init": {
+          "type": "CallExpression",
+          "callee": {
+            "type": "Identifier",
+            "name": "reverse",
             "line": {
               "start": 18,
               "end": 18
             },
             "column": {
               "start": 11,
-              "end": 25
+              "end": 18
             }
+          },
+          "arguments": [
+            {
+              "type": "StringLiteral",
+              "value": "abc",
+              "raw": "\"abc\"",
+              "line": {
+                "start": 18,
+                "end": 18
+              },
+              "column": {
+                "start": 19,
+                "end": 24
+              }
+            }
+          ],
+          "line": {
+            "start": 18,
+            "end": 18
+          },
+          "column": {
+            "start": 11,
+            "end": 25
           }
-        ],
+        },
         "line": {
           "start": 18,
           "end": 18

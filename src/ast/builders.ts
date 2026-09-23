@@ -342,10 +342,10 @@ export class Parser {
         return this.attempt(() => this.parseExpression(), stop, (start, from) => this.errorExpression(start, from))
     }
 
-    /** A comma-separated list of values: a `return`'s, a declaration's, an
-     *  assignment's. Each is one value; a spread belongs in a call's
-     *  arguments or an array, and is reported here — then read as one, so
-     *  the rest still means something. */
+    /** A comma-separated list of values where one belongs — a `return`'s, a
+     *  declaration's, an assignment's — read whole, so that writing several
+     *  is reported once and the rest still means something. A spread belongs
+     *  in a call's arguments or an array, and is reported here too. */
     private expressionListOr(stop: () => boolean): Expression[] {
         const until = (): boolean => stop() || this.checkPunctuator(",")
         const item = (): Expression => {
@@ -1012,7 +1012,7 @@ export class Parser {
         this.error("Expected 'const', 'let', 'function', 'class', 'type', 'default', '{' or '*' after 'export'")
     }
 
-    // `const x = ...` / `let x, y = ...`.
+    // `const x = ...` / `let [a, b] = ...`.
     // tilua has no `local` — `const` bindings are immutable, `let` mutable.
     /** `kind` reads the leading word as that keyword (recovery's `local`). */
     private parseVariableDeclaration(as?: "let"): VariableDeclaration {
@@ -1029,16 +1029,40 @@ export class Parser {
             names.push(this.parseBindingTarget(true))
         }
 
-        let init: Expression[] = []
+        let values: Expression[] = []
         if (this.matchOperator("=")) {
-            init = this.expressionListOr(() => false)
+            values = this.expressionListOr(() => false)
         } else if (kind === "const") {
             // Keep the name declared: everything after it refers to it.
             if (!this.recover) this.error("'const' declaration requires an initializer")
             this.softError("'const' declaration requires an initializer")
         }
 
-        return { type: "VariableDeclaration", kind, names, init, ...spanFrom(start, this.previous()) }
+        // Luau's `local a, b = x, y`. tilua declares one name and one value;
+        // several are an array, taken apart with a destructuring — which is
+        // what the rest of the file is read as once this is reported.
+        let name = names[0]
+        let init: Expression | undefined = values[0]
+        if (names.length > 1 || values.length > 1) {
+            this.problemAt(start, `A declaration takes one value: take several from an array, '${kind} [a, b] = [x, y]'`)
+            if (names.length > 1) name = this.namesAsPattern(names)
+            if (values.length > 1) init = this.valuesAsArray(values)
+        }
+
+        return { type: "VariableDeclaration", kind, name, init, ...spanFrom(start, this.previous()) }
+    }
+
+    /** `a, b` written where one name goes, read as `[a, b]`. */
+    private namesAsPattern(names: BindingTarget[]): ArrayPattern {
+        const elements = names.map((value): ArrayPatternElement => ({
+            type: "ArrayPatternElement", value, ...spanFrom(value, value),
+        }))
+        return { type: "ArrayPattern", elements, ...spanFrom(names[0], names[names.length - 1]) }
+    }
+
+    /** `x, y` written where one value goes, read as `[x, y]`. */
+    private valuesAsArray(values: Expression[]): ArrayExpression {
+        return { type: "ArrayExpression", elements: values, ...spanFrom(values[0], values[values.length - 1]) }
     }
 
     private parseIfStatement(): IfStatement {
@@ -1576,7 +1600,7 @@ export class Parser {
             // is what the rest of the file is read as once this is reported.
             if (values.length > 1) {
                 this.problemAt(start, "A function returns one value: return several as an array, 'return [a, b]'")
-                argument = { type: "ArrayExpression", elements: values, ...spanFrom(values[0], values[values.length - 1]) }
+                argument = this.valuesAsArray(values)
             }
         }
         return { type: "ReturnStatement", argument, ...spanFrom(start, this.previous()) }
@@ -1610,15 +1634,8 @@ export class Parser {
         // can't otherwise begin with `{` or `[`, so this is unambiguous (no
         // parens required, unlike JS).
         if (this.checkPunctuator("{") || this.checkPunctuator("[")) {
-            const targets: (Expression | ObjectPattern | ArrayPattern)[] = [
-                this.checkPunctuator("{") ? this.parseObjectPattern() : this.parseArrayPattern(),
-            ]
-            while (this.matchPunctuator(",")) {
-                targets.push(this.parseAssignTarget())
-            }
-            this.expectOperator("=")
-            const values = this.expressionListOr(() => false)
-            return { type: "AssignmentStatement", targets, values, ...spanFrom(start, this.previous()) }
+            const target = this.checkPunctuator("{") ? this.parseObjectPattern() : this.parseArrayPattern()
+            return this.parseAssignmentRest(start, target)
         }
 
         const statementStart = this.cursor
@@ -1626,14 +1643,8 @@ export class Parser {
         const first = this.parsePrefixExpression()
 
         if (this.checkOperator("=") || this.checkPunctuator(",")) {
-            const targets: (Expression | ObjectPattern | ArrayPattern)[] = [first]
-            while (this.matchPunctuator(",")) {
-                targets.push(this.parseAssignTarget())
-            }
-            for (const target of targets) this.rejectOptionalTarget(target)
-            this.expectOperator("=")
-            const values = this.expressionListOr(() => false)
-            return { type: "AssignmentStatement", targets, values, ...spanFrom(start, this.previous()) }
+            this.rejectOptionalTarget(first)
+            return this.parseAssignmentRest(start, first)
         }
 
         const t = this.current()
@@ -1671,6 +1682,19 @@ export class Parser {
             expression = this.parseExpression()
         }
         return { type: "ExpressionStatement", expression, ...spanFrom(start, this.previous()) }
+    }
+
+    /** From after an assignment's target: `= value`. Luau's `a, b = x, y`
+     *  is reported, and read as its first target taking its first value. */
+    private parseAssignmentRest(start: Token, target: Expression | ObjectPattern | ArrayPattern): AssignmentStatement {
+        let several = false
+        while (this.matchPunctuator(",")) { this.parseAssignTarget(); several = true }
+        this.expectOperator("=")
+        const values = this.expressionListOr(() => false)
+        if (several || values.length > 1) {
+            this.problemAt(start, "An assignment takes one value: take several from an array, '[a, b] = [x, y]'")
+        }
+        return { type: "AssignmentStatement", target, value: values[0], ...spanFrom(start, this.previous()) }
     }
 
     // ============================================================
@@ -2218,8 +2242,8 @@ export class Parser {
         return this.punctuatorAt(1, "(") || (this.punctuatorAt(1, ".") && this.peek(2).type === "Identifier")
     }
 
-    /** After `...`, is there something to spread? Nothing following it means
-     *  the vararg pack, which is what `f(...)` has always passed on. */
+    /** After `...`, is there something to spread? tilua has no bare `...`:
+     *  a varying number of arguments is a rest parameter, `...args: T[]`. */
     private startsSpread(): boolean {
         const next = this.peek(1)
         if (next.type === "Punctuator") {
@@ -2241,8 +2265,8 @@ export class Parser {
         return token.type === "Punctuator" && (token as { value?: unknown }).value === value
     }
 
-    /** An assignment target after the first: a prefix expression (`a.b`,
-     *  `a[i]`, `a`) or a nested destructuring pattern. */
+    /** An assignment target after the first — Luau's `a, b = ...`, read only
+     *  to be reported: a prefix expression or a destructuring pattern. */
     private parseAssignTarget(): Expression | ObjectPattern | ArrayPattern {
         if (this.checkPunctuator("{")) return this.parseObjectPattern()
         if (this.checkPunctuator("[")) return this.parseArrayPattern()
@@ -2293,7 +2317,7 @@ export class Parser {
                     // was never closed, and that is the enclosing object's field.
                     if (this.recover && this.onNewLine() && this.startsTableField() && !this.startsMethodCall(1)) break
                     const before = this.cursor
-                    // `f(...xs)` spreads an array; bare `f(...)` is the pack.
+                    // `f(...xs)` spreads an array.
                     const argument = this.checkOperator("...") && this.startsSpread()
                         ? this.parseSpreadArgument(stop)
                         : this.expressionOr(stop)
@@ -2797,7 +2821,7 @@ export class Parser {
         this.expectPunctuator("=>")
         const body = this.checkPunctuator("{")
             ? this.parseBraceBlock()
-            : this.returnOf(this.parseExpression(0))
+            : this.parseArrowExpressionBody()
         const func: FunctionBody = {
             type: "FunctionBody",
             generics: head.generics, params: head.params, hasVarargs: head.hasVarargs,
@@ -2806,6 +2830,34 @@ export class Parser {
             ...spanFrom(start, this.previous()),
         }
         return { type: "FunctionExpression", func, ...spanFrom(start, this.previous()) }
+    }
+
+    /** `() => value` returns the value. `() => a = 1` and `() => n += 1` are
+     *  an assignment, which is a statement: the body is that
+     *  statement, and the function returns nothing. */
+    private parseArrowExpressionBody(): Block {
+        const start = this.cursor
+        const errors = this.errors.length
+        const expression = this.parseExpression(0)
+        const t = this.current()
+        const assigns = t.type === "Operator" &&
+            ((t as any).value === "=" || COMPOUND_ASSIGN_OPS.has((t as any).value))
+        if (!assigns) return this.returnOf(expression)
+        // Read the target again, as a statement reads one.
+        this.cursor = start
+        this.errors.length = errors
+        const first = this.current()
+        const target = this.parsePrefixExpression()
+        this.rejectOptionalTarget(target)
+        const opToken = this.current()
+        const op = (opToken as any).value as CompoundAssignmentStatement["operator"] | "="
+        if (opToken.type !== "Operator" || (op !== "=" && !COMPOUND_ASSIGN_OPS.has(op))) this.error("Expected '='")
+        this.advance()
+        const value = this.expressionOr(() => false)
+        const statement: AssignmentStatement | CompoundAssignmentStatement = op === "="
+            ? { type: "AssignmentStatement", target, value, ...spanFrom(first, this.previous()) }
+            : { type: "CompoundAssignmentStatement", operator: op, target, value, ...spanFrom(first, this.previous()) }
+        return { type: "Block", statements: [statement], ...spanFrom(statement, statement) }
     }
 
     /** A one-expression body: the value is what the function returns. */

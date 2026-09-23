@@ -6,90 +6,86 @@
       {
         "type": "VariableDeclaration",
         "kind": "const",
-        "names": [
-          {
-            "type": "IdentifierPattern",
-            "name": "defaults",
-            "line": {
-              "start": 5,
-              "end": 5
-            },
-            "column": {
-              "start": 7,
-              "end": 15
-            }
+        "name": {
+          "type": "IdentifierPattern",
+          "name": "defaults",
+          "line": {
+            "start": 5,
+            "end": 5
+          },
+          "column": {
+            "start": 7,
+            "end": 15
           }
-        ],
-        "init": [
-          {
-            "type": "TableExpression",
-            "fields": [
-              {
-                "type": "TableFieldNamed",
-                "key": {
-                  "type": "Identifier",
-                  "name": "volume",
-                  "line": {
-                    "start": 5,
-                    "end": 5
-                  },
-                  "column": {
-                    "start": 20,
-                    "end": 26
-                  }
+        },
+        "init": {
+          "type": "TableExpression",
+          "fields": [
+            {
+              "type": "TableFieldNamed",
+              "key": {
+                "type": "Identifier",
+                "name": "volume",
+                "line": {
+                  "start": 5,
+                  "end": 5
                 },
-                "value": {
-                  "type": "NumberLiteral",
-                  "value": 1,
-                  "raw": "1",
-                  "line": {
-                    "start": 5,
-                    "end": 5
-                  },
-                  "column": {
-                    "start": 28,
-                    "end": 29
-                  }
+                "column": {
+                  "start": 20,
+                  "end": 26
                 }
               },
-              {
-                "type": "TableFieldNamed",
-                "key": {
-                  "type": "Identifier",
-                  "name": "muted",
-                  "line": {
-                    "start": 5,
-                    "end": 5
-                  },
-                  "column": {
-                    "start": 31,
-                    "end": 36
-                  }
+              "value": {
+                "type": "NumberLiteral",
+                "value": 1,
+                "raw": "1",
+                "line": {
+                  "start": 5,
+                  "end": 5
                 },
-                "value": {
-                  "type": "BooleanLiteral",
-                  "value": false,
-                  "line": {
-                    "start": 5,
-                    "end": 5
-                  },
-                  "column": {
-                    "start": 38,
-                    "end": 43
-                  }
+                "column": {
+                  "start": 28,
+                  "end": 29
                 }
               }
-            ],
-            "line": {
-              "start": 5,
-              "end": 5
             },
-            "column": {
-              "start": 18,
-              "end": 45
+            {
+              "type": "TableFieldNamed",
+              "key": {
+                "type": "Identifier",
+                "name": "muted",
+                "line": {
+                  "start": 5,
+                  "end": 5
+                },
+                "column": {
+                  "start": 31,
+                  "end": 36
+                }
+              },
+              "value": {
+                "type": "BooleanLiteral",
+                "value": false,
+                "line": {
+                  "start": 5,
+                  "end": 5
+                },
+                "column": {
+                  "start": 38,
+                  "end": 43
+                }
+              }
             }
+          ],
+          "line": {
+            "start": 5,
+            "end": 5
+          },
+          "column": {
+            "start": 18,
+            "end": 45
           }
-        ],
+        },
         "line": {
           "start": 5,
           "end": 5
@@ -102,113 +98,109 @@
       {
         "type": "VariableDeclaration",
         "kind": "const",
-        "names": [
-          {
-            "type": "IdentifierPattern",
-            "name": "copy",
-            "line": {
-              "start": 8,
-              "end": 8
-            },
-            "column": {
-              "start": 7,
-              "end": 11
-            },
-            "typeAnnotation": {
-              "type": "TypeofTypeNode",
-              "expression": {
-                "type": "Identifier",
-                "name": "defaults",
-                "line": {
-                  "start": 8,
-                  "end": 8
-                },
-                "column": {
-                  "start": 20,
-                  "end": 28
-                }
-              },
+        "name": {
+          "type": "IdentifierPattern",
+          "name": "copy",
+          "line": {
+            "start": 8,
+            "end": 8
+          },
+          "column": {
+            "start": 7,
+            "end": 11
+          },
+          "typeAnnotation": {
+            "type": "TypeofTypeNode",
+            "expression": {
+              "type": "Identifier",
+              "name": "defaults",
               "line": {
                 "start": 8,
                 "end": 8
               },
               "column": {
-                "start": 13,
+                "start": 20,
                 "end": 28
               }
-            }
-          }
-        ],
-        "init": [
-          {
-            "type": "TableExpression",
-            "fields": [
-              {
-                "type": "TableFieldNamed",
-                "key": {
-                  "type": "Identifier",
-                  "name": "volume",
-                  "line": {
-                    "start": 8,
-                    "end": 8
-                  },
-                  "column": {
-                    "start": 33,
-                    "end": 39
-                  }
-                },
-                "value": {
-                  "type": "NumberLiteral",
-                  "value": 2,
-                  "raw": "2",
-                  "line": {
-                    "start": 8,
-                    "end": 8
-                  },
-                  "column": {
-                    "start": 41,
-                    "end": 42
-                  }
-                }
-              },
-              {
-                "type": "TableFieldNamed",
-                "key": {
-                  "type": "Identifier",
-                  "name": "muted",
-                  "line": {
-                    "start": 8,
-                    "end": 8
-                  },
-                  "column": {
-                    "start": 44,
-                    "end": 49
-                  }
-                },
-                "value": {
-                  "type": "BooleanLiteral",
-                  "value": true,
-                  "line": {
-                    "start": 8,
-                    "end": 8
-                  },
-                  "column": {
-                    "start": 51,
-                    "end": 55
-                  }
-                }
-              }
-            ],
+            },
             "line": {
               "start": 8,
               "end": 8
             },
             "column": {
-              "start": 31,
-              "end": 57
+              "start": 13,
+              "end": 28
             }
           }
-        ],
+        },
+        "init": {
+          "type": "TableExpression",
+          "fields": [
+            {
+              "type": "TableFieldNamed",
+              "key": {
+                "type": "Identifier",
+                "name": "volume",
+                "line": {
+                  "start": 8,
+                  "end": 8
+                },
+                "column": {
+                  "start": 33,
+                  "end": 39
+                }
+              },
+              "value": {
+                "type": "NumberLiteral",
+                "value": 2,
+                "raw": "2",
+                "line": {
+                  "start": 8,
+                  "end": 8
+                },
+                "column": {
+                  "start": 41,
+                  "end": 42
+                }
+              }
+            },
+            {
+              "type": "TableFieldNamed",
+              "key": {
+                "type": "Identifier",
+                "name": "muted",
+                "line": {
+                  "start": 8,
+                  "end": 8
+                },
+                "column": {
+                  "start": 44,
+                  "end": 49
+                }
+              },
+              "value": {
+                "type": "BooleanLiteral",
+                "value": true,
+                "line": {
+                  "start": 8,
+                  "end": 8
+                },
+                "column": {
+                  "start": 51,
+                  "end": 55
+                }
+              }
+            }
+          ],
+          "line": {
+            "start": 8,
+            "end": 8
+          },
+          "column": {
+            "start": 31,
+            "end": 57
+          }
+        },
         "line": {
           "start": 8,
           "end": 8
@@ -268,103 +260,99 @@
       {
         "type": "VariableDeclaration",
         "kind": "const",
-        "names": [
-          {
-            "type": "IdentifierPattern",
-            "name": "other",
+        "name": {
+          "type": "IdentifierPattern",
+          "name": "other",
+          "line": {
+            "start": 13,
+            "end": 13
+          },
+          "column": {
+            "start": 7,
+            "end": 12
+          },
+          "typeAnnotation": {
+            "type": "TypeReference",
+            "base": "Settings",
+            "typeArguments": [],
             "line": {
               "start": 13,
               "end": 13
             },
             "column": {
-              "start": 7,
-              "end": 12
-            },
-            "typeAnnotation": {
-              "type": "TypeReference",
-              "base": "Settings",
-              "typeArguments": [],
-              "line": {
-                "start": 13,
-                "end": 13
-              },
-              "column": {
-                "start": 14,
-                "end": 22
-              }
+              "start": 14,
+              "end": 22
             }
           }
-        ],
-        "init": [
-          {
-            "type": "TableExpression",
-            "fields": [
-              {
-                "type": "TableFieldNamed",
-                "key": {
-                  "type": "Identifier",
-                  "name": "volume",
-                  "line": {
-                    "start": 13,
-                    "end": 13
-                  },
-                  "column": {
-                    "start": 27,
-                    "end": 33
-                  }
+        },
+        "init": {
+          "type": "TableExpression",
+          "fields": [
+            {
+              "type": "TableFieldNamed",
+              "key": {
+                "type": "Identifier",
+                "name": "volume",
+                "line": {
+                  "start": 13,
+                  "end": 13
                 },
-                "value": {
-                  "type": "NumberLiteral",
-                  "value": 3,
-                  "raw": "3",
-                  "line": {
-                    "start": 13,
-                    "end": 13
-                  },
-                  "column": {
-                    "start": 35,
-                    "end": 36
-                  }
+                "column": {
+                  "start": 27,
+                  "end": 33
                 }
               },
-              {
-                "type": "TableFieldNamed",
-                "key": {
-                  "type": "Identifier",
-                  "name": "muted",
-                  "line": {
-                    "start": 13,
-                    "end": 13
-                  },
-                  "column": {
-                    "start": 38,
-                    "end": 43
-                  }
+              "value": {
+                "type": "NumberLiteral",
+                "value": 3,
+                "raw": "3",
+                "line": {
+                  "start": 13,
+                  "end": 13
                 },
-                "value": {
-                  "type": "BooleanLiteral",
-                  "value": false,
-                  "line": {
-                    "start": 13,
-                    "end": 13
-                  },
-                  "column": {
-                    "start": 45,
-                    "end": 50
-                  }
+                "column": {
+                  "start": 35,
+                  "end": 36
                 }
               }
-            ],
-            "line": {
-              "start": 13,
-              "end": 13
             },
-            "column": {
-              "start": 25,
-              "end": 52
+            {
+              "type": "TableFieldNamed",
+              "key": {
+                "type": "Identifier",
+                "name": "muted",
+                "line": {
+                  "start": 13,
+                  "end": 13
+                },
+                "column": {
+                  "start": 38,
+                  "end": 43
+                }
+              },
+              "value": {
+                "type": "BooleanLiteral",
+                "value": false,
+                "line": {
+                  "start": 13,
+                  "end": 13
+                },
+                "column": {
+                  "start": 45,
+                  "end": 50
+                }
+              }
             }
+          ],
+          "line": {
+            "start": 13,
+            "end": 13
+          },
+          "column": {
+            "start": 25,
+            "end": 52
           }
-        ],
+        },
         "line": {
           "start": 13,
           "end": 13
@@ -377,52 +365,42 @@
       {
         "type": "VariableDeclaration",
         "kind": "const",
-        "names": [
-          {
-            "type": "IdentifierPattern",
-            "name": "volume",
-            "line": {
-              "start": 16,
-              "end": 16
-            },
-            "column": {
-              "start": 7,
-              "end": 13
-            },
-            "typeAnnotation": {
-              "type": "TypeofTypeNode",
-              "expression": {
-                "type": "MemberExpression",
-                "object": {
-                  "type": "Identifier",
-                  "name": "defaults",
-                  "line": {
-                    "start": 16,
-                    "end": 16
-                  },
-                  "column": {
-                    "start": 22,
-                    "end": 30
-                  }
-                },
-                "property": {
-                  "type": "Identifier",
-                  "name": "volume",
-                  "line": {
-                    "start": 16,
-                    "end": 16
-                  },
-                  "column": {
-                    "start": 31,
-                    "end": 37
-                  }
-                },
+        "name": {
+          "type": "IdentifierPattern",
+          "name": "volume",
+          "line": {
+            "start": 16,
+            "end": 16
+          },
+          "column": {
+            "start": 7,
+            "end": 13
+          },
+          "typeAnnotation": {
+            "type": "TypeofTypeNode",
+            "expression": {
+              "type": "MemberExpression",
+              "object": {
+                "type": "Identifier",
+                "name": "defaults",
                 "line": {
                   "start": 16,
                   "end": 16
                 },
                 "column": {
                   "start": 22,
+                  "end": 30
+                }
+              },
+              "property": {
+                "type": "Identifier",
+                "name": "volume",
+                "line": {
+                  "start": 16,
+                  "end": 16
+                },
+                "column": {
+                  "start": 31,
                   "end": 37
                 }
               },
@@ -431,27 +409,33 @@
                 "end": 16
               },
               "column": {
-                "start": 15,
+                "start": 22,
                 "end": 37
               }
-            }
-          }
-        ],
-        "init": [
-          {
-            "type": "NumberLiteral",
-            "value": 5,
-            "raw": "5",
+            },
             "line": {
               "start": 16,
               "end": 16
             },
             "column": {
-              "start": 40,
-              "end": 41
+              "start": 15,
+              "end": 37
             }
           }
-        ],
+        },
+        "init": {
+          "type": "NumberLiteral",
+          "value": 5,
+          "raw": "5",
+          "line": {
+            "start": 16,
+            "end": 16
+          },
+          "column": {
+            "start": 40,
+            "end": 41
+          }
+        },
         "line": {
           "start": 16,
           "end": 16
@@ -464,35 +448,31 @@
       {
         "type": "VariableDeclaration",
         "kind": "let",
-        "names": [
-          {
-            "type": "IdentifierPattern",
-            "name": "count",
-            "line": {
-              "start": 19,
-              "end": 19
-            },
-            "column": {
-              "start": 5,
-              "end": 10
-            }
+        "name": {
+          "type": "IdentifierPattern",
+          "name": "count",
+          "line": {
+            "start": 19,
+            "end": 19
+          },
+          "column": {
+            "start": 5,
+            "end": 10
           }
-        ],
-        "init": [
-          {
-            "type": "NumberLiteral",
-            "value": 1,
-            "raw": "1",
-            "line": {
-              "start": 19,
-              "end": 19
-            },
-            "column": {
-              "start": 13,
-              "end": 14
-            }
+        },
+        "init": {
+          "type": "NumberLiteral",
+          "value": 1,
+          "raw": "1",
+          "line": {
+            "start": 19,
+            "end": 19
+          },
+          "column": {
+            "start": 13,
+            "end": 14
           }
-        ],
+        },
         "line": {
           "start": 19,
           "end": 19
@@ -505,58 +485,54 @@
       {
         "type": "VariableDeclaration",
         "kind": "const",
-        "names": [
-          {
-            "type": "IdentifierPattern",
-            "name": "alsoNumber",
-            "line": {
-              "start": 20,
-              "end": 20
-            },
-            "column": {
-              "start": 7,
-              "end": 17
-            },
-            "typeAnnotation": {
-              "type": "TypeofTypeNode",
-              "expression": {
-                "type": "Identifier",
-                "name": "count",
-                "line": {
-                  "start": 20,
-                  "end": 20
-                },
-                "column": {
-                  "start": 26,
-                  "end": 31
-                }
-              },
+        "name": {
+          "type": "IdentifierPattern",
+          "name": "alsoNumber",
+          "line": {
+            "start": 20,
+            "end": 20
+          },
+          "column": {
+            "start": 7,
+            "end": 17
+          },
+          "typeAnnotation": {
+            "type": "TypeofTypeNode",
+            "expression": {
+              "type": "Identifier",
+              "name": "count",
               "line": {
                 "start": 20,
                 "end": 20
               },
               "column": {
-                "start": 19,
+                "start": 26,
                 "end": 31
               }
-            }
-          }
-        ],
-        "init": [
-          {
-            "type": "NumberLiteral",
-            "value": 2,
-            "raw": "2",
+            },
             "line": {
               "start": 20,
               "end": 20
             },
             "column": {
-              "start": 34,
-              "end": 35
+              "start": 19,
+              "end": 31
             }
           }
-        ],
+        },
+        "init": {
+          "type": "NumberLiteral",
+          "value": 2,
+          "raw": "2",
+          "line": {
+            "start": 20,
+            "end": 20
+          },
+          "column": {
+            "start": 34,
+            "end": 35
+          }
+        },
         "line": {
           "start": 20,
           "end": 20
@@ -716,58 +692,54 @@
       {
         "type": "VariableDeclaration",
         "kind": "const",
-        "names": [
-          {
-            "type": "IdentifierPattern",
-            "name": "paren",
-            "line": {
-              "start": 28,
-              "end": 28
-            },
-            "column": {
-              "start": 7,
-              "end": 12
-            },
-            "typeAnnotation": {
-              "type": "TypeofTypeNode",
-              "expression": {
-                "type": "Identifier",
-                "name": "count",
-                "line": {
-                  "start": 28,
-                  "end": 28
-                },
-                "column": {
-                  "start": 21,
-                  "end": 26
-                }
-              },
+        "name": {
+          "type": "IdentifierPattern",
+          "name": "paren",
+          "line": {
+            "start": 28,
+            "end": 28
+          },
+          "column": {
+            "start": 7,
+            "end": 12
+          },
+          "typeAnnotation": {
+            "type": "TypeofTypeNode",
+            "expression": {
+              "type": "Identifier",
+              "name": "count",
               "line": {
                 "start": 28,
                 "end": 28
               },
               "column": {
-                "start": 14,
-                "end": 27
+                "start": 21,
+                "end": 26
               }
-            }
-          }
-        ],
-        "init": [
-          {
-            "type": "NumberLiteral",
-            "value": 3,
-            "raw": "3",
+            },
             "line": {
               "start": 28,
               "end": 28
             },
             "column": {
-              "start": 30,
-              "end": 31
+              "start": 14,
+              "end": 27
             }
           }
-        ],
+        },
+        "init": {
+          "type": "NumberLiteral",
+          "value": 3,
+          "raw": "3",
+          "line": {
+            "start": 28,
+            "end": 28
+          },
+          "column": {
+            "start": 30,
+            "end": 31
+          }
+        },
         "line": {
           "start": 28,
           "end": 28

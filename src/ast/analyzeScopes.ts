@@ -513,10 +513,9 @@ class Analyzer {
             case "VariableDeclaration": {
                 // Initializers see the *old* bindings — `const x = x` reads
                 // the outer `x`, not the one being declared.
-                for (const init of stmt.init) this.visitExpression(init, scope)
-                for (const name of stmt.names) this.visitType(name.typeAnnotation, scope)
-                const isConst = stmt.kind === "const"
-                for (const name of stmt.names) this.declarePattern(scope, name, "local", scope, isConst)
+                if (stmt.init) this.visitExpression(stmt.init, scope)
+                this.visitType(stmt.name.typeAnnotation, scope)
+                this.declarePattern(scope, stmt.name, "local", scope, stmt.kind === "const")
                 return
             }
 
@@ -563,19 +562,18 @@ class Analyzer {
             }
 
             case "AssignmentStatement": {
-                for (const value of stmt.values) this.visitExpression(value, scope)
-                for (const target of stmt.targets) {
-                    if (target.type === "Identifier") {
-                        this.referenceAsAssignmentTarget(scope, target)
-                    } else if (target.type === "ObjectPattern" || target.type === "ArrayPattern") {
-                        this.assignPattern(scope, target)
-                    } else {
-                        // MemberExpression / IndexExpression target: the
-                        // object is a reference, the property/index isn't
-                        // (or is itself a full expression already handled).
-                        this.visitExpression(target, scope)
-                        this.checkModuleWrite(target)
-                    }
+                this.visitExpression(stmt.value, scope)
+                const target = stmt.target
+                if (target.type === "Identifier") {
+                    this.referenceAsAssignmentTarget(scope, target)
+                } else if (target.type === "ObjectPattern" || target.type === "ArrayPattern") {
+                    this.assignPattern(scope, target)
+                } else {
+                    // MemberExpression / IndexExpression target: the
+                    // object is a reference, the property/index isn't
+                    // (or is itself a full expression already handled).
+                    this.visitExpression(target, scope)
+                    this.checkModuleWrite(target)
                 }
                 return
             }
