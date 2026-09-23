@@ -36,9 +36,9 @@ export interface TypeLibraries {
  *  call written against this library's types should become.
  *
  *  The library declares the *types* in its definitions file; this is the other
- *  half. `names:filter(f)` is a call to a function only because `@tilua-types/lua`
- *  says so and ships the Luau behind it — the compiler knows how to ask, and
- *  nothing about `filter`.
+ *  half. `names:first()` is a call to a function only because the library that
+ *  put `first` in an array's metatable says so and ships the Luau behind it —
+ *  the compiler knows how to ask, and nothing about `first`.
  *
  *  `tilua.lowering` in the package.json names the module; what it must export
  *  is the compiler's business (see @tilua/compiler's `LoweringPlugin`). */
@@ -47,6 +47,10 @@ export interface LoweringModule {
     readonly file: string
     /** The package it came from, for reporting. */
     readonly from: string
+    /** The package's definitions file, as its index in `files` — what the
+     *  analyzer names when a method comes from a metatable the package
+     *  declared (`MethodSource`), so the compiler asks this lowering. */
+    readonly library: number
 }
 
 export function resolveTypeLibraries(config: TiluaConfig, host: ProjectHost = nodeHost): TypeLibraries {
@@ -73,7 +77,8 @@ export function resolveTypeLibraries(config: TiluaConfig, host: ProjectHost = no
         }
         addFile(entryFile)
         const lowering = loweringModule(directory, host, problems, config)
-        if (lowering) lowerings.push(lowering)
+        const library = files.findIndex(file => pathKey(file) === pathKey(entryFile))
+        if (lowering) lowerings.push({ ...lowering, library })
     }
 
     for (const entry of config.types) {
@@ -136,7 +141,7 @@ function loweringModule(
     host: ProjectHost,
     problems: ConfigProblem[],
     config: TiluaConfig,
-): LoweringModule | undefined {
+): Omit<LoweringModule, "library"> | undefined {
     const manifest = readJson(join(directory, "package.json"), host)
     const declared = (manifest?.tilua as { lowering?: unknown } | undefined)?.lowering
     if (typeof declared !== "string") return undefined

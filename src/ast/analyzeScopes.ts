@@ -666,6 +666,12 @@ class Analyzer {
                 this.visitType(stmt.body, scope)
                 return
 
+            case "DeclareMetatableStatement":
+                this.visitGenerics(stmt.generics, scope)
+                this.visitType(stmt.target, scope)
+                this.visitType(stmt.metatable, scope)
+                return
+
             case "TypeAliasStatement":
             case "ExportTypeAliasStatement":
                 // Type-level names live in a separate namespace from value

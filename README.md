@@ -260,22 +260,51 @@ brings in names that are types and nothing else: unlike TypeScript, using one
 as a value is an error, and only type positions — `typeof A` included — may
 name it. Compiled code keeps no trace of it.
 
-**Array and string methods** — an array and a string answer to methods
-written with `:`, the way JavaScript writes them:
+**Methods of strings, arrays and tables** — a value answers to the methods
+its metatable's `__index` has, written with `:`:
 
 ```luau
 const long = names:filter(n => #n > 3):map(string.upper)
-const first = names:find(n => n:startsWith("A"))
-print(names:join(", "), text:trim(), text:replaceAll(",", ";"))
+print(names:join(", "), text:trim(), text:upper())
+const point = { x: 1, y: "up" }
+const [x, y] = point:values()   -- [number, string]
 ```
 
-Which methods those are is not the language's business. The analyzer looks for
-two types by name — `ArrayMethods<T>` and `StringMethods` — and reads an
-array's or a string's members out of whichever type library declared them;
-without such a library an array has no methods at all.
+Strings, arrays and tables are the language's own, so their metatables are
+too: the prelude declares them, in tilua, and they are there with no type
+library at all. A string's is Lua's (`upper`, `sub`, with one value where Lua
+answers several: `find` is an array) plus the JavaScript-shaped ones (`trim`,
+`startsWith`, ...); an array's is JavaScript's (`filter`, `map`, `join`, ...),
+with Lua's indices — the first element is 1, `indexOf` answers `nil` rather
+than -1 — and `push`, `pop`, `shift`, `unshift`, `sort` and `reverse` change
+the array. A table's are `keys`, `values` and `entries`, which answer a tuple
+in the order the table's type wrote its members, not `string[]` as
+JavaScript's `Object.keys` does; the analyzer supplies that order as
+`ObjectKeys<T>`, `ObjectValues<T>` and `ObjectEntries<T>`. A member of a
+value's own with the same name is what a call reaches, and a class instance,
+which has a metatable of its own, has none of them.
 
-Running them is that library's business too. A library points at a JavaScript
-module in its package.json, and the compiler asks it what a call becomes:
+No Lua array or table really has these methods, so the compiler lowers each
+call into its own runtime (`names:filter(f)` becomes `array.filter(names, f)`);
+a string's Lua methods stay plain method calls.
+
+A library adds to a metatable by declaring the same target again, and a
+metatable can be declared for any type:
+
+```luau
+declare metatable string: { __index: { split: (self: string, separator?: string) => string[] } }
+declare metatable<T> T[]: { __index: { first: (self: T[]) => T | nil } }
+declare metatable<T extends {}> T: { __index: { size: (self: T) => number } }
+```
+
+`<T> T[]` is every array, `T` what it holds; `<T extends C> T` every value
+that is a `C`, `T` the value itself; a target with no parameters, every value
+of that type. The most specific target a value matches is its metatable.
+
+A method a library's metatable gives may be one the value really has, as
+Luau's `split` is. When it is not, the library says how it runs. It points at
+a JavaScript module in its package.json, and the compiler asks it — and only
+it — what a call through a metatable it declared becomes:
 
 ```json
 "tilua": { "types": "index.d.tilua", "lowering": "lowering.mjs" }
@@ -285,11 +314,9 @@ module in its package.json, and the compiler asks it what a call becomes:
 // @ts-check
 /** @type {import("@tilua/parser").LoweringPlugin} */   // the contract, declared here
 const plugin = {
-    runtime: { array: "local __NAME__ = {}\nfunction __NAME__.filter(t, test) ... end" },
-    methodCall({ method, receiver, use }) {
-        if (receiver?.kind === "array" && method === "filter") {
-            return { callee: `${use("array")}.filter` }
-        }
+    runtime: { array: "local __NAME__ = {}\nfunction __NAME__.first(t) return t[1] end" },
+    methodCall({ method, use }) {
+        if (method === "first") return { callee: `${use("array")}.first` }
         return undefined
     },
 }
@@ -300,7 +327,9 @@ export default plugin
 local name that table got — emitted once, at the top of the output, only if a
 call needed it — and the receiver is passed as the call's first argument. An
 answer of `undefined` leaves an ordinary Luau method call, which is what
-`text:upper()` wants, since a string already answers to it.
+`text:split(",")` wants, since a Luau string already answers to it. A method
+of a value's own (`console:log`, a member of a declared table) is asked of
+every library, the last loaded first.
 
 A call can also carry more than was written. Every hook is told `at`, where
 the call was written (`{ file, line, column }`), and `arguments`: each one's
@@ -313,13 +342,6 @@ hook is asked about it. A runtime can read `__LINES__`, the bundle's line map
 (`nil` outside a bundle), to turn a line Luau reports back into a place in the
 project. `console:log`, `print` and `error` in `@tilua-types/lua` are built on
 these hooks.
-
-The compiler lowers the language and nothing else: `filter` appears nowhere in
-it.
-
-`@tilua-types/lua` ships the JavaScript-shaped set; there, indices are Luau's (the
-first element is 1, `indexOf` answers `nil` rather than -1) and `push`, `pop`,
-`shift`, `unshift`, `sort` and `reverse` change the array they are called on.
 
 **A `(` that starts a line** continues the statement above it, as in Lua and
 in JavaScript — `const v = map[key]` followed by `("A"):upper()` is one

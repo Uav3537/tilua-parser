@@ -1102,9 +1102,6 @@ const a: A = { p: 1 }`).errors.length,
 
     // A string is not a table: the only members it has are its methods.
     {
-        const methods = parse(
-            "type StringMethods = { upper: (self: string) => string }",
-        )
         const program = parse([
             `declare skill: "a" | "b"`,
             `declare name: "Sans" | "Asgore"`,
@@ -1117,7 +1114,7 @@ const a: A = { p: 1 }`).errors.length,
             "const table = rows[name]",
         ].join("\n"))
         const scopes = analyzeScopes(program)
-        const types = analyzeTypes(program, scopes, { libs: [methods] })
+        const types = analyzeTypes(program, scopes, {})
         const bindings: Record<string, string> = {}
         for (const [id, type] of types.bindingType) bindings[scopes.bindings.get(id)!.name] = formatType(type)
         check("string members: a method by name, and a report for anything else", [
@@ -1134,7 +1131,6 @@ const a: A = { p: 1 }`).errors.length,
 
     // `"a":upper()` needs no parentheses, the way `("a"):upper()` does in Luau.
     {
-        const methods = parse("type StringMethods = { upper: (self: string) => string }")
         const shape = (code: string): unknown => {
             const statement = (parse(code).body.statements.at(-1) ?? {}) as unknown as Record<string, unknown>
             const node = statement.type === "VariableDeclaration" ? statement.init
@@ -1151,7 +1147,7 @@ const a: A = { p: 1 }`).errors.length,
             return describe(node)
         }
         const program = parse(`const shout = "a":upper()\nconst wrong = "a":nope()`)
-        const types = analyzeTypes(program, analyzeScopes(program), { libs: [methods] })
+        const types = analyzeTypes(program, analyzeScopes(program), {})
         check("string method calls: a bare string, a statement, a template, and a ternary's `:`", [
             shape(`const a = "a":upper():lower()`),
             shape(`"a":upper()`),
@@ -1190,20 +1186,21 @@ const a: A = { p: 1 }`).errors.length,
                 "Property 'a' does not exist on type '{ a: number } | { b: number }'",
             ])
 
-        // A number has no members; an array's come from a library.
-        const arrays = parse("type ArrayMethods<T> = { size: (self: T[]) => number }")
+        // A number has no members; an array's are its metatable's — the
+        // language's, and whatever a library adds to it.
+        const arrays = parse("declare metatable<T> T[]: { __index: { size: (self: T[]) => number } }")
         const scalar = (code: string, libs = [arrays]) => {
             const p = parse(code)
             return analyzeTypes(p, analyzeScopes(p), { libs }).diagnostics.map(d => d.message)
         }
-        check("missing members: on a number, and on an array once a library names its methods", [
+        check("missing members: on a number, and on an array, whose metatable a library adds to", [
             scalar("const a = 1\nconst b = a.a"),
-            scalar("declare arr: number[]\nconst ok = arr.size\nconst wrong = arr.nope"),
-            scalar("declare arr: number[]\nconst unchecked = arr.nope", []),
+            scalar("declare arr: number[]\nconst ok = arr.size\nconst fromLanguage = arr.filter\nconst wrong = arr.nope"),
+            scalar("declare arr: number[]\nconst notAdded = arr.size", []),
         ], [
             ["Property 'a' does not exist on type '1'"],
             ["Property 'nope' does not exist on type 'number[]'"],
-            [],
+            ["Property 'size' does not exist on type 'number[]'"],
         ])
         // Arithmetic on an `any` may have gone through a metamethod: the
         // difference of two untyped positions is a vector as far as anyone
@@ -1233,7 +1230,7 @@ const a: A = { p: 1 }`).errors.length,
             "declare map: { [string]: string }",
             "declare key: string",
             "const value = map[key]",
-            `("A"):split(",")`,
+            `("A"):upper()`,
         ].join("\n")
         check("ambiguous call: a `(` that starts a line is a call of the line above", [
             // Two reports: the line break, and the string it ends up calling.
@@ -1396,17 +1393,13 @@ const a: A = { p: 1 }`).errors.length,
             ["string", "unknown"])
     }
 
-    // The methods an array and a string answer to. The analyzer knows only
-    // where to look — `ArrayMethods<T>` and `StringMethods` — and a library
-    // says what is in them.
+    // The methods an array and a string answer to are their metatables': the
+    // language declares them (in the prelude), and a library adds to them
+    // with `declare metatable` of the same target.
     {
         const library = parse([
-            "type ArrayMethods<T> = {",
-            "    filter: (self: T[], test: (value: T, index: number) => boolean) => T[],",
-            "    map: <U>(self: T[], transform: (value: T) => U) => U[],",
-            "    pop: (self: T[]) => T | nil,",
-            "}",
-            "type StringMethods = { upper: (self: string) => string, trim: (self: string) => string }",
+            "declare metatable<T> T[]: { __index: { size: (self: T[]) => number } }",
+            "declare metatable string: { __index: { split: (self: string, separator: string) => string[] } }",
         ].join("\n"))
         const program = parse([
             `const names = ["a", "bb"]`,
@@ -1418,19 +1411,28 @@ const a: A = { p: 1 }`).errors.length,
             "const trimmed = text:trim()",
             `const literal = ("x"):trim()`,
             "const missing = names:nope()",
+            "const size = names:size()",
+            "const parts = text:split(\",\")",
         ].join("\n"))
         const scopes = analyzeScopes(program)
         const types = analyzeTypes(program, scopes, { libs: [library] })
         const bindings: Record<string, string> = {}
         for (const [id, type] of types.bindingType) bindings[scopes.bindings.get(id)!.name] = formatType(type)
-        check("array and string methods: read from the types a library declares", [
+        check("array and string methods: the language's, and a library's added to them", [
             bindings.long, bindings.sizes, bindings.last,
             bindings.up, bindings.trimmed, bindings.literal, bindings.missing,
-        ], ["string[]", "number[]", "number | nil", "string", "string", "string", "unknown"])
+            bindings.size, bindings.parts,
+        ], ["string[]", "number[]", "number | nil", "string", "string", "string", "unknown", "number", "string[]"])
+        // Where each method came from is what the compiler asks: its own
+        // runtime for the language's, the declaring library for a library's.
+        const origins = [...types.methodSources.values()].map(source =>
+            source.origin === "library" ? `library ${source.library}` : source.origin)
+        check("array and string methods: each call says whose metatable it read",
+            origins, ["language", "language", "language", "language", "language", "language", "library 0", "library 0"])
 
-        // Without a library that declares them, an array has no methods.
-        const bare = analyze("const names = [1]\nconst gone = names:filter(function(v) { return true })")
-        check("array methods: nothing is built in", bare.bindings.gone, "unknown")
+        // With no library at all, an array still has the language's methods.
+        const bare = analyze("const names = [1]\nconst kept = names:filter(function(v) { return true })")
+        check("array methods: the language gives them", bare.bindings.kept, "number[]")
     }
 
     // Libraries layer over one another; the file itself replaces.
@@ -2027,6 +2029,39 @@ function g() {
         "Only a name, a member or an index can be assigned to",
         "An optional chain cannot be assigned to",
     ])
+
+    // A table's methods are the language's, and answer tuples in the order
+    // the type wrote its members.
+    const objectMethods = analyze([
+        "const keys = { a: 1, b: \"x\" }:keys()",
+        "const values = { a: 1, b: \"x\" }:values()",
+        "const entries = { a: 1, b: \"x\" }:entries()",
+        "declare point: { x: number, y?: string }",
+        "const optionalValues = point:values()",
+        "declare scores: { [string]: number }",
+        "const recordKeys = scores:keys()",
+        "const recordEntries = scores:entries()",
+        "declare either: { a: number } | { b: string }",
+        "const eitherKeys = either:keys()",
+        "const own = { keys: () => 1 }",
+        "const ownKeys = own:keys()",
+        // A line starting with `[` or `{` would continue a call on the line
+        // before, as in Lua; after a plain value it starts a statement.
+        "let a = 0",
+        "[1, 2]:forEach(print)",
+        "a = 1",
+        "{ a: 1 }:keys()",
+        "a = 2",
+        "{ a } = { a: 1 }",
+    ].join("\n"))
+    check("object methods: tuples in written order",
+        [objectMethods.bindings.keys, objectMethods.bindings.values, objectMethods.bindings.entries,
+            objectMethods.bindings.optionalValues, objectMethods.bindings.recordKeys, objectMethods.bindings.recordEntries,
+            objectMethods.bindings.eitherKeys, objectMethods.bindings.ownKeys],
+        ["[\"a\", \"b\"]", "[number, string]", "[[\"a\", number], [\"b\", string]]",
+            "[number, string | nil]", "string[]", "[string, number][]",
+            "[\"a\"] | [\"b\"]", "1"])
+    check("object methods: a literal is called on, even starting a statement", objectMethods.errors, [])
     const optional = analyze([
         "type Node = { Parent: Node | nil, Name: string, find: (self: Node, name: string) => Node | nil }",
         "declare node: Node | nil",
@@ -3285,7 +3320,7 @@ function g() {
         analyze("declare u: unknown\nconst p = u.prop").errors,
         analyze("declare a: any\nconst p = a.prop.deep").errors,
         analyze("type S = { prop: number }\ndeclare u: unknown\nconst p = (u as S).prop").errors,
-        analyze("declare map: { [string]: string }\ndeclare key: string\nconst value = map[key]\n;(\"A\"):split(\",\")").errors,
+        analyze("declare map: { [string]: string }\ndeclare key: string\nconst value = map[key]\n;(\"A\"):upper()").errors,
     ], [["'u' is of type 'unknown'"], [], [], []])
 
     // A value that is one function or another is callable, and returns either.

@@ -120,6 +120,7 @@ export type Statement =
     | ExportAllStatement
     | DeclareStatement
     | DeclareClassStatement
+    | DeclareMetatableStatement
     | ErrorStatement
 
 /** `declare game: DataModel` / `declare function require(m: string): unknown`
@@ -145,6 +146,26 @@ export interface DeclareClassStatement extends BaseNode {
     /** `extends Base` — another class. */
     superclass?: TypeReference
     body: TableTypeNode
+}
+
+/** `declare metatable string: { __index: StringLibrary }` — the metatable
+ *  every value of `target` has, as far as types go. A method call reads
+ *  through its `__index`: `text:upper()` is `upper` there.
+ *
+ *  A library may declare one a value does not really have — Lua gives an
+ *  array none — and ship a lowering that turns a call through it into a
+ *  call of its own (`names:filter(f)` becomes `array.filter(names, f)`).
+ *  The compiler asks the library that declared the metatable, and only it.
+ *
+ *  `target` may use the declaration's type parameters: `<T> T[]` is every
+ *  array, `T` its elements; `<T extends {}> T` every plain table, `T` the
+ *  table itself. The most specific target a value matches is its metatable,
+ *  and declaring one target again adds to it. */
+export interface DeclareMetatableStatement extends BaseNode {
+    type: "DeclareMetatableStatement"
+    generics: GenericTypeParameter[]
+    target: TypeNode
+    metatable: TypeNode
 }
 
 /** A statement position that could not be parsed. Only produced when parsing

@@ -3,10 +3,11 @@
  *
  * A library's definitions file says what a value *is*; when what it gives is
  * not something the value already answers to, the library must also say how
- * it runs. `names:filter(f)` is a call to a function because `@tilua-types/lua`
- * declares the method and ships the Luau behind it — the compiler lowers the
- * language (`import`, `export`, `?.`, `a ? b : c`, destructuring, spreads)
- * and asks a library about everything else.
+ * it runs. `names:first()` is a call to a function when a library declares
+ * `first` in an array's metatable and ships the Luau behind it — the compiler
+ * lowers the language (`import`, `export`, `?.`, `a ? b : c`, destructuring,
+ * spreads, and the methods of the language's own metatables, such as
+ * `names:filter(f)`) and asks a library about what the library declared.
  *
  * These types are declarations only: nothing here runs, and the parser never
  * loads a lowering module. They live here so a library can be checked against
@@ -18,10 +19,8 @@
  *     /** @type {import("@tilua/parser").LoweringPlugin} *\/
  *     const plugin = {
  *         runtime: { array: "local __NAME__ = {}\n..." },
- *         methodCall({ method, receiver, use }) {
- *             if (receiver?.kind === "array" && method === "filter") {
- *                 return { callee: `${use("array")}.filter` }
- *             }
+ *         methodCall({ method, use }) {
+ *             if (method === "first") return { callee: `${use("array")}.first` }
  *             return undefined
  *         },
  *     }
@@ -47,11 +46,13 @@ export interface LoweringPlugin {
      *     that callback's errors the same way.
      *
      *      local __NAME__ = {}
-     *      function __NAME__.filter(t, test) ... end
+     *      function __NAME__.first(t) return t[1] end
      */
     readonly runtime?: Readonly<Record<string, string>>
 
-    /** What `receiver:method(...)` becomes. `undefined` leaves a plain Luau
+    /** What `receiver:method(...)` becomes. Asked about a method a metatable
+     *  gave the receiver only when this library declared that metatable, and
+     *  about a method of the receiver's own always. `undefined` leaves a plain Luau
      *  method call, which is what a value that answers to the method itself
      *  wants — `text:upper()` reaches Lua's own. */
     methodCall?(call: MethodCall): MethodLowering | undefined

@@ -8,7 +8,7 @@ import type {
     NumericForStatement, GenericForStatement, ReturnStatement,
     BreakStatement, ContinueStatement, TypeAliasStatement, ExportTypeAliasStatement,
     ImportStatement, ImportSpecifier, ExportStatement, ExportDefaultStatement, DeclareStatement,
-    DeclareClassStatement, ExportNamedStatement, ExportSpecifier, ExportAllStatement,
+    DeclareClassStatement, DeclareMetatableStatement, ExportNamedStatement, ExportSpecifier, ExportAllStatement,
     FunctionName, TypedIdentifier, GenericTypeParameter, FunctionSignature, TypePredicateNode,
     MappedTypeNode,
     BindingTarget, IdentifierPattern, ObjectPattern, ObjectPatternProperty,
@@ -66,7 +66,7 @@ const DECLARATION_STATEMENTS: ReadonlySet<string> = new Set([
     "ClassDeclaration", "TypeAliasStatement", "ExportTypeAliasStatement",
     "ImportStatement", "ExportStatement", "ExportDefaultStatement",
     "ExportNamedStatement", "ExportAllStatement",
-    "DeclareStatement", "DeclareClassStatement",
+    "DeclareStatement", "DeclareClassStatement", "DeclareMetatableStatement",
 ])
 
 // ------------------------------------------------------------
@@ -760,6 +760,10 @@ export class Parser {
                 this.peek(2).type === "Identifier") {
                 return this.parseDeclareClassStatement()
             }
+            // `metatable` too: `declare metatable: T` is a global of that name.
+            if (p1.type === "Identifier" && (p1 as any).value === "metatable" && !this.punctuatorAt(2, ":")) {
+                return this.parseDeclareMetatableStatement()
+            }
             if (p1.type === "Identifier" ||
                 (p1.type === "Keyword" && (p1 as any).value === "function")) {
                 return this.parseDeclareStatement()
@@ -821,6 +825,18 @@ export class Parser {
             return { type: "Identifier", name: `${first.value}.${second.value}`, ...spanFrom(first, second) }
         }
         return tokenIdentifier(first)
+    }
+
+    // `declare metatable<T> T[]: { __index: { ... } }`
+    private parseDeclareMetatableStatement(): DeclareMetatableStatement {
+        const start = this.current()
+        this.advance() // 'declare'
+        this.advance() // 'metatable'
+        const generics = this.checkOperator("<") ? this.parseGenericTypeParameterList() : []
+        const target = this.parseType()
+        this.expectPunctuator(":")
+        const metatable = this.parseType()
+        return { type: "DeclareMetatableStatement", generics, target, metatable, ...spanFrom(start, this.previous()) }
     }
 
     // `declare class Name extends Base { member: T, ... }`
@@ -1634,6 +1650,16 @@ export class Parser {
         // can't otherwise begin with `{` or `[`, so this is unambiguous (no
         // parens required, unlike JS).
         if (this.checkPunctuator("{") || this.checkPunctuator("[")) {
+            // `[1, 2]:forEach(f)`, `{ a: 1 }:keys()`: a call on a literal,
+            // not a pattern being assigned to.
+            const call = this.tryParse(() => {
+                const errors = this.errors.length
+                const expression = this.parseAtom()
+                if (expression.type !== "MethodCallExpression" && expression.type !== "CallExpression") throw new ParseRecover("not a call")
+                if (this.errors.length > errors) throw new ParseRecover("not a call")
+                return expression
+            })
+            if (call) return { type: "CallStatement", expression: call, ...spanFrom(start, this.previous()) }
             const target = this.checkPunctuator("{") ? this.parseObjectPattern(true) : this.parseArrayPattern(true)
             return this.parseAssignmentRest(start, target)
         }
@@ -2017,12 +2043,11 @@ export class Parser {
             return this.parseClassExpression()
         }
 
-        if (t.type === "Punctuator" && (t as any).value === "{") {
-            return this.parseTableExpression()
-        }
-
-        if (t.type === "Punctuator" && (t as any).value === "[") {
-            return this.parseArrayExpression()
+        // `{ a: 1 }:keys()`, `[1, 2]:map(f)`: like a string, a literal is
+        // called on without the parentheses Luau would want.
+        if (t.type === "Punctuator" && ((t as any).value === "{" || (t as any).value === "[")) {
+            const literal = (t as any).value === "{" ? this.parseTableExpression() : this.parseArrayExpression()
+            return this.checkPunctuator(":") && this.startsMethodCall() ? this.parseSuffixes(literal) : literal
         }
 
         // `x => x * 2`, `(a, b) => a + b`, `(a: number): string => a`.
@@ -2116,7 +2141,12 @@ export class Parser {
         } else {
             this.error("Expected identifier or '('")
         }
+        return this.parseSuffixes(base)
+    }
 
+    /** What follows a prefix expression's base: `.name`, `[key]`, `:m(...)`,
+     *  a call, and their optional forms. */
+    private parseSuffixes(base: Expression): Expression {
         while (true) {
             // `a?.b` / `a?:m()`: the `?` must touch what follows it, as one
             // token would. `?` alone still starts a ternary's middle.

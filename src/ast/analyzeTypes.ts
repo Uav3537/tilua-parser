@@ -4,7 +4,7 @@ import type {
     ObjectPattern, ArrayPattern, ObjectPatternProperty, ReturnStatement,
     TableExpression, ArrayExpression, IfStatement, TypePredicateNode, DeclareClassStatement, DeclareStatement,
     ClassDeclaration, TypeAliasStatement, ExportTypeAliasStatement, ClassExpression, ClassLike, ClassMember,
-    GenericForStatement,
+    GenericForStatement, MethodCallExpression, DeclareMetatableStatement,
 } from "./nodes"
 import { LANGUAGE_GLOBALS, type ScopeAnalysis, type BindingId } from "./analyzeScopes"
 import { preludeProgram } from "./prelude"
@@ -82,7 +82,30 @@ export interface TypeAnalysis {
     /** How each `for (const item in source)` walks its source; see
      *  `LoopForm`. A loop missing here walks values. */
     readonly loops: ReadonlyMap<GenericForStatement, LoopForm>
+    /** Each `receiver:method(...)` whose method the receiver's metatable
+     *  gave it (`declare metatable`), and which library declared that. A call
+     *  missing here reached a member of the receiver's own. */
+    readonly methodSources: ReadonlyMap<MethodCallExpression, MethodSource>
+    /** The members a value's metatable `__index` gives it — what an editor
+     *  offers after `:`. Empty for a value no metatable matches. */
+    readonly metatableMembers: (type: Type) => ReadonlyMap<string, Type>
     readonly diagnostics: TypeDiagnostic[]
+}
+
+/** Where a metatable reached by a method call was declared: by the language
+ *  itself (the prelude's metatables for strings, arrays and tables), by a
+ *  library (its index in `libs`), or by the program. The compiler lowers a
+ *  language method itself, and asks a library about its own. */
+export type MethodSource =
+    | { readonly origin: "language" }
+    | { readonly origin: "library"; readonly library: number }
+    | { readonly origin: "program" }
+
+/** A `declare metatable`, resolved when first needed. */
+interface MetatableEntry {
+    readonly node: DeclareMetatableStatement
+    readonly source: MethodSource
+    resolved?: { target: Type; metatable: Type }
 }
 
 /** A type a module exports: the resolved type, plus the parameter names of a
@@ -700,6 +723,10 @@ class TypeAnalyzer {
     private readonly typeOfTypeNode = new Map<TypeNode, Type>()
     private readonly expectedTypeOf = new Map<Expression, Type>()
     private readonly loops = new Map<GenericForStatement, LoopForm>()
+    /** Every `declare metatable`, libraries first, in declaration order. */
+    private readonly metatables: MetatableEntry[] = []
+    private readonly metatableCache = new WeakMap<object, { type: Type; source: MethodSource }[]>()
+    private readonly methodSources = new Map<MethodCallExpression, MethodSource>()
     /** Public: each alias resolved once (generic aliases keep their params as
      *  `typeParam` nodes in the body). */
     private readonly aliases = new LazyMap<string>()
@@ -783,6 +810,9 @@ class TypeAnalyzer {
         this.registerNestedClasses()
         this.registerNestedAliases()
         for (const lib of this.options.libs ?? []) this.harvestDeclares(lib.body)
+        this.harvestMetatables(preludeProgram().body, { origin: "language" })
+        ;(this.options.libs ?? []).forEach((lib, i) => this.harvestMetatables(lib.body, { origin: "library", library: i }))
+        this.harvestMetatables(this.program.body, { origin: "program" })
         // Imported type names must be known before any annotation resolves.
         this.registerImportedTypes()
         this.resolveAllAliases()
@@ -824,6 +854,8 @@ class TypeAnalyzer {
             expectedTypeOf: this.expectedTypeOf,
             aliases: this.resolveDeferredAliases(),
             loops: this.loops,
+            methodSources: this.methodSources,
+            metatableMembers: type => this.metatableMembers(type),
             diagnostics: this.diagnostics,
         }
     }
@@ -895,8 +927,7 @@ class TypeAnalyzer {
 
     /** `layering` is on for the prelude and for definitions files: a second
      *  library that declares an alias already declared *adds* to it, the way a
-     *  second `declare` of a table's name does, so `@tilua-types/roblox` can give
-     *  `StringMethods` Luau's `split` without restating Lua's. The file being
+     *  second `declare` of a table's name does. The file being
      *  analysed is not a layer: its own alias replaces what the libraries
      *  gave, which is how a project opts out of a set. */
     private registerAliasDefs(block: Block, layering = false): void {
@@ -1990,7 +2021,7 @@ class TypeAnalyzer {
                 const unresolved = resolved?.kind === "genericRef" && resolved.name === name &&
                     !this.aliasDefs.has(name) && !this.importedTypes.has(name) &&
                     this.options.libTypes?.[name] === undefined &&
-                    !STRING_INTRINSICS.has(name) && !this.importedNames().has(name.split(".")[0])
+                    !INTRINSICS.has(name) && !this.importedNames().has(name.split(".")[0])
                 const at = node as unknown as { line: { start: number }; column: { start: number } }
                 const key = `${at.line.start}:${at.column.start}`
                 if (unresolved && !reported.has(key)) {
@@ -2118,7 +2149,7 @@ class TypeAnalyzer {
                     const tp = this.lookupTypeParam(node.base)
                     if (tp) return typeParam(tp.name, tp.constraint, tp.isConst)
                     if (node.typeArguments.length === 1 && !this.aliasDefs.has(node.base)) {
-                        const intrinsic = this.applyStringIntrinsic(
+                        const intrinsic = this.applyIntrinsic(
                             node.base, this.resolveType(node.typeArguments[0]))
                         if (intrinsic) return intrinsic
                     }
@@ -2360,7 +2391,7 @@ class TypeAnalyzer {
                     // `Capitalize<K>` resolves to a ref while `K` is generic;
                     // once `K` is a real string it becomes computable.
                     if (t.typeArguments.length !== 1 || this.aliasDefs.has(t.name)) return t
-                    return this.applyStringIntrinsic(t.name, t.typeArguments[0]) ?? t
+                    return this.applyIntrinsic(t.name, t.typeArguments[0]) ?? t
                 }
                 case "conditional": return this.reduceConditional(t)
                 case "mapped": return this.reduceMapped(t)
@@ -2492,6 +2523,42 @@ class TypeAnalyzer {
             combos = next
         }
         return union(combos.map(c => literal(c)))
+    }
+
+    /** A type function the analyzer supplies, since tilua cannot write it. */
+    private applyIntrinsic(name: string, arg: Type): Type | undefined {
+        return this.applyStringIntrinsic(name, arg) ?? this.applyObjectIntrinsic(name, arg)
+    }
+
+    /** `ObjectKeys<T>`, `ObjectValues<T>`, `ObjectEntries<T>`: an object's
+     *  members as a tuple, in the order they were written — `{ a: 1, b: "x" }`
+     *  has keys `["a", "b"]`, values `[number, string]` and entries
+     *  `[["a", number], ["b", string]]`. TypeScript answers `string[]` for
+     *  `Object.keys`, since its objects have no order; tilua's lowering hands
+     *  the runtime the written order, so the tuple is what runs. An indexer's
+     *  keys follow the named ones, as the tuple's rest. */
+    private applyObjectIntrinsic(name: string, arg: Type): Type | undefined {
+        if (!OBJECT_INTRINSICS.has(name)) return undefined
+        const t = this.expand(this.reduceType(arg))
+        if (containsTypeParam(t)) return undefined
+        if (t.kind === "union") return union(t.types.map(m => this.applyObjectIntrinsic(name, m) ?? unknownType))
+        const parts = (t.kind === "intersection" ? t.types.map(m => this.expand(m)) : [t])
+        if (!parts.every(m => m.kind === "object" && !m.class)) return unknownType
+        const properties = new Map<string, ObjectProperty>()
+        let indexer: { key: Type; value: Type } | undefined
+        for (const part of parts as Extract<Type, { kind: "object" }>[]) {
+            for (const [key, property] of part.properties) properties.set(key, property)
+            indexer ??= part.indexer
+        }
+        const entries = [...properties].map(([key, p]) => [literal(key), p.optional ? optional(p.type) : p.type] as const)
+        // Only an indexer's keys: an array, of however many there are.
+        const listed = (elements: Type[], rest: Type | undefined): Type =>
+            !elements.length && rest ? arrayOf(rest) : tuple(elements, rest)
+        switch (name) {
+            case "ObjectKeys": return listed(entries.map(([key]) => key), indexer?.key)
+            case "ObjectValues": return listed(entries.map(([, value]) => value), indexer?.value)
+            default: return listed(entries.map(entry => tuple([...entry])), indexer && tuple([indexer.key, indexer.value]))
+        }
     }
 
     /** TypeScript's four string intrinsics. They cannot be written in tilua —
@@ -4616,38 +4683,134 @@ class TypeAnalyzer {
         }
     }
 
-    /** `names:filter(f)`, `text:trim()` — the methods arrays and strings have.
-     *  They are written in the prelude as `ArrayMethods<T>` and
-     *  `StringMethods`, so a file (or a type library) that declares one of
-     *  those names again replaces the whole set, and nothing here is a special
-     *  case in the analyzer. The build lowers each call to a plain function. */
-    private builtInMethod(t: Type, name: string): Type | undefined {
-        // A union of arrays is still an array to its methods — what one holds
-        // is any of their elements. Same for a union of strings.
-        const parts = (t.kind === "union" ? t.types : [t]).map(m => this.expand(m))
-        const elements = parts.map(m => (m.kind === "array" ? m.element
-            : m.kind === "tuple" ? union(m.elements)
-            : undefined))
-        const element = elements.every(e => e !== undefined) ? union(elements as Type[]) : undefined
-        const isString = (m: Type): boolean =>
-            (m.kind === "primitive" && m.name === "string") ||
-            (m.kind === "literal" && m.base === "string") ||
-            m.kind === "templateLiteral"
-        const methodTable = element !== undefined ? "ArrayMethods"
-            : parts.every(isString) ? "StringMethods"
-            : undefined
-        const def = methodTable === undefined ? undefined : this.aliasDefs.get(methodTable)
-        if (!def || def.class) return undefined
-        const table = this.expand(this.instantiateAlias(def as { params: GenericTypeParameter[]; node: TypeNode }, element !== undefined ? [element] : []))
-        // Libraries layer, so the set may be an intersection of what each gave
-        // it; the last to declare a name wins.
-        const layers = table.kind === "intersection" ? table.types.map(m => this.expand(m)) : [table]
-        for (let i = layers.length - 1; i >= 0; i--) {
-            const part = layers[i]
-            const property = part.kind === "object" ? part.properties.get(name) : undefined
-            if (property) return property.type
+    // --------------------------------------------------------
+    // Metatables
+    // --------------------------------------------------------
+
+    private harvestMetatables(block: Block, source: MethodSource): void {
+        for (const stmt of block.statements) {
+            if (stmt.type === "DeclareMetatableStatement") this.metatables.push({ node: stmt, source })
+        }
+    }
+
+    private resolvedMetatable(entry: MetatableEntry): { target: Type; metatable: Type } {
+        entry.resolved ??= this.withTypeParams(entry.node.generics, () => ({
+            target: this.resolveType(entry.node.target),
+            metatable: this.resolveType(entry.node.metatable),
+        }))
+        return entry.resolved
+    }
+
+    /** Does a value (`whole`, whose union members are `parts`) have the
+     *  metatable `entry` declares — and if so how specifically, and what its
+     *  type parameters stand for there. Three kinds of target:
+     *
+     *   - `<T> T[]`: every array and tuple, `T` what they hold;
+     *   - `<T extends C> T`: every value that is a `C` other than a class
+     *     instance, which has a metatable of its own; `T` the value itself;
+     *   - a type with no parameters (`string`): every value that is one.
+     *
+     *  A bare parameter matches the most, so it is the least specific: an
+     *  array that is also a `{}` takes an array's metatable. */
+    private matchMetatable(entry: MetatableEntry, whole: Type, parts: readonly Type[]): { specificity: number; bindings: Map<string, Type> } | undefined {
+        if (!parts.length || parts.some(m => m.kind === "any" || m.kind === "unknown" || m.kind === "never")) return undefined
+        const { target } = this.resolvedMetatable(entry)
+        if (target.kind === "array" && target.element.kind === "typeParam") {
+            const elements = parts.map(m => m.kind === "array" ? m.element : m.kind === "tuple" ? union(tupleMembers(m)) : undefined)
+            if (!elements.every(e => e !== undefined)) return undefined
+            return { specificity: 2, bindings: new Map([[target.element.name, union(elements as Type[])]]) }
+        }
+        if (target.kind === "typeParam") {
+            const constraint = target.constraint
+            if (parts.some(m => m.kind === "object" && m.class)) return undefined
+            if (constraint && !parts.every(m => isAssignable(m, constraint))) return undefined
+            return { specificity: 1, bindings: new Map([[target.name, whole]]) }
+        }
+        if (containsTypeParam(target)) return undefined
+        return parts.every(m => isAssignable(m, target)) ? { specificity: 2, bindings: new Map() } : undefined
+    }
+
+    /** The metatables `t` has: every declaration of the most specific target
+     *  it matches, instantiated for it, in declaration order — a later one
+     *  adds to an earlier, the way a library layers on another. A type
+     *  parameter is read at its constraint. */
+    private metatablesOf(t: Type): { type: Type; source: MethodSource }[] {
+        if (!this.metatables.length) return []
+        const cached = this.metatableCache.get(t)
+        if (cached) return cached
+        const expanded = this.expand(t)
+        const parts = (expanded.kind === "union" ? expanded.types : [expanded])
+            .map(m => this.expand(m))
+            .map(m => (m.kind === "typeParam" && m.constraint ? this.expand(m.constraint) : m))
+        const whole = union(parts)
+        const matches = this.metatables.flatMap(entry => {
+            const match = this.matchMetatable(entry, whole, parts)
+            return match ? [{ entry, ...match }] : []
+        })
+        const best = Math.max(0, ...matches.map(m => m.specificity))
+        const found = matches.filter(m => m.specificity === best).map(({ entry, bindings }) => ({
+            type: this.expand(this.reduceType(substitute(this.resolvedMetatable(entry).metatable, bindings))),
+            source: entry.source,
+        }))
+        this.metatableCache.set(t, found)
+        return found
+    }
+
+    /** The `__index` tables of `t`'s metatables, each with the library that
+     *  declared it, in declaration order. */
+    private metatableIndexes(t: Type): { table: Type; source: MethodSource }[] {
+        return this.metatablesOf(t).flatMap(({ type, source }) => {
+            const parts = type.kind === "intersection" ? type.types.map(m => this.expand(m)) : [type]
+            return parts.flatMap(part => {
+                const index = part.kind === "object" ? part.properties.get("__index") : undefined
+                if (!index) return []
+                const table = this.expand(index.type)
+                return (table.kind === "intersection" ? table.types.map(m => this.expand(m)) : [table])
+                    .map(m => ({ table: m, source }))
+            })
+        })
+    }
+
+    /** `name` read through `t`'s metatable: `text:upper()` is `upper` in the
+     *  string metatable's `__index`. The last declaration to give the name
+     *  wins. The language's own metatables are declared in the prelude, in
+     *  tilua, like any library's; a library adds to them the same way. */
+    private metatableMember(t: Type, name: string): { type: Type; source: MethodSource } | undefined {
+        const indexes = this.metatableIndexes(t)
+        for (let i = indexes.length - 1; i >= 0; i--) {
+            const { table, source } = indexes[i]
+            const property = table.kind === "object" ? table.properties.get(name) : undefined
+            if (property) return { type: property.type, source }
         }
         return undefined
+    }
+
+    private metatableMethod(t: Type, name: string): Type | undefined {
+        return this.metatableMember(t, name)?.type
+    }
+
+    private hasMetatable(t: Type): boolean {
+        return this.metatablesOf(t).length > 0
+    }
+
+    private metatableMembers(t: Type): Map<string, Type> {
+        const members = new Map<string, Type>()
+        for (const { table } of this.metatableIndexes(t)) {
+            if (table.kind !== "object") continue
+            for (const [name, property] of table.properties) members.set(name, property.type)
+        }
+        return members
+    }
+
+    /** `text:upper()`, `scores:keys()`: the method a value's metatable gives
+     *  it, when the value has no member of that name of its own. Called with
+     *  `:`, it answers before an object's indexer, since a metatable's
+     *  `__index` is only read for a key the table does not hold. */
+    private receiverMetatableMember(objType: Type, name: string): { type: Type; source: MethodSource } | undefined {
+        const t = this.expand(objType)
+        const parts = (t.kind === "union" ? t.types : [t]).map(m => this.expand(m))
+        if (parts.some(m => m.kind === "object" && m.properties.has(name))) return undefined
+        return this.metatableMember(t, name)
     }
 
     /** The most a deferred type could turn out to be. A conditional is one of
@@ -4719,7 +4882,7 @@ class TypeAnalyzer {
         if (index.kind !== "literal" || typeof index.value !== "string") return undefined
         const parts = this.stringParts(object)
         if (!parts) return undefined
-        const found = parts.map(part => this.builtInMethod(part, index.value as string))
+        const found = parts.map(part => this.metatableMethod(part, index.value as string))
         return found.every(t => t !== undefined) ? union(found as Type[]) : undefined
     }
 
@@ -4747,7 +4910,7 @@ class TypeAnalyzer {
      *  not one of them is a mistake worth reporting, rather than the nil Lua
      *  would hand back. */
     private checkStringMember(node: Expression, object: Type, key: Type): void {
-        if (!this.emitDiagnostics || !this.aliasDefs.has("StringMethods")) return
+        if (!this.emitDiagnostics || !this.hasMetatable(stringType)) return
         const parts = this.stringParts(object)
         if (!parts) return
         // The key may be one name or a choice of them; anything less definite
@@ -4755,7 +4918,7 @@ class TypeAnalyzer {
         const keys = (key.kind === "union" ? key.types : [key]).map(m => this.expand(m))
         if (!keys.length || !keys.every(m => m.kind === "literal" && typeof m.value === "string")) return
         const names = keys.map(m => String((m as Extract<Type, { kind: "literal" }>).value))
-        if (names.some(name => parts.some(part => this.builtInMethod(part, name)))) return
+        if (names.some(name => parts.some(part => this.metatableMethod(part, name)))) return
         this.diagnostics.push({
             node,
             message: names.length === 1
@@ -4791,24 +4954,24 @@ class TypeAnalyzer {
             switch (part.kind) {
                 case "primitive":
                     if (part.name === "nil") continue
-                    if (part.name === "string" && !this.aliasDefs.has("StringMethods")) return false
-                    if (part.name === "string" && this.builtInMethod(part, name)) continue
+                    if (part.name === "string" && !this.hasMetatable(part)) return false
+                    if (part.name === "string" && this.metatableMethod(part, name)) continue
                     break
                 case "literal":
                 case "templateLiteral":
                     if (part.kind === "templateLiteral" || part.base === "string") {
-                        if (!this.aliasDefs.has("StringMethods")) return false
+                        if (!this.hasMetatable(part)) return false
                     }
-                    if (this.builtInMethod(part, name)) continue
+                    if (this.metatableMethod(part, name)) continue
                     break
                 case "array":
                 case "tuple":
-                    if (!this.aliasDefs.has("ArrayMethods")) return false
-                    if (this.builtInMethod(part, name)) continue
+                    if (!this.hasMetatable(part)) return false
+                    if (this.metatableMethod(part, name)) continue
                     break
                 case "object":
                     if (part.properties.has(name)) continue
-                    if (part.indexer || (part.properties.size === 0 && !part.class) || this.builtInMethod(part, name)) return false
+                    if (part.indexer || (part.properties.size === 0 && !part.class) || this.metatableMethod(part, name)) return false
                     break
                 default:
                     return false
@@ -4967,13 +5130,13 @@ class TypeAnalyzer {
             if (p) return p.optional ? optional(p.type) : p.type
             if (t.indexer) return t.indexer.value
         }
-        const built = this.builtInMethod(t, name)
+        const built = this.metatableMethod(t, name)
         if (built) return built
         if (t.kind === "union") {
             // The methods of a union of arrays (or of strings) come from the
             // union, not from each member on its own: one `some` over all the
             // elements, rather than several that cannot be called.
-            const built = this.builtInMethod(t, name)
+            const built = this.metatableMethod(t, name)
             if (built) return built
             return union(t.types.map(m => this.propertyType(m, name)))
         }
@@ -5439,7 +5602,9 @@ class TypeAnalyzer {
         this.checkPrivateMember(expr.method, objType, expr.method.name)
         this.checkStringMember(expr.method, objType, literal(expr.method.name))
         this.checkMissingMember(expr.method, objType, expr.method.name)
-        const method = this.propertyType(objType, expr.method.name)
+        const fromMetatable = this.receiverMetatableMember(objType, expr.method.name)
+        if (fromMetatable) this.methodSources.set(expr, fromMetatable.source)
+        const method = fromMetatable?.type ?? this.propertyType(objType, expr.method.name)
         const united = this.unionSignatures(method)
         const fns = united ?? this.overloadsOf(method)
         const explicit = this.explicitTypeArguments(expr, fns)
@@ -6936,6 +7101,8 @@ function containsTypeQuery(node: unknown): boolean {
 /** `Uppercase<T>` and friends are built in, and resolve only once their
  *  argument is a known string. */
 const STRING_INTRINSICS = new Set(["Uppercase", "Lowercase", "Capitalize", "Uncapitalize"])
+const OBJECT_INTRINSICS = new Set(["ObjectKeys", "ObjectValues", "ObjectEntries"])
+const INTRINSICS = new Set([...STRING_INTRINSICS, ...OBJECT_INTRINSICS])
 
 /** A type for a message. A long union of literals — every service name — is
  *  cut short the way TypeScript does, so the message stays readable. */
