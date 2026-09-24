@@ -5,7 +5,7 @@ extended: { a: number, b: number, c: number }
 key: "dynamic"
 nested: { onHit: (dmg: number) => number, position: { x: number, y: number }, tags: string[] }
 point: { x: number, y: number }
-shorthand: { x: number, y: number }
+shorthand: { x: 10, y: 20 }
 stringKeys: { "data-id": number, order: string }
 x: 10
 y: 20

@@ -17,7 +17,7 @@ import {
     widen, isAssignable, overlaps, narrowTo, narrowExclude, narrowTruthy, narrowFalsy,
     isClassType,
     isPossiblyFalsy,
-    formatType, withAliasName,
+    formatType, withAliasName, equalTypes,
 } from "./typeModel"
 
 // ============================================================
@@ -362,9 +362,14 @@ function isFreshLiteralExpr(e: Expression | undefined): boolean {
         case "StringLiteral":
         case "BooleanLiteral":
         case "InterpolatedStringExpression":
+            return true
+        // A table or array literal widened the literals written in it as it
+        // was read (`widenUnlessAsked`), and keeps what it read from
+        // elsewhere — `{ key: name }`, `[...names]` — so there is nothing
+        // left for the binding to widen.
         case "TableExpression":
         case "ArrayExpression":
-            return true
+            return false
         case "ParenthesizedExpression":
             return isFreshLiteralExpr(e.expression)
         case "UnaryExpression":
@@ -375,6 +380,40 @@ function isFreshLiteralExpr(e: Expression | undefined): boolean {
             const inner = unwrapParens(e.expression)
             return inner.type !== "TableExpression" && inner.type !== "ArrayExpression" && isFreshLiteralExpr(inner)
         }
+        default:
+            return false
+    }
+}
+
+/** The order overloads are tried in. A signature that takes a guard —
+ *  `filter`'s `(value: T) => value is S` — accepts only a guard, and says
+ *  more than one that takes any test, so it goes first; then the plain
+ *  signatures, and the generic ones last. */
+function overloadTier(f: FunctionType): number {
+    const takesGuard = f.params.some(p => p.type.kind === "function" && p.type.predicate?.type && !p.type.predicate.asserts)
+    if (takesGuard) return 0
+    return (f.typeParams?.length ?? 0) > 0 ? 2 : 1
+}
+
+/** Is a literal written in `e` itself — `"a"`, `c ? 1 : 2`, `x or "none"` —
+ *  rather than every value in it read from somewhere? Only a written literal
+ *  widens where it is stored (see `widenUnlessAsked`). A table or array
+ *  literal has widened its own already, and keeps what it read. */
+function writesLiteral(e: Expression): boolean {
+    switch (e.type) {
+        case "NumberLiteral":
+        case "StringLiteral":
+        case "BooleanLiteral":
+        case "InterpolatedStringExpression":
+            return true
+        case "ParenthesizedExpression":
+            return writesLiteral(e.expression)
+        case "UnaryExpression":
+            return writesLiteral(e.argument)
+        case "IfElseExpression":
+            return e.clauses.some(c => writesLiteral(c.body)) || writesLiteral(e.alternate)
+        case "BinaryExpression":
+            return (e.operator === "or" || e.operator === "and") && (writesLiteral(e.left) || writesLiteral(e.right))
         default:
             return false
     }
@@ -3252,7 +3291,13 @@ class TypeAnalyzer {
         if (!waits.some(Boolean)) return written.map(a => this.infer(a, env))
 
         const argTypes = written.map((a, i) => (waits[i] ? this.quietly(() => this.infer(a, env)) : this.infer(a, env)))
-        const picked = this.pickOverload(fns as FunctionType[], argTypes, f => extra(f, argTypes), this.spreadOf(written, selfOf(fns[0])))
+        const spread = this.spreadOf(written, selfOf(fns[0]))
+        // The quiet read is only a shape: `v => v ~= nil` read with `v: any`
+        // guards nothing, yet fits `(value: T) => value is S` once `T` is
+        // known. When the shape fits no signature, the other arguments pick.
+        const provisional = argTypes.map((t, i) => (waits[i] ? anyType : t))
+        const picked = this.pickOverload(fns as FunctionType[], argTypes, f => extra(f, argTypes), spread)
+            ?? this.pickOverload(fns as FunctionType[], provisional, f => extra(f, provisional), spread)
         const subst = picked?.typeParams?.length
             ? this.inferTypeArgs(picked, extra(picked, argTypes))
             : undefined
@@ -3496,6 +3541,22 @@ class TypeAnalyzer {
             }
             const id = this.bindingIdByName(p.name, p)
             const t = this.paramType(p, env)
+            // `wait: number = Base.ping() * 2`: the annotation says what the
+            // parameter holds, but the default is code all the same — read
+            // where the parameters before it are known, and checked against
+            // what it stands in for. (Without an annotation, `paramType` read
+            // it already: it is the parameter's type.)
+            if (p.default && p.typeAnnotation) {
+                const given = this.infer(p.default, env)
+                const declared = this.resolveType(p.typeAnnotation)
+                if (this.emitDiagnostics && !isAssignable(given, declared)) {
+                    this.diagnostics.push({
+                        node: p.default,
+                        message: `Type '${briefType(given)}' is not assignable to '${briefType(declared)}'`
+                            + this.explainMismatch(given, declared),
+                    })
+                }
+            }
             if (id !== undefined) {
                 this.bindingType.set(id, t)
                 this.setBinding(env, id, t)
@@ -3634,9 +3695,9 @@ class TypeAnalyzer {
         argsFor?: (f: FunctionType) => Type[],
         spread?: SpreadInfo,
     ): FunctionType | undefined {
-        for (const generic of [false, true]) {
+        for (const tier of [0, 1, 2]) {
             for (const f of fns) {
-                if (((f.typeParams?.length ?? 0) > 0) !== generic) continue
+                if (overloadTier(f) !== tier) continue
                 if (this.overloadAccepts(f, argsFor ? argsFor(f) : argTypes, spread)) return f
             }
         }
@@ -3672,8 +3733,7 @@ class TypeAnalyzer {
         const members = (this.expand(argTypes[position]) as Extract<Type, { kind: "union" }>).types
         if (members.length > 32) return undefined
         // The order `pickOverload` tries signatures in.
-        const rank = (f: FunctionType): number =>
-            ((f.typeParams?.length ?? 0) > 0 ? fns.length : 0) + fns.indexOf(f)
+        const rank = (f: FunctionType): number => overloadTier(f) * fns.length + fns.indexOf(f)
         const limit = picked ? rank(picked) : Infinity
         const results: Type[] = []
         for (const member of members) {
@@ -4178,9 +4238,44 @@ class TypeAnalyzer {
                 params, returns,
                 undefined,
                 names,
-                this.resolvePredicate(func.predicate, params),
+                func.predicate || func.returnType
+                    ? this.resolvePredicate(func.predicate, params)
+                    : this.inferPredicate(func, params, returns, bodyEnv),
             ), func.params)
         })
+    }
+
+    /** `v => v ~= nil` is a guard without saying so, as TypeScript reads it:
+     *  a body that is one `return` of a boolean which, true, narrows a
+     *  parameter — and, false, leaves it exactly what that excludes. Then
+     *  `list:filter(v => v ~= nil)` knows what it kept. */
+    private inferPredicate(
+        func: FunctionBody, params: readonly { name?: string; type: Type }[], returns: Type, env: FlowEnv,
+    ): TypePredicate | undefined {
+        const only = func.body.statements.length === 1 ? func.body.statements[0] : undefined
+        if (only?.type !== "ReturnStatement" || !only.argument) return undefined
+        if (returns.kind === "any" || returns.kind === "never" || !isAssignable(returns, booleanType)) return undefined
+        const cond = only.argument
+        for (let i = 0; i < params.length; i++) {
+            const p = func.params[i]
+            if (p.pattern || p.rest) continue
+            const id = this.bindingIdByName(p.name, p)
+            if (id === undefined) continue
+            const declared = params[i].type
+            const key = bindKey(id)
+            const t = forkEnv(env)
+            const f = forkEnv(env)
+            this.silently(() => this.applyNarrowing(cond, env, t, f))
+            const yes = t.get(key)
+            if (!yes || equalTypes(yes, declared) || !isAssignable(yes, declared)) continue
+            // `v => v ~= nil and v.Enabled` narrows `v` when true, but false
+            // does not mean `nil`: that is no guard.
+            const no = this.expand(f.get(key) ?? declared)
+            const rest = no.kind === "union" ? no.types : [no]
+            if (rest.some(m => m.kind !== "never" && isAssignable(m, yes))) continue
+            return { param: i, type: yes, asserts: false }
+        }
+        return undefined
     }
 
     /** Where the return types of the function being walked are collected, so
@@ -5480,6 +5575,38 @@ class TypeAnalyzer {
                     elseEnv = whenFalse
                 }
                 branches.push(this.infer(expr.alternate, elseEnv))
+                // `cond ? list : []`: an empty `[]` or `{}` that already is what
+                // the other branches hold adds nothing to them, as with
+                // `list or []`. Kept, it would make the whole `unknown[]`.
+                const bodies = [...expr.clauses.map(c => c.body), expr.alternate].map(unwrapParens)
+                const isEmpty = (e: Expression): boolean =>
+                    (e.type === "TableExpression" && e.fields.length === 0) || (e.type === "ArrayExpression" && e.elements.length === 0)
+                const others = union(branches.filter((_, i) => !isEmpty(bodies[i])))
+                // An empty `[]` is any array, and an empty `{}` any plain table
+                // whose members are all optional: then it is one of the others.
+                // Beside a tuple (`names as const`), `[]` is the empty tuple,
+                // so spreading the whole gives exactly the names.
+                const parts = (others.kind === "union" ? others.types : [others]).map(m => this.expand(m))
+                    .filter(m => !(m.kind === "primitive" && m.name === "nil"))
+                const fits = (e: Expression): Type | undefined => {
+                    if (!parts.length) return undefined
+                    if (e.type === "ArrayExpression") {
+                        if (parts.every(m => m.kind === "array")) return others
+                        return parts.every(m => m.kind === "array" || m.kind === "tuple") ? tuple([]) : undefined
+                    }
+                    return parts.every(m => m.kind === "object" && !m.class && [...m.properties.values()].every(prop => prop.optional))
+                        ? others : undefined
+                }
+                if (bodies.some(isEmpty) && others.kind !== "never" && others.kind !== "any" &&
+                    bodies.every(body => !isEmpty(body) || fits(body))) {
+                    const typed = bodies.map((body, i) => {
+                        if (!isEmpty(body)) return branches[i]
+                        const t = fits(body)!
+                        this.typeOf.set(body, t)
+                        return t
+                    })
+                    return union(typed)
+                }
                 return union(branches)
             }
         }
@@ -5825,18 +5952,28 @@ class TypeAnalyzer {
         if (wantedTuple && !asConst) return this.inferTupleLiteral(expr, env, wantedTuple)
         const elems: Type[] = []
         let hadSpread = false
+        /** Per element: a spread's type, or what was written. */
+        const written: { spread: boolean; type: Type }[] = []
         for (const el of expr.elements) {
             if (el.type === "SpreadElement") {
                 hadSpread = true
-                const s = this.infer(el.argument, env)
-                if (s.kind === "array") elems.push(s.element)
-                else if (s.kind === "tuple") elems.push(...s.elements)
-                else elems.push(unknownType)
+                const spread = this.infer(el.argument, env)
+                written.push({ spread: true, type: spread })
+                elems.push(...this.spreadElements(spread))
             } else {
-                elems.push(asConst ? this.inferAsConst(el, env) : this.infer(el, env))
+                const t = asConst ? this.inferAsConst(el, env) : this.infer(el, env)
+                written.push({ spread: false, type: asConst ? t : this.widenUnlessAsked(t, el) })
+                elems.push(t)
             }
         }
         if (asConst && !hadSpread) return tuple(elems)
+        // `[...Named, ...(host ? Extra : [])]`: every spread a tuple of known
+        // length, so the result is one too — one for each way the unions go,
+        // `[...Named] | [...Named, ...Extra]`.
+        if (hadSpread) {
+            const tuples = this.spreadTuples(written)
+            if (tuples) return union(tuples.map(elements => tuple(elements)))
+        }
         return arrayOf(elems.length
             ? union(elems.map((t, i) => {
                 const element = expr.elements[i]
@@ -5845,6 +5982,63 @@ class TypeAnalyzer {
                     : this.widenUnlessAsked(t, element)
             }))
             : unknownType)
+    }
+
+    /** The tuples an array literal with spreads is, when every spread is a
+     *  tuple of known length or a union of them: one per way the unions go.
+     *  `undefined` when a spread's length is not known (an array, a tuple
+     *  with a rest), or the ways multiply past what is worth listing. */
+    private spreadTuples(written: readonly { spread: boolean; type: Type }[]): Type[][] | undefined {
+        const MAX = 32
+        let variants: Type[][] = [[]]
+        for (const { spread, type } of written) {
+            if (!spread) {
+                variants = variants.map(v => [...v, type])
+                continue
+            }
+            const options = this.fixedTuples(type)
+            if (!options) return undefined
+            const next: Type[][] = []
+            for (const v of variants) for (const option of options) next.push([...v, ...option])
+            if (next.length > MAX) return undefined
+            variants = next
+        }
+        return variants
+    }
+
+    /** A tuple of known length's members, or a union of such tuples' — each
+     *  a way the value can be. `nil` in a union spreads nothing. */
+    private fixedTuples(t: Type, depth = 0): Type[][] | undefined {
+        if (depth > 8) return undefined
+        const held = this.expand(t)
+        if (held.kind === "tuple") return held.rest ? undefined : [held.elements]
+        if (held.kind !== "union") return undefined
+        const out: Type[][] = []
+        for (const member of held.types) {
+            if (member.kind === "primitive" && member.name === "nil") continue
+            const options = this.fixedTuples(member, depth + 1)
+            if (!options) return undefined
+            out.push(...options)
+        }
+        return out.length ? out : undefined
+    }
+
+    /** What `...xs` puts into an array: an array's element, a tuple's members,
+     *  and for a union each member's — `...(host ? extra : [])` adds `extra`'s
+     *  elements and the empty tuple nothing. Anything else, `unknown`. */
+    private spreadElements(t: Type, depth = 0): Type[] {
+        const held = this.expand(t)
+        if (depth > 8) return [unknownType]
+        switch (held.kind) {
+            case "array": return [held.element]
+            case "tuple": return tupleMembers(held)
+            case "union": return held.types
+                .filter(m => !(m.kind === "primitive" && m.name === "nil"))
+                .flatMap(m => this.spreadElements(m, depth + 1))
+            case "typeParam": return held.constraint ? this.spreadElements(held.constraint, depth + 1) : [unknownType]
+            case "any": return [anyType]
+            default: return [unknownType]
+        }
     }
 
     /** `[a, b, ...more]` where a tuple is wanted: the places it names are the
@@ -5857,10 +6051,7 @@ class TypeAnalyzer {
         expr.elements.forEach((element, i) => {
             if (element.type === "SpreadElement") {
                 spread = true
-                const held = this.expand(this.infer(element.argument, env))
-                if (held.kind === "array") tail.push(held.element)
-                else if (held.kind === "tuple") tail.push(...tupleMembers(held))
-                else tail.push(unknownType)
+                tail.push(...this.spreadElements(this.infer(element.argument, env)))
                 return
             }
             const t = this.widenUnlessAsked(this.infer(element, env), element)
@@ -5878,6 +6069,10 @@ class TypeAnalyzer {
      *  The context was recorded by `applyContext` before the value was
      *  inferred, so this is a lookup rather than a second pass. */
     private widenUnlessAsked(value: Type, at: Expression): Type {
+        // `{ Key: name }`: a value read from somewhere keeps the type it has
+        // there — only a literal written here is new, and widens. TypeScript
+        // draws the same line.
+        if (!writesLiteral(at)) return value
         const wanted = this.expectedTypeOf.get(at)
         // Each arm of the contract is asked on its own, before any of them are
         // merged. `{ Status?: true } | { Status?: false }` wants a literal of

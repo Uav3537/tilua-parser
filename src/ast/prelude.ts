@@ -99,11 +99,14 @@ declare metatable string: {
 -- answer \`nil\` rather than JavaScript's -1. \`sort\` takes Lua's comparator
 -- (true when \`a\` comes first). \`push\`, \`pop\`, \`shift\`, \`unshift\`,
 -- \`sort\` and \`reverse\` change the array; everything else returns a new one.
+-- A \`filter\` whose test is a guard — \`v is S\`, or \`v => v ~= nil\` —
+-- answers an array of what it let through.
 declare metatable<T> T[]: {
     __index: {
         find: (self: T[], test: (value: T, index: number) => boolean) => T | nil,
         findIndex: (self: T[], test: (value: T, index: number) => boolean) => number | nil,
-        filter: (self: T[], test: (value: T, index: number) => boolean) => T[],
+        filter: (<S extends T>(self: T[], test: (value: T, index: number) => value is S) => S[])
+            & ((self: T[], test: (value: T, index: number) => boolean) => T[]),
         map: <U>(self: T[], transform: (value: T, index: number) => U) => U[],
         forEach: (self: T[], visit: (value: T, index: number) => nil) => nil,
         some: (self: T[], test: (value: T, index: number) => boolean) => boolean,

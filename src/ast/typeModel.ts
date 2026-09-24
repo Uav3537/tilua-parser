@@ -414,8 +414,17 @@ export function substitute(t: Type, subst: Map<string, Type>): Type {
     // say) rebuilds that whole type at every mention.
     if (!containsTypeParam(t)) return t
     switch (t.kind) {
-        case "typeParam":
-            return subst.get(t.name) ?? t
+        case "typeParam": {
+            const bound = subst.get(t.name)
+            if (bound) return bound
+            // `<S extends T>` inside a signature whose `T` is now known: the
+            // parameter stays, bounded by what `T` became. A mention of itself
+            // in its own bound (`S extends Box<S>`) is left as it was.
+            if (t.constraint && containsTypeParam(t.constraint)) {
+                return { ...t, constraint: substitute(t.constraint, new Map([...subst, [t.name, t]])) }
+            }
+            return t
+        }
         case "array":
             return { ...arrayOf(substitute(t.element, subst)), readonly: t.readonly }
         case "tuple":
@@ -597,6 +606,12 @@ export function unify(param: Type, arg: Type, vars: Set<string>, out: Map<string
             if (arg.kind === "function") {
                 param.params.forEach((p, i) => arg.params[i] && unify(p.type, arg.params[i].type, vars, out))
                 unify(param.returns, arg.returns, vars, out)
+                // `(v: T) => v is S` given `v => v ~= nil`: what the guard
+                // narrows to is `S`.
+                const wanted = param.predicate, given = arg.predicate
+                if (wanted?.type && given?.type && wanted.param === given.param && !wanted.asserts && !given.asserts) {
+                    unify(wanted.type, given.type, vars, out)
+                }
             }
             return
         case "object":
@@ -993,6 +1008,13 @@ function isAssignableInner(a: Type, b: Type): boolean {
             if (!isAssignable(a.params[i].type, b.params[i].type) &&
                 !isAssignable(b.params[i].type, a.params[i].type)) return false
         }
+        // Where a guard is wanted, a plain `boolean` says nothing about the
+        // value: only a guard on the same parameter, narrowing no wider, is one.
+        const wanted = b.predicate
+        if (wanted?.type && !wanted.asserts) {
+            const given = a.predicate
+            if (!given?.type || given.asserts || given.param !== wanted.param || !isAssignable(given.type, wanted.type)) return false
+        }
         return isAssignable(a.returns, b.returns)
     }
     if (b.kind === "typeParam") return false
@@ -1199,7 +1221,8 @@ function containsFreeTypeParam(t: Type, seen: Set<Type>, bound: Set<string>): bo
                 : bound
             return t.params.some(p => containsTypeParam(p.type, seen, inner)) ||
                 (!!t.varargs && containsTypeParam(t.varargs, seen, inner)) ||
-                containsTypeParam(t.returns, seen, inner)
+                containsTypeParam(t.returns, seen, inner) ||
+                (!!t.predicate?.type && containsTypeParam(t.predicate.type, seen, inner))
         }
         case "genericRef": return t.typeArguments.some(a => containsTypeParam(a, seen, bound))
         case "keyof": return containsTypeParam(t.target, seen, bound)

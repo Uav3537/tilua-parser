@@ -2062,6 +2062,105 @@ function g() {
             "[number, string | nil]", "string[]", "[string, number][]",
             "[\"a\"] | [\"b\"]", "1"])
     check("object methods: a literal is called on, even starting a statement", objectMethods.errors, [])
+
+    // `cond ? list : []` is a list: the empty literal adds nothing to it, as
+    // in `list or []`, so spreading it keeps the element type.
+    const emptyBranch = analyze([
+        "declare Mod: { Default: string[], Private: string[] }",
+        "declare host: boolean",
+        "const active = [...Mod.Default, ...(host ? Mod.Private : [])]",
+        "const picked = host ? Mod.Private : []",
+        "const shape = host ? { x: 1 } : {}",
+        "const mixed = host ? 1 : []",
+        // Beside a tuple, `[]` is the empty tuple, and spreading a union of
+        // tuples adds each one's members.
+        "const Named = [\"Sans\", \"Asgore\"] as const",
+        "const Extra = [\"KJ\"] as const",
+        "const maybe = host ? Extra : []",
+        "const names = [...Named, ...(host ? Extra : [])]",
+        "const keyed = names:map(name => name)",
+        // Spreading tuples of known length makes a tuple, their names kept;
+        // what is written beside them widens, and an array's spread makes an array.
+        "const copy = [...Named]",
+        "const around = [1, ...Named, \"x\"]",
+        "const loose = [...Mod.Default, ...Named]",
+    ].join("\n"))
+    check("ternary: an empty literal takes the other branch's type",
+        [emptyBranch.bindings.active, emptyBranch.bindings.picked, emptyBranch.bindings.shape, emptyBranch.bindings.mixed,
+            emptyBranch.bindings.maybe, emptyBranch.bindings.names, emptyBranch.bindings.keyed],
+        ["string[]", "string[]", "{ x: number } | {}", "1 | unknown[]",
+            "[\"KJ\"] | []", "[\"Sans\", \"Asgore\", \"KJ\"] | [\"Sans\", \"Asgore\"]", "(\"Sans\" | \"Asgore\" | \"KJ\")[]"])
+    // A literal written into a table or array widens; a value read into one
+    // keeps its type, as in TypeScript.
+    const kept = analyze([
+        "const Named = [\"Sans\", \"Asgore\"] as const",
+        "const first = Named[1]",
+        "const row = { key: first, n: 1, s: \"lit\", nested: { k: first }, list: [\"a\"] }",
+        "const pair = [first, first]",
+        "const rows = Named:map(name => ({ Key: name, Img: \"x\" }))",
+    ].join("\n"))
+    check("literals: a value read into a table keeps its type, a written one widens",
+        [kept.bindings.row, kept.bindings.pair, kept.bindings.rows],
+        ["{ key: \"Sans\", list: string[], n: number, nested: { k: \"Sans\" }, s: string }",
+            "\"Sans\"[]", "{ Img: string, Key: \"Sans\" | \"Asgore\" }[]"])
+    check("spread: tuples make a tuple, one per way a union goes",
+        [emptyBranch.bindings.copy, emptyBranch.bindings.around, emptyBranch.bindings.loose],
+        ["[\"Sans\", \"Asgore\"]", "[number, \"Sans\", \"Asgore\", string]", "string[]"])
+
+    // An annotated parameter's default is still code: typed, where the
+    // parameters before it are known, and checked against the annotation.
+    const defaults = analyze([
+        "declare Base: { ping: () => number }",
+        "function f(wait: number = Base.ping() * 2, twice: number = wait * 2) { return twice }",
+        "function g(wait: number = \"soon\") { return wait }",
+    ].join("\n"))
+    check("parameter defaults: typed and checked under an annotation", defaults.errors,
+        [`Type '"soon"' is not assignable to 'number'`])
+
+    // A test that is a guard — written `v is S`, or read off `v => v ~= nil`
+    // as TypeScript does — makes `filter` answer what it let through.
+    const guards = analyze([
+        "declare items: { Name: string, Id: string }[]",
+        "declare maybe: (string | nil)[]",
+        "function isText(v: string | nil): v is string { return v ~= nil }",
+        "const named = maybe:filter(isText)",
+        "const kept = maybe:filter(v => v ~= nil)",
+        "const ids = items:map(item => { if (item.Name == \"\") { return nil }\n return item.Id }):filter(id => id ~= nil)",
+        // False must mean exactly what the guard excludes, or it is no guard.
+        "const some = maybe:filter(v => v ~= nil and v ~= \"x\")",
+        "const long = maybe:filter((v, i) => i > 2)",
+        "const guard = (v: string | nil) => v ~= nil",
+    ].join("\n"))
+    check("filter: a guard narrows what it keeps",
+        [guards.bindings.named, guards.bindings.kept, guards.bindings.ids, guards.bindings.some, guards.bindings.long, guards.bindings.guard],
+        ["string[]", "string[]", "string[]", "(string | nil)[]", "(string | nil)[]", "(v: string | nil) => v is string"])
+    check("filter: guards raise no errors", guards.errors, [])
+    // A generic function of one's own: the callback reads `T` from the list
+    // before it is asked whether it guards.
+    const ownGuards = analyze([
+        "declare maybe: (string | nil)[]",
+        "declare keep: (<T, S extends T>(list: T[], test: (value: T) => value is S) => S[]) & (<T>(list: T[], test: (value: T) => boolean) => T[])",
+        "declare only: <T, S extends T>(list: T[], test: (value: T) => value is S) => S[]",
+        "const kept = keep(maybe, v => v ~= nil)",
+        "const onlyKept = only(maybe, w => w ~= nil)",
+        "const all = keep(maybe, (u: string | nil) => true)",
+    ].join("\n"))
+    check("generic calls: an inline callback is a guard once T is known",
+        [ownGuards.bindings.kept, ownGuards.bindings.onlyKept, ownGuards.bindings.all, ownGuards.errors],
+        ["string[]", "string[]", "(string | nil)[]", []])
+
+    // `break` and `continue` belong to a loop of the function they are in:
+    // a callback is a function of its own.
+    const jumps = analyze([
+        "declare xs: number[]",
+        "for (const x in xs) { const doubled = xs:map(y => { if (y > 1) { continue }\n return y * 2 }) }",
+        "while (true) { if (xs[1] == 1) { break }\n repeat { continue } until (true) }",
+        "break",
+    ].join("\n"))
+    check("loops: break and continue outside a loop", jumps.errors, [
+        "'continue' is not inside a loop of this function; to skip a value in a callback, 'return' from it",
+        "'break' is not inside a loop",
+    ])
     const optional = analyze([
         "type Node = { Parent: Node | nil, Name: string, find: (self: Node, name: string) => Node | nil }",
         "declare node: Node | nil",

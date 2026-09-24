@@ -70,7 +70,7 @@ export interface ScopeDiagnostic {
     /** the offending node (redeclaration site, or assignment target) */
     node: { line: { start: number; end: number }; column: { start: number; end: number } }
     message: string
-    kind: "redeclare" | "const-assign" | "type-only" | "undeclared" | "use-before-define"
+    kind: "redeclare" | "const-assign" | "type-only" | "undeclared" | "use-before-define" | "outside-loop"
 }
 
 export interface ScopeAnalysis {
@@ -189,6 +189,10 @@ class Analyzer {
     private moduleScope: Scope = this.globalScope
     /** How many function bodies enclose the walk. */
     private functionDepth = 0
+    /** How many loops enclose the walk inside the nearest function body. A
+     *  function starts again at 0: `continue` in `xs:map(x => ...)` has no
+     *  loop to go on with, whatever loop the call is written in. */
+    private loopDepth = 0
     /** Function declarations already declared by their block's hoisting, with
      *  the function depth of that block. */
     private readonly hoisted = new Map<Identifier, number>()
@@ -610,14 +614,14 @@ class Analyzer {
 
             case "WhileStatement":
                 this.visitExpression(stmt.condition, scope)
-                this.visitBlockInNewScope(stmt.body, scope)
+                this.inLoop(() => this.visitBlockInNewScope(stmt.body, scope))
                 return
 
             case "RepeatStatement": {
                 // Luau/Lua quirk: `until` can see locals declared in the
                 // body, unlike `while` — so body + condition share one scope.
                 const bodyScope = childScope(scope)
-                this.visitBlock(stmt.body, bodyScope)
+                this.inLoop(() => this.visitBlock(stmt.body, bodyScope))
                 this.visitExpression(stmt.condition, bodyScope)
                 return
             }
@@ -637,7 +641,7 @@ class Analyzer {
                 if (stmt.step) this.visitExpression(stmt.step, scope)
                 const bodyScope = childScope(scope)
                 this.declare(bodyScope, stmt.variable.name, "for-numeric", stmt.variable)
-                this.visitBlock(stmt.body, bodyScope)
+                this.inLoop(() => this.visitBlock(stmt.body, bodyScope))
                 return
             }
 
@@ -645,7 +649,7 @@ class Analyzer {
                 this.visitExpression(stmt.iterator, scope)
                 const bodyScope = childScope(scope)
                 this.declarePattern(bodyScope, stmt.variable, "for-generic", scope, stmt.kind === "const")
-                this.visitBlock(stmt.body, bodyScope)
+                this.inLoop(() => this.visitBlock(stmt.body, bodyScope))
                 return
             }
 
@@ -655,6 +659,21 @@ class Analyzer {
 
             case "BreakStatement":
             case "ContinueStatement":
+                // A function's body is a loop's no longer: `continue` inside
+                // `xs:map(x => ...)` would leave the callback, not go on with
+                // a loop, and Luau rejects it.
+                if (this.loopDepth === 0) {
+                    const word = stmt.type === "BreakStatement" ? "break" : "continue"
+                    this.diagnostics.push({
+                        node: stmt,
+                        message: this.functionDepth > 0
+                            ? `'${word}' is not inside a loop of this function; to skip a value in a callback, 'return' from it`
+                            : `'${word}' is not inside a loop`,
+                        kind: "outside-loop",
+                    })
+                }
+                return
+
             case "ErrorStatement":
                 return
 
@@ -733,6 +752,16 @@ class Analyzer {
         }
     }
 
+    /** Visit a loop's body, where `break` and `continue` have a loop. */
+    private inLoop(visit: () => void): void {
+        this.loopDepth++
+        try {
+            visit()
+        } finally {
+            this.loopDepth--
+        }
+    }
+
     // ---------------- functions ----------------
 
     private visitFunctionBody(func: FunctionBody, outerScope: Scope, isMethod = false): void {
@@ -758,11 +787,14 @@ class Analyzer {
             }
         })
         this.visitType(func.returnType, fnScope)
+        const loops = this.loopDepth
         this.functionDepth++
+        this.loopDepth = 0
         try {
             this.visitBlock(func.body, fnScope)
         } finally {
             this.functionDepth--
+            this.loopDepth = loops
         }
     }
 
