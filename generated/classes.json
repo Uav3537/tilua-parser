@@ -141,6 +141,7 @@
                   {
                     "type": "FunctionParameter",
                     "name": "this",
+                    "implicit": true,
                     "line": {
                       "start": 12,
                       "end": 12
@@ -349,6 +350,7 @@
                   {
                     "type": "FunctionParameter",
                     "name": "this",
+                    "implicit": true,
                     "line": {
                       "start": 17,
                       "end": 17
@@ -500,6 +502,7 @@
                   {
                     "type": "FunctionParameter",
                     "name": "this",
+                    "implicit": true,
                     "line": {
                       "start": 22,
                       "end": 22
@@ -651,6 +654,7 @@
                   {
                     "type": "FunctionParameter",
                     "name": "this",
+                    "implicit": true,
                     "line": {
                       "start": 26,
                       "end": 26
@@ -982,6 +986,7 @@
                   {
                     "type": "FunctionParameter",
                     "name": "this",
+                    "implicit": true,
                     "line": {
                       "start": 38,
                       "end": 38
@@ -1202,6 +1207,7 @@
                   {
                     "type": "FunctionParameter",
                     "name": "this",
+                    "implicit": true,
                     "line": {
                       "start": 43,
                       "end": 43
@@ -1406,6 +1412,7 @@
                   {
                     "type": "FunctionParameter",
                     "name": "this",
+                    "implicit": true,
                     "line": {
                       "start": 47,
                       "end": 47
@@ -1650,6 +1657,7 @@
                   {
                     "type": "FunctionParameter",
                     "name": "this",
+                    "implicit": true,
                     "line": {
                       "start": 54,
                       "end": 54
@@ -2997,6 +3005,7 @@
                   {
                     "type": "FunctionParameter",
                     "name": "this",
+                    "implicit": true,
                     "line": {
                       "start": 85,
                       "end": 85
@@ -3145,6 +3154,7 @@
                   {
                     "type": "FunctionParameter",
                     "name": "this",
+                    "implicit": true,
                     "line": {
                       "start": 89,
                       "end": 89
@@ -3294,6 +3304,7 @@
                   {
                     "type": "FunctionParameter",
                     "name": "this",
+                    "implicit": true,
                     "line": {
                       "start": 93,
                       "end": 93
@@ -4004,6 +4015,7 @@
                   {
                     "type": "FunctionParameter",
                     "name": "this",
+                    "implicit": true,
                     "line": {
                       "start": 104,
                       "end": 104
@@ -4141,6 +4153,7 @@
                   {
                     "type": "FunctionParameter",
                     "name": "this",
+                    "implicit": true,
                     "line": {
                       "start": 108,
                       "end": 108
@@ -4365,6 +4378,7 @@
                   {
                     "type": "FunctionParameter",
                     "name": "this",
+                    "implicit": true,
                     "line": {
                       "start": 117,
                       "end": 117

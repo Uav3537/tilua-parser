@@ -9,6 +9,7 @@ import {
     findConfig, loadConfig, resolveTypeLibraries, resolveModulePath, sourceMapTypes,
     parse, parseWithRecovery, analyzeScopes, analyzeTypes, moduleExports, formatType, applyDirectives,
     type ProjectHost, type ModuleExports, type GenericForStatement,
+    luauString, escapeLuauString, isLuauName, isIdentifier, withoutNil, isFunctionType, isInstanceOf, returnsTuple,
 } from "../src/index.js"
 
 const ROOT = resolve("/tilua-project")
@@ -3550,6 +3551,107 @@ function g() {
         check("optional chain: nil only from an object that can be nil",
             { a, b, c, d }, { a: "boolean", b: "boolean", c: "boolean | nil", d: "boolean | nil" })
     }
+}
+
+// --- writing Luau, and the lowering helpers ---------------------------------
+{
+    check("luauString: quotes and the named escapes",
+        luauString("a\"b\\c\nd\te\r"), String.raw`"a\"b\\c\nd\te\r"`)
+    // Three digits always, so the "2" after it is not read into the escape.
+    check("luauString: other control characters as three digits",
+        luauString("\u00012\u007f"), String.raw`"\0012\127"`)
+    check("luauString: not JSON, which writes \\u0001", luauString("\u0001").includes("\\u"), false)
+    check("luauString: non-ASCII is written as it is", luauString("é한"), `"é한"`)
+    check("escapeLuauString: the inside, without quotes", escapeLuauString("a\"b"), String.raw`a\"b`)
+    check("isLuauName: a keyword is not", [isLuauName("x_1"), isLuauName("local"), isLuauName("1x")], [true, false, false])
+    check("isIdentifier: shape only", [isIdentifier("local"), isIdentifier("a-b")], [true, false])
+
+    const program = parse([
+        "declare class Instance { Name: string }",
+        "declare class Part extends Instance { Size: number }",
+        "declare p: Part | nil",
+        "declare f: ((x: number) => string) | nil",
+        "declare pair: { get: () => [number, string], one: () => number }",
+        "const a = p",
+        "const b = f",
+        "const c = pair",
+    ].join("\n"))
+    const scopes = analyzeScopes(program)
+    const types = analyzeTypes(program, scopes)
+    const typeOf = (name: string) => [...types.bindingType.entries()]
+        .find(([id]) => scopes.bindings.get(id)!.name === name)?.[1]
+    check("withoutNil: the members that are not nil", withoutNil(typeOf("a")).map(formatType), ["Part"])
+    check("isFunctionType: through a nil", [isFunctionType(typeOf("b")), isFunctionType(typeOf("a"))], [true, false])
+    check("isInstanceOf: the class and what it extends",
+        [isInstanceOf(typeOf("a"), "Part"), isInstanceOf(typeOf("a"), "Instance"), isInstanceOf(typeOf("c"), "Instance")],
+        [true, true, false])
+    check("returnsTuple: a method returning several values",
+        [returnsTuple(typeOf("c"), "get"), returnsTuple(typeOf("c"), "one"), returnsTuple(typeOf("c"), "missing")],
+        [true, false, false])
+}
+
+// --- class methods written as TypeScript writes them ------------------------
+{
+    const membersOf = (code: string): string[] => {
+        const statement = parse(code).body.statements.find(s => s.type === "ClassDeclaration")
+        return statement && statement.type === "ClassDeclaration"
+            ? statement.members.map(m => [
+                m.type.replace("Class", ""),
+                "name" in m && m.name ? m.name.name : "",
+                ...("accessibility" in m && m.accessibility ? [m.accessibility] : []),
+                ...("isStatic" in m && m.isStatic ? ["static"] : []),
+                ...("signatures" in m && m.signatures ? [`${m.signatures.length} signatures`] : []),
+            ].join(" "))
+            : []
+    }
+    check("method: `name() {}` without `function`", membersOf([
+        "class A {",
+        "    n = 0",
+        "    get2() { return this.n }",
+        "    public inc(by: number): number { return this.n + by }",
+        "    private static make(): number { return 1 }",
+        "    id<T>(x: T): T { return x }",
+        "    function old() { return 1 }",
+        "}",
+    ].join("\n")), [
+        "Field n", "Method get2", "Method inc public", "Method make private static", "Method id", "Method old",
+    ])
+    // A modifier or `get` followed by `(` is the method's own name, and
+    // `constructor(` is still the constructor.
+    check("method: a soft keyword as its name", membersOf([
+        "class A {",
+        "    static() { return 1 }",
+        "    get() { return 2 }",
+        "    get value(): number { return 1 }",
+        "    constructor() {}",
+        "}",
+    ].join("\n")), ["Method static", "Method get", "Accessor value", "Constructor "])
+    check("method: overloads without `function`, `;` after a head", membersOf([
+        "class A {",
+        "    f(x: number): number;",
+        "    f(x: string): string;",
+        "    f(x: any): any { return x }",
+        "    public static g(x: number): number",
+        "    public static g(x: string): string",
+        "    static g(x: any): any { return x }",
+        "}",
+    ].join("\n")), ["Method f 2 signatures", "Method g public static 2 signatures"])
+    check("method: an abstract one without `function`",
+        membersOf("abstract class A {\n    abstract area(): number\n}"), ["Method area"])
+    const typed = (code: string, name: string): string | undefined => {
+        const program = parse(code)
+        const scopes = analyzeScopes(program)
+        const types = analyzeTypes(program, scopes)
+        for (const [id, type] of types.bindingType) if (scopes.bindings.get(id)!.name === name) return formatType(type)
+        return undefined
+    }
+    check("method: a shorthand method's `this` is typed", typed([
+        "class A {",
+        "    n = 1",
+        "    get2() { return this.n }",
+        "}",
+        "const v = A.new():get2()",
+    ].join("\n"), "v"), "number")
 }
 
 for (const failure of failures) console.log(`FAIL ${failure}`)

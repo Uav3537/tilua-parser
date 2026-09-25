@@ -28,11 +28,6 @@ import type {
     ParenthesizedTypeNode, TypeofTypeNode,
 } from "@ast/nodes"
 
-/** Give a class method its receiver: a real first parameter named `this`,
- *  the way `function T:m()` gets a real `self`. It carries no annotation —
- *  the analyzer knows the class it belongs to, which is the only thing that
- *  works for a generic class (`Box<T>`) and for one written as a value. Every
- *  later pass then sees an ordinary parameter. */
 /** What bare `...` is instead. */
 const NO_DOTS = "tilua has no bare '...': take a rest parameter, '...args: T[]', or 'scriptArgs' for the script's own"
 
@@ -40,13 +35,19 @@ const NO_DOTS = "tilua has no bare '...': take a rest parameter, '...args: T[]',
 const ACCESSIBILITIES: ReadonlySet<string> = new Set(["public", "private", "protected"])
 const CLASS_MODIFIERS: ReadonlySet<string> = new Set([...ACCESSIBILITIES, "static", "abstract", "override", "readonly"])
 
+/** Give a class method its receiver: a real first parameter named `this`,
+ *  the way `function T:m()` gets a real `self`. It carries no annotation —
+ *  the analyzer knows the class it belongs to, which is the only thing that
+ *  works for a generic class (`Box<T>`) and for one written as a value. Every
+ *  later pass then sees an ordinary parameter; it is marked `implicit`, as
+ *  nothing in the source names it. */
 function bindThis(func: FunctionBody, at: Span): void {
     bindThisParam(func.params, at)
     func.isMethod = true
 }
 
 function bindThisParam(params: FunctionParameter[], at: Span): void {
-    params.unshift({ type: "FunctionParameter", name: "this", ...spanFrom(at, at) })
+    params.unshift({ type: "FunctionParameter", name: "this", implicit: true, ...spanFrom(at, at) })
 }
 
 export class ParseError extends Error {
@@ -1249,7 +1250,7 @@ export class Parser {
                 // `function T:m(a)` is `function T.m(self, a)`. The `self`
                 // parameter is made real here so every later pass — scopes,
                 // types, arity — sees an ordinary first parameter.
-                func.params.unshift({ type: "FunctionParameter", name: "self", ...spanFrom(target, target) })
+                func.params.unshift({ type: "FunctionParameter", name: "self", implicit: true, ...spanFrom(target, target) })
                 func.isMethod = true
             }
             return {
@@ -1459,45 +1460,7 @@ export class Parser {
 
         if (this.checkKeyword("function")) {
             this.advance()
-            const memberName = this.parseIdentifier()
-            // `abstract function area(): number` — the head is all there is.
-            if (modifiers.has("abstract")) {
-                const head = this.parseFunctionHead()
-                const func: FunctionBody = {
-                    type: "FunctionBody",
-                    generics: head.generics, params: head.params, hasVarargs: head.hasVarargs,
-                    returnType: head.returnType,
-                    predicate: head.predicate,
-                    body: { type: "Block", statements: [], ...spanFrom(head.start, this.previous()) } as Block,
-                    ...spanFrom(head.start, this.previous()),
-                }
-                if (!isStatic) bindThis(func, start)
-                if (!head.returnType) this.problem("An abstract method has no body to infer from: write its return type")
-                if (this.checkPunctuator("{")) this.problem("An abstract method has no body")
-                return { type: "ClassMethod", name: memberName, isStatic, func, isAbstract: true, ...spanFrom(start, this.previous()) }
-            }
-            // Overloads inside a class are written as they are outside one:
-            // bodyless heads for the same name, then the implementation.
-            const signatures: FunctionSignature[] = []
-            let written = memberName
-            while (true) {
-                const head = this.parseFunctionHead()
-                if (this.isClassOverloadContinuation(memberName.name, isStatic)) {
-                    if (!isStatic) bindThisParam(head.params, start)
-                    signatures.push({ ...this.headToSignature(head), name: written })
-                    if (isStatic) this.advance() // 'static'
-                    this.expectKeyword("function")
-                    written = this.parseIdentifier()
-                    continue
-                }
-                const func = this.headToBody(head, start)
-                if (!isStatic) bindThis(func, start)
-                return {
-                    type: "ClassMethod", name: memberName, isStatic, func,
-                    signatures: signatures.length ? signatures : undefined,
-                    ...spanFrom(start, this.previous()),
-                }
-            }
+            return this.parseClassMethod(start, modifiers)
         }
 
         // `constructor(...)` — a soft keyword too.
@@ -1508,6 +1471,12 @@ export class Parser {
             const func = this.headToBody(head, start)
             bindThis(func, start)
             return { type: "ClassConstructor", func, ...spanFrom(start, this.previous()) }
+        }
+
+        // TypeScript's method: `name() {}`, `name<T>() {}` — `function` left
+        // out. After `constructor`, which has the same shape.
+        if (this.startsMethodShorthand(0)) {
+            return this.parseClassMethod(start, modifiers)
         }
 
         // `get name(): T ... end` / `set name(v: T) ... end`
@@ -1544,28 +1513,92 @@ export class Parser {
         }
 
         if (this.recover) {
-            this.softError("Expected a class member: a field, 'function', 'constructor', 'get' or 'set'")
+            this.softError("Expected a class member: a field, a method, 'constructor', 'get' or 'set'")
             this.advance()
             return undefined
         }
-        this.error("Expected a class member: a field, 'function', 'constructor', 'get' or 'set'")
+        this.error("Expected a class member: a field, a method, 'constructor', 'get' or 'set'")
     }
 
-    /** Give a class method its `this`: a real first parameter, the way
-     *  `function T:m()` gets a real `self`. Every later pass — scopes, types,
-     *  arity, lowering — then sees an ordinary parameter and needs to know
-     *  nothing about classes. */
+    /** A name at `offset` opening a method without `function`: `name(` or
+     *  `name<T>(`. A field's name is followed by `:` or `=` instead. */
+    private startsMethodShorthand(offset: number): boolean {
+        if (this.peek(offset).type !== "Identifier") return false
+        const next = this.peek(offset + 1)
+        return (next.type === "Punctuator" || next.type === "Operator") &&
+            ((next as { value?: unknown }).value === "(" || (next as { value?: unknown }).value === "<")
+    }
 
+    /** A method, from its name on: `function` (if written) and the modifiers
+     *  are behind. */
+    private parseClassMethod(start: Token, modifiers: ReadonlySet<string>): ClassMember {
+        const isStatic = modifiers.has("static")
+        const memberName = this.parseIdentifier()
+        // `abstract area(): number` — the head is all there is.
+        if (modifiers.has("abstract")) {
+            const head = this.parseFunctionHead()
+            const func: FunctionBody = {
+                type: "FunctionBody",
+                generics: head.generics, params: head.params, hasVarargs: head.hasVarargs,
+                returnType: head.returnType,
+                predicate: head.predicate,
+                body: { type: "Block", statements: [], ...spanFrom(head.start, this.previous()) } as Block,
+                ...spanFrom(head.start, this.previous()),
+            }
+            if (!isStatic) bindThis(func, start)
+            if (!head.returnType) this.problem("An abstract method has no body to infer from: write its return type")
+            if (this.checkPunctuator("{")) this.problem("An abstract method has no body")
+            return { type: "ClassMethod", name: memberName, isStatic, func, isAbstract: true, ...spanFrom(start, this.previous()) }
+        }
+        // Overloads inside a class are written as they are outside one:
+        // bodyless heads for the same name, then the implementation.
+        const signatures: FunctionSignature[] = []
+        let written = memberName
+        while (true) {
+            const head = this.parseFunctionHead()
+            const skip = this.classOverloadContinuation(memberName.name, isStatic)
+            if (skip !== undefined) {
+                if (!isStatic) bindThisParam(head.params, start)
+                signatures.push({ ...this.headToSignature(head), name: written })
+                for (let i = 0; i < skip; i++) this.advance()
+                written = this.parseIdentifier()
+                continue
+            }
+            const func = this.headToBody(head, start)
+            if (!isStatic) bindThis(func, start)
+            return {
+                type: "ClassMethod", name: memberName, isStatic, func,
+                signatures: signatures.length ? signatures : undefined,
+                ...spanFrom(start, this.previous()),
+            }
+        }
+    }
 
     /** After a bodyless head inside a class body, does another declaration of
-     *  the same member follow? Then the head was an overload signature. */
-    private isClassOverloadContinuation(name: string, isStatic: boolean): boolean {
-        const offset = isStatic ? 1 : 0
-        if (isStatic && !(this.checkIdentifierValue("static"))) return false
+     *  the same member follow? Then the head was an overload signature, and
+     *  this is how many tokens stand before the next one's name: a `;` that
+     *  ends the head, as TypeScript writes it, the modifiers, and `function`
+     *  when it is written. `undefined` when no overload follows. Each head may
+     *  be written either way, with `function` or without. */
+    private classOverloadContinuation(name: string, isStatic: boolean): number | undefined {
+        let offset = 0
+        if (this.punctuatorAt(0, ";")) offset++
+        let sawStatic = false
+        while (true) {
+            const t = this.peek(offset)
+            const word = t.type === "Identifier" ? (t as { value: string }).value : undefined
+            if (word === undefined || !CLASS_MODIFIERS.has(word) || this.startsMethodShorthand(offset)) break
+            if (word === "static") sawStatic = true
+            offset++
+        }
+        if (sawStatic !== isStatic) return undefined
         const keyword = this.peek(offset)
-        if (!(keyword.type === "Keyword" && (keyword as { value?: unknown }).value === "function")) return false
-        const named = this.peek(offset + 1)
-        return named.type === "Identifier" && (named as { value?: unknown }).value === name
+        const hasKeyword = keyword.type === "Keyword" && (keyword as { value?: unknown }).value === "function"
+        if (hasKeyword) offset++
+        const named = this.peek(offset)
+        if (!(named.type === "Identifier" && (named as { value?: unknown }).value === name)) return undefined
+        if (!hasKeyword && !this.startsMethodShorthand(offset)) return undefined
+        return offset
     }
 
     private operatorAt(ahead: number, value: string): boolean {

@@ -633,6 +633,12 @@ export interface FunctionParameter extends BaseNode {
     typeAnnotation?: TypeNode
     /** default value (`function f(a = 1) end`) */
     default?: Expression
+    /** Not written in the source: the `this` a class method is given, or the
+     *  `self` of `function T:m()`. It carries the span of what implies it
+     *  (the method, the `T:m`) so a diagnostic has somewhere to point, but no
+     *  text there is its name — an editor colours, hovers and renames none
+     *  of it. */
+    implicit?: boolean
 }
 
 export interface FunctionBody extends BaseNode {

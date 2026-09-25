@@ -22,6 +22,10 @@ export {
     type Directive, type DirectiveKind, type Directives, type DirectiveOutcome,
 } from '@ast/directives'
 export * from './project'
+// Writing Luau as text, and the questions a lowering plugin asks of a type —
+// shared by the compiler, the plugins and anything else that emits Luau.
+export { LUAU_KEYWORDS, isIdentifier, isLuauName, escapeLuauString, luauString } from './luau'
+export { withoutNil, isFunctionType, isInstanceOf, hasMembers, returnsTuple } from './loweringHelpers'
 
 // This package is the tilua *front end* only: source -> tilua AST (+ scope
 // analysis). Emitting Luau is the downstream compiler's job — it lowers the

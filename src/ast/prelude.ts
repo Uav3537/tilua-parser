@@ -140,11 +140,34 @@ declare metatable<T> T[]: {
 -- \`nil\` when it is missing; an indexer's keys follow the named ones. A
 -- member of the table's own with one of these names is what a call reaches,
 -- and a class instance, which has a metatable of its own, has none of them.
+--
+-- The rest are JavaScript's \`Object\` functions, written as methods of the
+-- table they take first:
+--
+--     point:hasOwn("x")           -- Object.hasOwn(point, "x")
+--     point:assign({ z: 3 })      -- Object.assign(point, { z: 3 })
+--     point:freeze()              -- Object.freeze(point)
+--
+-- \`hasOwn\` asks the table itself, not what its metatable's \`__index\`
+-- lends it. \`assign\` copies each source's members onto the table, later ones
+-- over earlier ones, skipping a \`nil\` source, and answers the table. \`freeze\`
+-- is Luau's \`table.freeze\`; under Lua 5.1, which cannot freeze a table, the
+-- table is answered as it is and \`isFrozen\` is false.
 declare metatable<T extends {}> T: {
     __index: {
         keys: (self: T) => ObjectKeys<T>,
         values: (self: T) => ObjectValues<T>,
         entries: (self: T) => ObjectEntries<T>,
+
+        hasOwn: (self: T, key: unknown) => boolean,
+        hasOwnProperty: (self: T, key: unknown) => boolean,
+        assign: (<U>(self: T, source: U) => T & U)
+            & (<U, V>(self: T, a: U, b: V) => T & U & V)
+            & (<U, V, W>(self: T, a: U, b: V, c: W) => T & U & V & W)
+            -- Generic like the rest: a plain signature would be tried first.
+            & (<S extends {}>(self: T, ...sources: S[]) => T),
+        freeze: (self: T) => Readonly<T>,
+        isFrozen: (self: T) => boolean,
     },
 }
 `

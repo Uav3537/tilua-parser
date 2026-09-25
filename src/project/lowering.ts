@@ -25,6 +25,10 @@
  *         },
  *     }
  *     export default plugin
+ *
+ * What a plugin runs to decide and to write — `luauString`, `isInstanceOf`,
+ * `returnsTuple`, ... — is exported beside this contract (see `luau.ts` and
+ * `loweringHelpers.ts`), so no plugin keeps a copy.
  */
 import type { Type } from "../ast/typeModel"
 

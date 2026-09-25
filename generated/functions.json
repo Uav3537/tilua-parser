@@ -1357,6 +1357,7 @@
             {
               "type": "FunctionParameter",
               "name": "self",
+              "implicit": true,
               "line": {
                 "start": 27,
                 "end": 27

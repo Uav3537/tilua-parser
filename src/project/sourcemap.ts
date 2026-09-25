@@ -21,6 +21,7 @@
 import { dirname, extname, resolve } from "node:path"
 import { parse } from "@ast/builders"
 import type { Program } from "@ast/nodes"
+import { isIdentifier } from "../luau"
 
 export interface SourceMapNode {
     name: string
@@ -46,7 +47,6 @@ export interface SourceMapTypes {
     scriptFor(file: string): Program | undefined
 }
 
-const IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/
 const INSTANCE_MEMBERS: ReadonlySet<string> = new Set(["Name", "ClassName", "Parent", "Archivable"])
 const SCRIPT_EXTENSIONS = new Set([".tilua", ".luau", ".lua"])
 
@@ -83,7 +83,7 @@ export function sourceMapTypes(
         aliasOfNode.set(node, alias)
         for (const filePath of node.filePaths ?? []) aliasOfFile.set(fileKey(resolve(directory, filePath)), alias)
 
-        const className = IDENTIFIER.test(node.className) && options.classes.has(node.className)
+        const className = isIdentifier(node.className) && options.classes.has(node.className)
             ? node.className
             : "Instance"
         const taken = options.membersOf?.(className) ?? INSTANCE_MEMBERS
@@ -100,7 +100,7 @@ export function sourceMapTypes(
             // of `DataModel` typed as that very class, and the child is that
             // service, so its tree only narrows what the member already says.
             const service = child.name === child.className && options.classes.has(child.className)
-            if (!IDENTIFIER.test(child.name) || (taken.has(child.name) && !service) || named.has(child.name)) continue
+            if (!isIdentifier(child.name) || (taken.has(child.name) && !service) || named.has(child.name)) continue
             named.add(child.name)
             members.push(`${child.name}: ${childAlias}`)
         }
