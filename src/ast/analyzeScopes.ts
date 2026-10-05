@@ -903,7 +903,10 @@ class Analyzer {
             case "BooleanLiteral":
             case "NumberLiteral":
             case "StringLiteral":
+                return
+
             case "ErrorExpression":
+                if (expr.expression) this.visitExpression(expr.expression, scope)
                 return
 
             case "InterpolatedStringExpression":

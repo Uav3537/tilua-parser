@@ -7,7 +7,7 @@ cond: boolean
 config: { debug: boolean } | nil
 firstWord: (s: string | nil) => string
 flag: boolean
-inOr: string | number
+inOr: 1 | "x"
 mergePaths: (cond: boolean) => boolean
 readBag: (bag: Bag) => string
 s: string | nil

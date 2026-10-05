@@ -24,7 +24,7 @@ function clampTo(limit: number, value: typeof limit): number {
     return value
 }
 
--- Luau's parenthesised spelling still works.
-const paren: typeof(count) = 3
+-- A path is named the same way.
+const paren: typeof count = 3
 
 print(copy, other, volume, alsoNumber, clampTo(1, 2), paren)

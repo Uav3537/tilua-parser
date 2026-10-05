@@ -1,7 +1,7 @@
 import type {
     Program, Block, Statement, Expression, TypeNode,
     Identifier, FunctionBody, FunctionSignature, FunctionParameter, BindingTarget, GenericTypeParameter, VariableDeclaration,
-    ObjectPattern, ArrayPattern, ObjectPatternProperty, ReturnStatement,
+    ObjectPattern, ArrayPattern, ObjectPatternProperty, ReturnStatement, AssignmentStatement, MemberExpression, IndexExpression,
     TableExpression, ArrayExpression, IfStatement, TypePredicateNode, DeclareClassStatement, DeclareStatement,
     ClassDeclaration, TypeAliasStatement, ExportTypeAliasStatement, ClassExpression, ClassLike, ClassMember,
     GenericForStatement, MethodCallExpression, DeclareMetatableStatement,
@@ -11,7 +11,7 @@ import { preludeProgram } from "./prelude"
 import {
     type Type, type ObjectProperty, type ObjectType, type FunctionType, type TypePredicate, type ClassInfo,
     type GenericRefType, type TypeOrigin,
-    anyType, unknownType, declaredUnknownType, neverType, nilType, booleanType, numberType, stringType,
+    anyType, unknownType, declaredUnknownType, neverType, nilType, booleanType, numberType, stringType, threadType, bufferType,
     primitive, literal, arrayOf, tuple, tupleMembers, objectType, fn, union, intersection, optional,
     typeParam, substitute, unify, containsTypeParam, matchInfer, setAliasExpander, setDeferredBound, difference,
     widen, isAssignable, overlaps, narrowTo, narrowExclude, narrowTruthy, narrowFalsy,
@@ -86,6 +86,10 @@ export interface TypeAnalysis {
      *  gave it (`declare metatable`), and which library declared that. A call
      *  missing here reached a member of the receiver's own. */
     readonly methodSources: ReadonlyMap<MethodCallExpression, MethodSource>
+    /** Each `typeof v` whose `v`, where it is a table at all, is known by its
+     *  type to be an array or to be an object. One missing here has to be
+     *  told apart as the program runs. */
+    readonly typeofTables: ReadonlyMap<Expression, "array" | "object">
     /** The members a value's metatable `__index` gives it — what an editor
      *  offers after `:`. Empty for a value no metatable matches. */
     readonly metatableMembers: (type: Type) => ReadonlyMap<string, Type>
@@ -340,6 +344,17 @@ function mergeEnv(a: FlowEnv, b: FlowEnv, base: (key: RefKey) => Type): FlowEnv 
         out.set(k, union([a.get(k) ?? base(k), b.get(k) ?? base(k)]))
     }
     return out
+}
+
+/** One of two tests decided a branch: `a`, narrowed from `aFrom`, or `b`,
+ *  narrowed from `bFrom`. What both narrowed is, in that branch, one or the
+ *  other; what only one did says nothing about the branch. */
+function joinNarrowings(into: FlowEnv, a: FlowEnv, aFrom: FlowEnv, b: FlowEnv, bFrom: FlowEnv): void {
+    for (const [key, left] of a) {
+        const right = b.get(key)
+        if (right === undefined || left === aFrom.get(key) || right === bFrom.get(key)) continue
+        into.set(key, union([left, right]))
+    }
 }
 
 type Indexer = { key: Type; value: Type }
@@ -695,6 +710,12 @@ function unwrapParens(e: Expression): Expression {
 
 /** How a diagnostic names an expression: `a.b:c("x")`. `undefined` for
  *  anything too complex to name briefly. */
+/** `label.key` / `label[n]`: the place a nested pattern reads from. */
+function memberLabel(label: string | undefined, key: string | number | undefined): string | undefined {
+    if (label === undefined || key === undefined) return undefined
+    return typeof key === "number" ? `${label}[${key}]` : `${label}.${key}`
+}
+
 function expressionLabel(e: Expression, depth = 0): string | undefined {
     if (depth > 6) return undefined
     const args = (list: Expression[]): string => {
@@ -766,6 +787,7 @@ class TypeAnalyzer {
     private readonly metatables: MetatableEntry[] = []
     private readonly metatableCache = new WeakMap<object, { type: Type; source: MethodSource }[]>()
     private readonly methodSources = new Map<MethodCallExpression, MethodSource>()
+    private readonly typeofTables = new Map<Expression, "array" | "object">()
     /** Public: each alias resolved once (generic aliases keep their params as
      *  `typeParam` nodes in the body). */
     private readonly aliases = new LazyMap<string>()
@@ -869,7 +891,7 @@ class TypeAnalyzer {
             if (given) this.bindingType.set(id, given)
             else if (this.libGlobalTypes.has(name)) this.bindingType.defer(id, () => this.libGlobalTypes.get(name) ?? anyType)
             // What the script was started with, whatever it was.
-            else if (LANGUAGE_GLOBALS.includes(name)) this.bindingType.set(id, arrayOf(unknownType))
+            else if (LANGUAGE_GLOBALS.includes(name)) this.bindingType.set(id, arrayOf(declaredUnknownType))
             else this.bindingType.set(id, anyType)
         }
         // Let structural comparison see through nominal alias references —
@@ -894,6 +916,7 @@ class TypeAnalyzer {
             aliases: this.resolveDeferredAliases(),
             loops: this.loops,
             methodSources: this.methodSources,
+            typeofTables: this.typeofTables,
             metatableMembers: type => this.metatableMembers(type),
             diagnostics: this.diagnostics,
         }
@@ -1924,7 +1947,14 @@ class TypeAnalyzer {
             // resolves on first use (through `expand`) or at the end instead —
             // and so does one that names it: `type Part = Config["part"]`
             // resolved now would read `Config` before it can be known.
-            if (this.dependsOnTypeQuery(name)) continue
+            if (this.dependsOnTypeQuery(name)) {
+                // A class must stay in the map — a subclass looks its base up
+                // there — so it waits for its first use instead of the end.
+                if (def.runtimeClass) {
+                    this.aliases.defer(name, () => this.withTypeParams(def.params, () => this.resolveDef(def)))
+                }
+                continue
+            }
             this.withTypeParams(def.params, () => {
                 this.aliases.set(name, this.resolveDef(def))
             })
@@ -1934,15 +1964,17 @@ class TypeAnalyzer {
     private readonly typeQueryDependents = new Map<string, boolean>()
 
     /** Does alias `name` contain a `typeof`, itself or through an alias it
-     *  names? */
+     *  names? Its parameters count: `class C<K extends Config["key"]>`
+     *  resolves the bound along with the class. */
     private dependsOnTypeQuery(name: string, visiting = new Set<string>()): boolean {
         const known = this.typeQueryDependents.get(name)
         if (known !== undefined) return known
         const def = this.aliasDefs.get(name)
         if (!def || def.class || visiting.has(name)) return false
         visiting.add(name)
-        const result = containsTypeQuery(def.node) ||
-            referencedTypeNames(def.node).some(other => other !== name && this.dependsOnTypeQuery(other, visiting))
+        const nodes = [def.node, ...def.params.flatMap(p => [p.constraint, p.default])]
+        const result = nodes.some(containsTypeQuery) ||
+            referencedTypeNames(nodes).some(other => other !== name && this.dependsOnTypeQuery(other, visiting))
         visiting.delete(name)
         this.typeQueryDependents.set(name, result)
         return result
@@ -2774,7 +2806,7 @@ class TypeAnalyzer {
                 const mode: BindMode = this.initIsAsConst(source) ? "asconst"
                     : !isFreshLiteralExpr(source) ? "keep"
                     : stmt.kind === "const" ? "const" : "widen"
-                this.bindPattern(target, inferred, env, mode)
+                this.bindPattern(target, inferred, env, mode, source && expressionLabel(source))
                 if (stmt.kind === "const") {
                     this.correlateDestructuring(target, inferred, env)
                     this.correlateIndexed(target, source, env)
@@ -2888,13 +2920,14 @@ class TypeAnalyzer {
                 } else if (target.type === "MemberExpression" || target.type === "IndexExpression") {
                     this.infer(target, env)
                     this.checkReadonlyAssign(target, env)
+                    this.checkMemberAssign(stmt, target, vt, env)
                     // The old narrowing of this path (and anything under it)
                     // described the previous value.
                     this.assignToRef(target, isFreshLiteralExpr(source) ? widen(vt) : vt, env)
                 } else if (target.type === "ObjectPattern" || target.type === "ArrayPattern") {
                     // Destructuring assignment: narrow the existing bindings
                     // to the destructured slices of the assigned value.
-                    this.reassignPattern(target, vt, env)
+                    this.reassignPattern(target, vt, env, expressionLabel(source))
                 }
                 return
             }
@@ -4638,7 +4671,8 @@ class TypeAnalyzer {
 
     /** Like `bindPattern`, but the leaves are *existing* bindings (a `{a} = t`
      *  assignment). Updates their flow type; keeps a declared annotation. */
-    private reassignPattern(target: BindingTarget, valueType: Type, env: FlowEnv): void {
+    private reassignPattern(target: BindingTarget, valueType: Type, env: FlowEnv, label?: string): void {
+        if (target.type === "ObjectPattern" || target.type === "ArrayPattern") valueType = this.destructured(target, valueType, label)
         switch (target.type) {
             case "IdentifierPattern": {
                 const id = this.scopes.bindingOf.get(target)
@@ -4664,14 +4698,14 @@ class TypeAnalyzer {
                     const key = !p.computed && p.key.type === "Identifier" ? p.key.name
                         : !p.computed && p.key.type === "StringLiteral" ? p.key.value : undefined
                     const pt = key !== undefined ? this.propertyType(valueType, key) : unknownType
-                    this.reassignPattern(p.value, this.withDefault(pt, p.default, env), env)
+                    this.reassignPattern(p.value, this.withDefault(pt, p.default, env), env, memberLabel(label, key))
                 }
                 if (target.rest) this.reassignPattern(target.rest, this.withoutKeys(valueType, target.properties), env)
                 return
             }
             case "ArrayPattern": {
                 target.elements.forEach((el, i) => {
-                    if (el) this.reassignPattern(el.value, this.withDefault(this.elementType(valueType, i), el.default, env), env)
+                    if (el) this.reassignPattern(el.value, this.withDefault(this.elementType(valueType, i), el.default, env), env, memberLabel(label, i + 1))
                 })
                 if (target.rest) this.reassignPattern(target.rest, this.restAfter(valueType, target.elements.length), env)
                 return
@@ -4679,7 +4713,31 @@ class TypeAnalyzer {
         }
     }
 
-    private bindPattern(target: BindingTarget, valueType: Type, env: FlowEnv, mode: BindMode): void {
+    private readonly destructuredReported = new WeakSet<object>()
+
+    /** What a pattern reads from. `const { a } = v` is `v.a`, and fails where
+     *  that would: on a `v` that may be nil, and on one that is `unknown`.
+     *  `label` is the value as it would be written — `args[1]` for the inner
+     *  pattern of `const [{ a }] = args`. */
+    private destructured(pattern: ObjectPattern | ArrayPattern, raw: Type, label: string | undefined): Type {
+        let type = raw
+        const report = (message: string): void => {
+            if (!this.emitDiagnostics || this.destructuredReported.has(pattern)) return
+            this.destructuredReported.add(pattern)
+            this.diagnostics.push({ node: pattern as unknown as Expression, message: `${label === undefined ? "Object" : `'${label}'`} ${message}` })
+        }
+        if (this.includesNil(type)) {
+            const t = this.expand(type)
+            report(t.kind === "primitive" ? "is nil" : "is possibly nil. Check it first, or give it a default")
+            type = withoutNil(t)
+        }
+        const read = this.expand(type)
+        if (read.kind === "unknown" && read.declared) report("is of type 'unknown'")
+        return type
+    }
+
+    private bindPattern(target: BindingTarget, valueType: Type, env: FlowEnv, mode: BindMode, label?: string): void {
+        if (target.type === "ObjectPattern" || target.type === "ArrayPattern") valueType = this.destructured(target, valueType, label)
         switch (target.type) {
             case "IdentifierPattern": {
                 const id = this.bindingIdByName(target.name, target)
@@ -4704,7 +4762,7 @@ class TypeAnalyzer {
                         : !p.computed && p.key.type === "StringLiteral" ? p.key.value
                         : undefined
                     const propType = key !== undefined ? this.propertyType(valueType, key) : unknownType
-                    this.bindPattern(p.value, this.withDefault(propType, p.default, env), env, mode)
+                    this.bindPattern(p.value, this.withDefault(propType, p.default, env), env, mode, memberLabel(label, key))
                 }
                 if (target.rest) this.bindPattern(target.rest, this.withoutKeys(valueType, target.properties), env, mode)
                 return
@@ -4712,7 +4770,7 @@ class TypeAnalyzer {
             case "ArrayPattern": {
                 target.elements.forEach((el, i) => {
                     if (!el) return
-                    this.bindPattern(el.value, this.withDefault(this.elementType(valueType, i), el.default, env), env, mode)
+                    this.bindPattern(el.value, this.withDefault(this.elementType(valueType, i), el.default, env), env, mode, memberLabel(label, i + 1))
                 })
                 if (target.rest) this.bindPattern(target.rest, this.restAfter(valueType, target.elements.length), env, mode)
                 return
@@ -5372,7 +5430,10 @@ class TypeAnalyzer {
                 return element ?? anyType
             }
             // Broken syntax is reported by the parser; nothing more to say.
-            case "ErrorExpression": return anyType
+            case "ErrorExpression":
+                // What was read before it broke is still what it is.
+                if (expr.expression) this.infer(expr.expression, env)
+                return anyType
 
             case "Identifier": {
                 const id = this.bindingIdOf(expr)
@@ -5453,6 +5514,14 @@ class TypeAnalyzer {
                         this.checkOperands(expr, "#", arg)
                         return numberType
                     }
+                    case "typeof": {
+                        const names = this.typeofNamesOf(arg)
+                        const tables = names && [...names].filter(name => name === "array" || name === "object")
+                        if (tables?.length === 1) this.typeofTables.set(expr, tables[0] as "array" | "object")
+                        else this.typeofTables.delete(expr)
+                        const answers = names?.size ? [...names] : [...this.typeofTypes().keys()]
+                        return union(answers.map(name => literal(name)))
+                    }
                 }
                 return arg
             }
@@ -5498,7 +5567,9 @@ class TypeAnalyzer {
                         if (!this.checkComparison(expr, op, l, r)) this.checkOperands(expr, op, l, r)
                         return booleanType
                     case "==": case "~=":
-                        this.checkOverlap(expr, op, l, r)
+                        if (!this.checkTypeofName(expr, expr.left, expr.right) && !this.checkTypeofName(expr, expr.right, expr.left)) {
+                            this.checkOverlap(expr, op, l, r)
+                        }
                         return booleanType
                     case "+": case "-": case "*": case "/": case "//": case "%": case "^": {
                         const answered = this.operatorResult(expr, op, l, r)
@@ -5732,6 +5803,8 @@ class TypeAnalyzer {
         const fromMetatable = this.receiverMetatableMember(objType, expr.method.name)
         if (fromMetatable) this.methodSources.set(expr, fromMetatable.source)
         const method = fromMetatable?.type ?? this.propertyType(objType, expr.method.name)
+        // The name is the method, where the call is what it answers.
+        this.typeOf.set(expr.method, method)
         const united = this.unionSignatures(method)
         const fns = united ?? this.overloadsOf(method)
         const explicit = this.explicitTypeArguments(expr, fns)
@@ -5879,6 +5952,48 @@ class TypeAnalyzer {
             node: target,
             message: `Cannot assign to '${name}' because it is a read-only property`,
         })
+    }
+
+    /** `t.x = v` against what `x` was declared as. Only a property the
+     *  table's type names is checked: a key it does not name is the Lua
+     *  table growing, which `checkMissingMember` is not about. */
+    private checkMemberAssign(stmt: AssignmentStatement, target: MemberExpression | IndexExpression, value: Type, env: FlowEnv): void {
+        if (!this.emitDiagnostics) return
+        let name: string
+        if (target.type === "MemberExpression") {
+            name = target.property.name
+        } else {
+            const index = this.expand(this.infer(target.index, env))
+            if (index.kind !== "literal" || typeof index.value !== "string") return
+            name = index.value
+        }
+        // A write through `import * as M` is already reported as one.
+        if (target.object.type === "Identifier") {
+            const id = this.bindingIdOf(target.object)
+            if (id !== undefined && this.scopes.bindings.get(id)?.declaredBy === "namespace") return
+        }
+        const declared = this.declaredProperty(this.expand(this.infer(target.object, env)), name)
+        if (!declared || declared.kind === "any" || declared.kind === "unknown") return
+        if (this.fitsAnnotation(stmt.value, declared, value, env)) return
+        this.diagnostics.push({
+            node: stmt,
+            message: `Type '${briefType(value)}' is not assignable to '${briefType(declared)}'`
+                + this.explainMismatch(value, declared),
+        })
+    }
+
+    /** The type a property was declared with, where the type names it. */
+    private declaredProperty(t: Type, name: string): Type | undefined {
+        if (t.kind === "object") {
+            const p = t.properties.get(name)
+            return p && (p.optional ? optional(p.type) : p.type)
+        }
+        // Writing through an intersection writes every part that has it.
+        if (t.kind === "intersection") {
+            const parts = t.types.flatMap(m => this.declaredProperty(this.expand(m), name) ?? [])
+            return parts.length ? intersection(parts) : undefined
+        }
+        return undefined
     }
 
     private isReadonlyProperty(t: Type, name: string): boolean {
@@ -6348,16 +6463,28 @@ class TypeAnalyzer {
             const { operator: op, left, right } = cond
             if (op === "and") {
                 // true branch: both operands held, so `right` is narrowed on top
-                // of `left`'s result. false branch: either could have failed —
-                // not refinable, so its narrowings go to a scratch env.
-                this.applyNarrowing(left, env, t, forkEnv(env))
-                this.applyNarrowing(right, t, t, forkEnv(t))
+                // of `left`'s result. false branch: either could have failed,
+                // so it holds what the two failures have in common.
+                const before = forkEnv(env)
+                const leftFailed = forkEnv(env)
+                this.applyNarrowing(left, env, t, leftFailed)
+                const between = forkEnv(t)
+                const rightFailed = forkEnv(t)
+                this.applyNarrowing(right, t, t, rightFailed)
+                joinNarrowings(f, leftFailed, before, rightFailed, between)
                 return
             }
             if (op === "or") {
-                // Mirror image: only the false branch (both operands falsy) refines.
-                this.applyNarrowing(left, env, forkEnv(env), f)
-                this.applyNarrowing(right, f, forkEnv(f), f)
+                // Mirror image: the false branch is both operands falsy, and
+                // the true branch is whichever held — `a:IsA("X") or
+                // a:IsA("Y")` leaves `X | Y`.
+                const before = forkEnv(env)
+                const leftHeld = forkEnv(env)
+                this.applyNarrowing(left, env, leftHeld, f)
+                const between = forkEnv(f)
+                const rightHeld = forkEnv(f)
+                this.applyNarrowing(right, f, rightHeld, f)
+                joinNarrowings(t, leftHeld, before, rightHeld, between)
                 return
             }
             if (op === "==" || op === "~=") {
@@ -6383,7 +6510,7 @@ class TypeAnalyzer {
     }
 
     /** `a == b` / `a ~= b`. Handles, in order: a declaration-driven
-     *  `typeof(x) == "..."` test, a literal/`nil` comparison against a
+     *  `typeof x == "..."` test, a literal/`nil` comparison against a
      *  reference, and a reference-to-reference comparison. */
     private narrowByComparison(
         left: Expression, right: Expression, eq: boolean,
@@ -6392,7 +6519,10 @@ class TypeAnalyzer {
         const yes = eq ? t : f
         const no = eq ? f : t
 
-        // `typeof(x) == "number"` and friends.
+        // `typeof x == "number"`.
+        if (this.narrowByTypeof(left, right, yes, no, env)) return
+        if (this.narrowByTypeof(right, left, yes, no, env)) return
+        // `kind(x) == "number"`, for a function declared to answer by type.
         if (this.narrowByCallResult(left, right, yes, no, env)) return
         if (this.narrowByCallResult(right, left, yes, no, env)) return
 
@@ -6428,18 +6558,158 @@ class TypeAnalyzer {
         }
     }
 
-    /** Declaration-driven `typeof(x) == "number"`.
+    // --------------------------------------------------------
+    // typeof
+    // --------------------------------------------------------
+    //
+    // `typeof v` answers what Luau's `typeof` does, except for a table: that
+    // is an `"array"` or an `"object"`. The names of a runtime's own values —
+    // Roblox's `"Instance"`, `"Vector3"` — are a library's to give: it
+    // declares `type TypeofNames = { Vector3: Vector3, Instance: Instance }`,
+    // each property the name `typeof` answers for a value of that type. A
+    // value several of them fit is the first one's.
+
+    private typeofTypesCache: Map<string, Type> | undefined
+
+    /** Every name `typeof` answers, and what a value it answered that for
+     *  is — `unknown` where nothing more is known. */
+    private typeofTypes(): Map<string, Type> {
+        if (this.typeofTypesCache) return this.typeofTypesCache
+        const types = new Map<string, Type>([
+            ["nil", nilType], ["boolean", booleanType], ["number", numberType], ["string", stringType],
+            ["function", fn([], declaredUnknownType, declaredUnknownType)],
+            ["array", arrayOf(declaredUnknownType)],
+            ["object", objectType([], { key: declaredUnknownType, value: declaredUnknownType })],
+            ["thread", threadType], ["buffer", bufferType], ["userdata", unknownType],
+        ])
+        for (const [name, type] of this.typeofLibraryNames()) if (!types.has(name)) types.set(name, type)
+        return this.typeofTypesCache = types
+    }
+
+    private typeofLibraryCache: [string, Type][] | undefined
+
+    private typeofLibraryNames(): [string, Type][] {
+        if (this.typeofLibraryCache) return this.typeofLibraryCache
+        const declared = this.aliases.get("TypeofNames")
+        const names = declared && this.expand(declared)
+        return this.typeofLibraryCache = names?.kind === "object"
+            ? [...names.properties].map(([name, property]) => [name, property.type])
+            : []
+    }
+
+    /** The names `typeof` can answer for a value of type `raw`, or
+     *  `undefined` where the type does not say. */
+    private typeofNamesOf(raw: Type, depth = 0): Set<string> | undefined {
+        if (depth > 8) return undefined
+        const t = this.expand(raw)
+        switch (t.kind) {
+            case "never": return new Set()
+            case "primitive": return new Set([t.name])
+            case "literal": return new Set([t.base])
+            case "templateLiteral": return new Set(["string"])
+            case "array": case "tuple": return new Set(["array"])
+            case "function": return new Set(["function"])
+            case "object": {
+                // A class a library declared is whatever the library says it
+                // is; anything else — a class of the program's included — is
+                // a table.
+                const named = t.class && this.typeofLibraryNames().find(([, type]) => isAssignable(t, type))
+                return new Set([named ? named[0] : "object"])
+            }
+            case "union": {
+                const all = new Set<string>()
+                for (const member of t.types) {
+                    const names = this.typeofNamesOf(member, depth + 1)
+                    if (!names) return undefined
+                    for (const name of names) all.add(name)
+                }
+                return all
+            }
+            case "intersection": {
+                const known = t.types.map(part => this.typeofNamesOf(part, depth + 1)).filter((names): names is Set<string> => names !== undefined)
+                if (!known.length) return undefined
+                const common = [...known[0]].filter(name => known.every(names => names.has(name)))
+                return new Set(common.length ? common : known[0])
+            }
+            case "typeParam": return t.constraint ? this.typeofNamesOf(t.constraint, depth + 1) : undefined
+            case "difference": return this.typeofNamesOf(t.base, depth + 1)
+            default: return undefined
+        }
+    }
+
+    /** `typeof v == "table"`: a name `typeof` never answers. Returns true if
+     *  the comparison needs no further checking. */
+    private checkTypeofName(node: Expression, typeofSide: Expression, nameSide: Expression): boolean {
+        const test = unwrapParens(typeofSide)
+        if (test.type !== "UnaryExpression" || test.operator !== "typeof") return false
+        const name = this.asLiteral(unwrapParens(nameSide))
+        if (typeof name !== "string") return false
+        // As a test against nil is never idle: an element read past the end
+        // of an array is nil whatever its type says.
+        if (name === "nil") return true
+        if (this.typeofTypes().has(name)) return false
+        if (this.emitDiagnostics) {
+            this.diagnostics.push({
+                node,
+                message: name === "table"
+                    ? `'typeof' never answers "table": a table is an "array" or an "object"`
+                    : `'typeof' never answers "${name}"`,
+            })
+        }
+        return true
+    }
+
+    /** `typeof x == "number"`: `x` is what answers that name where the test
+     *  holds, and what does not where it fails. Returns true if `testSide` is
+     *  a `typeof` compared with a name. */
+    private narrowByTypeof(
+        testSide: Expression, nameSide: Expression,
+        yes: FlowEnv, no: FlowEnv, env: FlowEnv,
+    ): boolean {
+        const test = unwrapParens(testSide)
+        if (test.type !== "UnaryExpression" || test.operator !== "typeof") return false
+        const name = this.asLiteral(unwrapParens(nameSide))
+        if (typeof name !== "string") return false
+        const answered = this.typeofTypes().get(name)
+        if (!answered) return true
+        // What the type says nothing about — `unknown`, a type parameter — is
+        // narrowed to the name's own type. Ruling a table out of it is left
+        // alone: `unknown` less every object would have no array left in it.
+        const opaque = answered.kind !== "unknown"
+        const subtracts = opaque && name !== "array" && name !== "object"
+        const members = (cur: Type): Type[] => {
+            const t = this.expand(cur)
+            return t.kind === "union" ? t.types.flatMap(members) : [t]
+        }
+        if (this.refKeyOf(test.argument) !== undefined) {
+            this.narrowRef(test.argument, env, yes, no, cur => {
+                const kept: Type[] = []
+                const dropped: Type[] = []
+                for (const member of members(cur)) {
+                    const names = this.typeofNamesOf(member)
+                    if (!names) {
+                        kept.push(opaque ? narrowTo(member, answered) : member)
+                        dropped.push(subtracts ? narrowExclude(member, answered) : member)
+                        continue
+                    }
+                    if (names.has(name)) kept.push(member)
+                    if (!(names.size === 1 && names.has(name))) dropped.push(member)
+                }
+                return { yes: union(kept), no: union(dropped) }
+            })
+        }
+        // `typeof a?.b == "string"` got as far as `b`: `a` is not nil there.
+        this.narrowOptionalLinks(test.argument, env, name === "nil" ? no : yes)
+        return true
+    }
+
+    /** Declaration-driven `kind(x) == "number"`.
      *
-     *  `typeof` is not special-cased: it is declared in the definitions as an
-     *  overload set whose members return *string-literal* types
-     *  (`(value: number) -> "number"`, ...). So for `f(x) == "lit"` we keep the
-     *  parameter types of the overloads that can return `"lit"`, and that union
-     *  is what `x` narrows to. Any user function declared the same way gets the
-     *  same treatment for free.
-     *
-     *  The analyzer knows nothing about the names `type` and `typeof`: with no
-     *  definitions loaded there are no literal-returning overloads and this
-     *  narrows nothing. Returns true if it handled the comparison. */
+     *  A function declared as an overload set whose members return
+     *  *string-literal* types (`(value: number) => "number"`, ...) says by its
+     *  answer what it was given. So for `f(x) == "lit"` we keep the parameter
+     *  types of the overloads that can return `"lit"`, and that union is what
+     *  `x` narrows to. Returns true if it handled the comparison. */
     private narrowByCallResult(
         callSide: Expression, litSide: Expression,
         yes: FlowEnv, no: FlowEnv, env: FlowEnv,

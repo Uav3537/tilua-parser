@@ -124,14 +124,31 @@ Every problem comes back as `{ file, message, line, column }`, pointing into
 the config (or sourcemap) it is about. `host` reads files — pass your own to
 read unsaved editor buffers or to record what was read.
 
-`type` / `typeof` are **not** special-cased in the analyzer either: they are
-overload sets in `@tilua-types/lua` and `@tilua-types/roblox`, and narrowing is derived
-from them. Without a library that declares them, they narrow nothing.
+`typeof v` is the language's own, an operator like `not` and `#`: it needs no
+library, and Lua's `type()` and Luau's `typeof()` functions are declared by
+none. It answers Luau's names — `"nil"`, `"boolean"`, `"number"`, `"string"`,
+`"function"`, `"thread"`, `"buffer"`, `"userdata"` — except for a table, which
+is an `"array"` or an `"object"`. `typeof v == "array"` narrows `v`, and
+`== "table"` is an error: it is never the answer. There is no `typeof(v)`
+function: written that way it is an error, and a parenthesised operand stands
+apart from the operator — `typeof (a or b)`.
+
+What a runtime's own values answer is a library's to say, in one alias:
+
+```ts
+type TypeofNames = { Vector3: Vector3, Instance: Instance }
+```
+
+Each property is the name `typeof` gives a value of the property's type; a
+value several fit (a `Part` is an `Instance`) is the first one's.
+`TypeAnalysis.typeofTables` lists each `typeof v` whose `v` is, by its type,
+an array or an object wherever it is a table — what a compiler need not find
+out as the program runs.
 
 Libraries stack: a name declared again *adds* to what an earlier library gave
 it — overloads of a function accumulate, and the members of a declared table
-merge. That is how `@tilua-types/roblox` extends Lua's `table` and `type` without
-restating them.
+merge. That is how `@tilua-types/roblox` extends Lua's `table` without
+restating it.
 
 ## The language, in brief
 
@@ -340,7 +357,8 @@ such as `print(x)`, and `globalValue` for a global read as a value, such as
 `local p = print`. A local with the same name belongs to the author, and no
 hook is asked about it. A runtime can read `__LINES__`, the bundle's line map
 (`nil` outside a bundle), to turn a line Luau reports back into a place in the
-project. `console:log`, `print` and `error` in `@tilua-types/lua` are built on
+project. One that answers with a new array wraps it in `__ARRAY__(...)`, which
+writes it down as an array for `typeof`. `console:log`, `print` and `error` in `@tilua-types/lua` are built on
 these hooks.
 
 **A `(` that starts a line** continues the statement above it, as in Lua and
@@ -383,8 +401,8 @@ declare class Part extends BasePart { Shape: EnumItem }
 A `Part` is a `BasePart` and an `Instance` because it extends them. A
 `ReplicatedStorage` is not a `Part`, and no table literal is an `Instance`,
 however alike their members. A class still fits a shape that names members it
-has (`{ Name: string }`). It is not a table, though, so `typeof(part)` picks
-the `"Instance"` overload, not `"table"`. Members are inherited, and a subclass
+has (`{ Name: string }`). It is not a table, though, so `typeof part` is
+`"Instance"`, as the library's `TypeofNames` says, not `"object"`. Members are inherited, and a subclass
 may narrow one (`Parent: SomeFolder`).
 
 **`class ... { }`** — a class written in code, rather than declared in a
@@ -804,8 +822,9 @@ three operators: only a call after the `>` makes it type arguments.
 
 `typeof x` in a type is TypeScript's type query — the type of a value
 (`typeof config`, `typeof config.volume`, `ReturnType<typeof f>`). Luau's
-`typeof(expr)` spelling works too. It is compile-time only, unrelated to the
-`typeof(v)` function that returns a string at runtime.
+`typeof(expr)` spelling is an error here as well. It is compile-time only, unrelated to the
+`typeof v` operator in an expression, which answers a string as the program
+runs.
 
 **Modules** — `import` / `export`, export lists, re-exports and `export *`.
 

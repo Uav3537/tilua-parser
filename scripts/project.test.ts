@@ -509,8 +509,9 @@ const rel = (path: string | undefined): string | undefined =>
         check("recovery: strings, `local`, `obj.`, a stray `}`, types, interpolation, calls and initializers", [r.errors, Object.keys(r.bindings)], [[
             "Unterminated string",
             "tilua has no 'local'; declare with 'const' or 'let'",
-            // `part.` is followed by the stray `end`: one problem, reported once.
-            "Expected identifier",
+            // `part.` has no name, said at the `.`; the stray `}` is its own.
+            "Expected a name after '.'",
+            "Expected end of file",
             "Unexpected token in type annotation",
             "In '${1 +}': Unexpected token in expression",
             "Unexpected token in expression",
@@ -1859,6 +1860,29 @@ function g() {
         check("type queries: aliases built on a `typeof` alias, a declare, and a binding above the function",
             [dependent.errors, dependent.bindings.seen, dependent.bindings.Resource],
             [[], "ClassMapType", "ResourceType | nil"])
+
+        // A class bound on such an alias waits too, instead of settling on
+        // `unknown` and leaving the alias it named `unknown` with it.
+        const bounded = analyze([
+            "type ResourceType = ReturnType<typeof Load>",
+            "type SkillMapType = ResourceType[\"SkillMap\"]",
+            "class Manager<C extends SkillMapType[number][\"Class\"]> {",
+            "    constructor(Class: C) { }",
+            "}",
+            "function Load() {",
+            "    const SkillMap = [{ Class: \"A\" }, { Class: \"B\" }] as const",
+            "    return { SkillMap }",
+            "}",
+            "declare peek: SkillMapType[number][\"Class\"]",
+            "const seen = peek",
+            "const ok = Manager.new(\"A\")",
+            "const bad = Manager.new(\"Z\")",
+            "",
+            "",
+        ].join("\n"))
+        check("type queries: a class bound on a `typeof` alias",
+            [bounded.bindings.seen, bounded.errors],
+            ["\"A\" | \"B\"", ["Argument of type '\"Z\"' is not assignable to parameter of type '\"A\" | \"B\"'"]])
     }
 
     // `export type X = typeof value` reads the value, as a plain alias does.
@@ -3464,6 +3488,218 @@ function g() {
         ["Cannot assign to 'a' because it is a read-only property"],
         ["Cannot assign to 'a' because it is a read-only property"],
         [], [],
+    ])
+
+    // A property the type names is written with what it was declared as; a
+    // key it does not name is the table growing, and stays allowed.
+    check("assignment: a written property is checked against its declared type", [
+        analyze("declare x: number | nil\ndeclare t: { a: number }\nt.a = x").errors,
+        analyze("declare t: { a: number }\nt[\"a\"] = \"x\"").errors,
+        analyze("declare t: { a?: number }\nt.a = nil").errors,
+        analyze("declare t: { s: \"a\" | \"b\" }\nt.s = \"b\"").errors,
+        analyze("const t = {}\nt.x = 1").errors,
+        analyze([
+            "declare function get(): { Remote: number | nil }",
+            "class M {",
+            "    private Remote: number",
+            "    constructor() {",
+            "        const { Remote } = get()",
+            "        this.Remote = Remote",
+            "    }",
+            "}",
+        ].join("\n")).errors,
+    ], [
+        ["Type 'number | nil' is not assignable to 'number'"],
+        ["Type '\"x\"' is not assignable to 'number'"],
+        [], [], [],
+        ["Type 'number | nil' is not assignable to 'number'"],
+    ])
+
+    // Where `a or b` held, one of them did: what both narrow is the union of
+    // the two. Where `a and b` failed, likewise. What only one of them
+    // narrows is left as it was.
+    {
+        const head = [
+            "declare v: string | number | boolean | nil",
+            "declare flag: boolean",
+            "declare function isS(x: unknown): x is string",
+            "declare function isN(x: unknown): x is number",
+            "",
+        ].join("\n")
+        const isString = "isS(v)"
+        const isNumber = "isN(v)"
+        check("narrowing: the branch one of two tests decided", [
+            analyze(`${head}if (${isString} or ${isNumber}) { const seen = v }`).bindings.seen,
+            analyze(`${head}function f() {\n    if (not (${isString} or ${isNumber})) return\n    const seen = v\n}`).bindings.seen,
+            analyze(`${head}function f() {\n    if (not (${isString}) and not (${isNumber})) return\n    const seen = v\n}`).bindings.seen,
+            analyze(`${head}if (${isString} or ${isNumber} or v == nil) { const seen = v }`).bindings.seen,
+            analyze(`${head}if (${isString} or ${isNumber}) { } else { const seen = v }`).bindings.seen,
+            analyze(`${head}if (${isString} or flag) { const seen = v }`).bindings.seen,
+            analyze(`${head}if (flag and (${isString} or ${isNumber})) { const seen = v }`).bindings.seen,
+        ], [
+            "string | number", "string | number", "string | number", "string | number | nil",
+            "boolean | nil", "string | number | boolean | nil", "string | number",
+        ])
+    }
+
+    // `obj.` while its name is still to be typed: `obj` is read as it stands,
+    // and the line below is its own statement, not the name.
+    {
+        const typing = (code: string) => {
+            const { program, errors } = parseWithRecovery(code)
+            const scopes = analyzeScopes(program, { reportUndeclared: true })
+            const types = analyzeTypes(program, scopes, {})
+            const read = [...types.typeOf].filter(([node]) => node.type === "Identifier" && (node as { name: string }).name === "part")
+            return {
+                errors: errors.map(e => e.message),
+                statements: program.body.statements.map(s => s.type),
+                part: read.map(([, type]) => formatType(type)),
+                diagnostics: [...scopes.diagnostics, ...types.diagnostics].map(d => d.message),
+            }
+        }
+        const head = "const part = { Name: \"x\" }\ndeclare function show(v: unknown): nil\n"
+        const below = typing(`${head}part.\nshow(part)\n`)
+        const inside = typing(`${head}show(part.)\n`)
+        const optional = typing(`${head}const n = part?.\nshow(n)\n`)
+        const method = typing(`${head}part:\nshow(part)\n`)
+        check("recovery: `obj.` keeps `obj`, and leaves the line below alone", [
+            [below.errors, below.statements, below.part, below.diagnostics],
+            [inside.errors, inside.part, inside.diagnostics],
+            [optional.errors, optional.statements, optional.diagnostics],
+            [method.errors, method.statements.slice(2), method.part, method.diagnostics],
+        ], [
+            [["Expected a name after '.' (3:5)"], ["VariableDeclaration", "DeclareStatement", "ExpressionStatement", "CallStatement"],
+                ["{ Name: string }", "{ Name: string }"], []],
+            [["Expected a name after '.' (3:10)"], ["{ Name: string }"], []],
+            [["Expected a name after '.' (3:16)"], ["VariableDeclaration", "DeclareStatement", "VariableDeclaration", "CallStatement"], []],
+            [["Expected a name after ':' (3:5)"], ["ExpressionStatement", "CallStatement"], ["{ Name: string }", "{ Name: string }"], []],
+        ])
+        // A name on a later line is the access's own, as in JavaScript. Only
+        // while recovering is the line below read by its indentation: carried
+        // on when deeper, a statement of its own when not.
+        const names = (code: string): unknown => {
+            const { program, errors } = parseWithRecovery(code)
+            return [errors.map(e => e.message), program.body.statements.map(s => s.type)]
+        }
+        const object = "const a = { b: 1, m: () => 1 }\n"
+        check("a member's name may be on a later line", [
+            (() => { try { parse(`${object}const c = a.\nb`); return "parsed" } catch (e) { return (e as Error).message } })(),
+            (() => { try { parse(`${object}const c = a\n    .b`); return "parsed" } catch (e) { return (e as Error).message } })(),
+            names(`${object}const c = a.\n    b\n`),
+            names(`${object}const c = a:\n    m()\n`),
+            names(`${object}const c = a.\nb\n`),
+        ], [
+            "parsed", "parsed",
+            [[], ["VariableDeclaration", "VariableDeclaration"]],
+            [[], ["VariableDeclaration", "VariableDeclaration"]],
+            [["Expected a name after '.' (2:12)"], ["VariableDeclaration", "VariableDeclaration", "ExpressionStatement"]],
+        ])
+    }
+
+    // `typeof v` is an operator of the language: Luau's names, with a table
+    // told apart as an "array" or an "object". A library names its own values
+    // through `TypeofNames`.
+    {
+        const seen = (code: string, name = "seen"): string => analyze(code).bindings[name]
+        const unknown = "declare v: unknown\n"
+        check("typeof: what it answers", [
+            seen("declare v: number | string[] | nil\nconst seen = typeof v"),
+            seen("class A { }\nconst seen = typeof A.new()"),
+            seen("const seen = typeof [1]"),
+            seen("const seen = typeof { a: 1 }"),
+            seen("const seen = typeof (() => 1)"),
+            seen(`${unknown}const seen = typeof v`),
+        ], [
+            "\"number\" | \"array\" | \"nil\"", "\"object\"", "\"array\"", "\"object\"", "\"function\"",
+            "\"nil\" | \"boolean\" | \"number\" | \"string\" | \"function\" | \"array\" | \"object\" | \"thread\" | \"buffer\" | \"userdata\"",
+        ])
+        check("typeof: a test narrows what was tested", [
+            seen(`${unknown}if (typeof v == "array") { const seen = v }`),
+            seen(`${unknown}if (typeof (v) == "object") { const seen = v }`),
+            seen(`${unknown}if (typeof v == "object") { } elseif (typeof v == "array") { const seen = v }`),
+            seen(`${unknown}function f() {\n    if (typeof v ~= "string") return\n    const seen = v\n}`),
+            seen(`${unknown}if (typeof v == "array" or typeof v == "object") { const seen = v }`),
+            seen("declare v: number[] | { a: number } | string\nif (typeof v == \"array\") { const seen = v }"),
+            seen("declare v: number[] | { a: number } | string\nif (typeof v == \"object\") { const seen = v }"),
+            seen("declare v: number[] | { a: number } | string\nif (typeof v == \"array\") { } elseif (typeof v == \"object\") { } else { const seen = v }"),
+        ], [
+            "unknown[]", "{ [unknown]: unknown }", "unknown[]", "string", "unknown[] | { [unknown]: unknown }",
+            "number[]", "{ a: number }", "string",
+        ])
+        // There is no `typeof(v)` function. A parenthesised operand stands
+        // apart from the operator.
+        const syntax = (code: string): string[] => parseWithRecovery(code).errors.map(e => e.message)
+        check("typeof: not a function", [
+            syntax("const k = typeof(v)"),
+            syntax("const k = typeof (v or w)"),
+            syntax("const k = typeof v"),
+            syntax("const n = 1\nconst k: typeof(n) = 1"),
+            syntax("const n = 1\nconst k: typeof n = 1"),
+        ], [
+            ["'typeof' is an operator, not a function: write 'typeof v' (1:17)"], [], [],
+            ["'typeof' is an operator, not a function: write 'typeof v' (2:16)"], [],
+        ])
+        check("typeof: a name it never answers", [
+            analyze(`${unknown}if (typeof v == "table") { }`).errors,
+            analyze(`${unknown}if (typeof v == "Table") { }`).errors,
+            analyze("declare v: number\nif (typeof v == \"string\") { }").errors,
+            analyze("declare v: number\nif (typeof v == \"nil\") { }").errors,
+        ], [
+            ["'typeof' never answers \"table\": a table is an \"array\" or an \"object\""],
+            ["'typeof' never answers \"Table\""],
+            ["This comparison is always false: '\"number\"' and '\"string\"' have no value in common"],
+            [],
+        ])
+        const library = [
+            "declare class Vector3 { X: number }",
+            "declare class Instance { Name: string }",
+            "declare class Part extends Instance { }",
+            "type TypeofNames = { Vector3: Vector3, Instance: Instance }",
+            "declare p: Part",
+            "",
+        ].join("\n")
+        check("typeof: the names a library gives its own values", [
+            seen(`${library}const seen = typeof p`),
+            seen(`${library}${unknown}if (typeof v == "Vector3") { const seen = v }`),
+            seen(`${library}declare w: Part | Vector3 | { a: number }\nif (typeof w == "Instance") { const seen = w }`),
+            seen(`${library}declare w: Part | Vector3 | { a: number }\nif (typeof w == "Instance") { } else { const seen = w }`),
+        ], ["\"Instance\"", "Vector3", "Part", "Vector3 | { a: number }"])
+        const tables = (code: string): string[] => {
+            const program = parse(code)
+            return [...analyzeTypes(program, analyzeScopes(program), {}).typeofTables.values()]
+        }
+        check("typeof: a table its type already tells apart", [
+            tables("declare v: number[] | nil\nconst k = typeof v"),
+            tables("declare v: { a: number } | string\nconst k = typeof v"),
+            tables("declare v: number[] | { a: number }\nconst k = typeof v"),
+            tables(`${unknown}const k = typeof v`),
+        ], [["array"], ["object"], [], []])
+    }
+
+    // `const { a } = v` reads `v.a`, and is checked as that read is: `v` may
+    // not be `unknown`, nor possibly nil. A nested pattern names its place.
+    check("destructuring: the value read from is checked as a member access is", [
+        analyze("const [{ Target }] = scriptArgs").errors,
+        analyze("const t = scriptArgs[1].Target").errors,
+        analyze("declare u: unknown\nconst { a } = u").errors,
+        analyze("declare u: unknown\nconst [a] = u").errors,
+        analyze("declare u: { p: unknown }\nlet a\n{ p: { a } } = u").errors,
+        analyze("function f({ a }: unknown) { }").errors,
+        analyze("declare u: { a: number } | nil\nconst { a } = u").errors,
+        analyze("declare u: { a: number } | nil\nconst { a } = u").bindings.a,
+        analyze("declare u: { p?: { a: number } }\nconst { p: { a } = { a: 1 } } = u").errors,
+        analyze("declare u: any\nconst [{ a }] = u").errors,
+        analyze("declare u: { a: number }[]\nconst [{ a }] = u").errors,
+    ], [
+        ["'scriptArgs[1]' is of type 'unknown'"],
+        ["'scriptArgs[1]' is of type 'unknown'"],
+        ["'u' is of type 'unknown'"],
+        ["'u' is of type 'unknown'"],
+        ["'u.p' is of type 'unknown'"],
+        ["Object is of type 'unknown'"],
+        ["'u' is possibly nil. Check it first, or give it a default"],
+        "number",
+        [], [], [],
     ])
 
     // `private` is checked where the member is reached: inside the class that

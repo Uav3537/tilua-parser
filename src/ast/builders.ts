@@ -31,6 +31,12 @@ import type {
 /** What bare `...` is instead. */
 const NO_DOTS = "tilua has no bare '...': take a rest parameter, '...args: T[]', or 'scriptArgs' for the script's own"
 
+/** `obj.` with nothing after it on the line. */
+const NO_MEMBER_NAME = "Expected a name after '.'"
+
+/** What `typeof(v)` is instead. */
+const NO_TYPEOF_CALL = "'typeof' is an operator, not a function: write 'typeof v'"
+
 /** Words that can open a class member before what it is. */
 const ACCESSIBILITIES: ReadonlySet<string> = new Set(["public", "private", "protected"])
 const CLASS_MODIFIERS: ReadonlySet<string> = new Set([...ACCESSIBILITIES, "static", "abstract", "override", "readonly"])
@@ -1785,6 +1791,7 @@ export class Parser {
      *  `:` Identifier followed by one of Lua's call forms. */
     private startsMethodCall(offset = 0): boolean {
         if (this.peek(offset + 1).type !== "Identifier") return false
+        if (this.startsOwnLine(this.peek(offset), this.peek(offset + 1))) return false
         const after = this.peek(offset + 2)
         if (after.type === "Punctuator") {
             const v = String((after as { value?: unknown }).value)
@@ -1813,6 +1820,25 @@ export class Parser {
         const isString = t.type === "InterpolatedString" ||
             (t.type === "Literal" && (t as { kind?: unknown }).kind === "string")
         return isString && this.punctuatorAt(1, ":") && this.startsMethodCall(1)
+    }
+
+    /** Is there no member name at `offset`, after the `.` or `:` before it? */
+    private namelessAfter(offset: number): boolean {
+        const name = this.peek(offset)
+        if (name.type !== "Identifier") return true
+        const before = offset === 0 ? this.previous() : this.peek(offset - 1)
+        return before !== undefined && this.startsOwnLine(before, name)
+    }
+
+    /** Recovery only. `obj.` may go on to its name on a later line, as in
+     *  JavaScript — but while `obj.` is still being typed, the line below is
+     *  whatever statement was already there, and reading it as the name turns
+     *  one unfinished line into errors about the next. So, as a missing `}`
+     *  is placed, the indentation says which: a line that carries the access
+     *  on is indented deeper than the line it carries on from. */
+    private startsOwnLine(before: Token, name: Token): boolean {
+        if (!this.recover || name.line.start <= before.line.end) return false
+        return this.indentOf(name) <= this.indentOf(before)
     }
 
     /** Does the next token start right where the current one ends? */
@@ -1858,6 +1884,8 @@ export class Parser {
         const t = this.current()
         if (t.type === "Keyword" && (t as any).value === "not") return "not"
         if (t.type === "Operator" && ((t as any).value === "-" || (t as any).value === "#")) return (t as any).value
+        // `typeof v`: an operator, as `not` is.
+        if (t.type === "Identifier" && (t as any).value === "typeof") return "typeof"
         return null
     }
 
@@ -1976,6 +2004,13 @@ export class Parser {
         const op = this.isUnaryOperator()
         if (op) {
             const opTok = this.advance()
+            // `typeof(v)` is the call of a function tilua does not have. A
+            // parenthesised operand stands apart from it: `typeof (a or b)`.
+            const next = this.current()
+            if (op === "typeof" && this.checkPunctuator("(")
+                && next.line.start === opTok.line.end && next.column.start === opTok.column.end) {
+                this.problemAt(next, NO_TYPEOF_CALL)
+            }
             const argument = this.parseExpression(UNARY_PRECEDENCE)
             return {
                 type: "UnaryExpression",
@@ -2186,6 +2221,14 @@ export class Parser {
             if (this.checkPunctuator("?") && this.touchesNext()) {
                 const next = this.peek(1)
                 const punct = next.type === "Punctuator" ? String((next as { value?: unknown }).value) : undefined
+                if (punct === "." && this.recover && this.namelessAfter(2) && !this.punctuatorAt(2, "[") && !this.punctuatorAt(2, "(")) {
+                    // `obj?.` mid-typing.
+                    this.advance()
+                    this.advance()
+                    this.problemAt(this.previous(), NO_MEMBER_NAME)
+                    base = { type: "ErrorExpression", expression: base, ...spanFrom(base, this.previous()) }
+                    break
+                }
                 if (punct === "." && this.peek(2).type === "Identifier") {
                     this.advance()
                     this.advance()
@@ -2232,10 +2275,11 @@ export class Parser {
                 }
             }
             if (this.matchPunctuator(".")) {
-                if (this.recover && !this.checkType("Identifier")) {
-                    // `obj.` mid-typing: the access has no name yet.
-                    this.softError("Expected identifier")
-                    base = { type: "ErrorExpression", ...spanFrom(base, this.previous()) }
+                // `obj.` mid-typing: the access has no name yet — or, in
+                // recovery, the only name is the line below's own.
+                if (this.namelessAfter(0)) {
+                    this.problemAt(this.previous(), NO_MEMBER_NAME)
+                    base = { type: "ErrorExpression", expression: base, ...spanFrom(base, this.previous()) }
                     break
                 }
                 const prop = this.parseIdentifier()
@@ -2247,6 +2291,15 @@ export class Parser {
                 this.expectPunctuator("]")
                 base = { type: "IndexExpression", object: base, index, ...spanFrom(base, this.previous()) }
                 continue
+            }
+            // `obj:` mid-typing, the last thing on its line: as `obj.` is. Not
+            // in a ternary's consequent, whose own `:` may end a line.
+            if (this.recover && !this.ternaryColons && this.checkPunctuator(":")
+                && this.peek(1).line.start > this.current().line.end && !this.startsMethodCall()) {
+                this.advance()
+                this.problemAt(this.previous(), "Expected a name after ':'")
+                base = { type: "ErrorExpression", expression: base, ...spanFrom(base, this.previous()) }
+                break
             }
             if (this.checkPunctuator(":") && this.startsMethodCall() && this.takeMethodColon()) {
                 this.advance()
@@ -3179,7 +3232,11 @@ export class Parser {
             return { type: "TupleTypeNode", elements, ...(rest ? { rest } : {}), ...spanFrom(t, this.previous()) } as TupleTypeNode
         }
 
+        // `typeof(x)` is Luau's spelling, and tilua has no such function, in a
+        // type or out of one. In recovery it is read as the query it was
+        // meant to be, so the rest of the file still analyses.
         if (t.type === "Identifier" && (t as any).value === "typeof" && this.peek(1).type === "Punctuator" && (this.peek(1) as any).value === "(") {
+            this.problemAt(this.peek(1), NO_TYPEOF_CALL)
             this.advance()
             this.advance()
             const expression = this.parseExpression()
@@ -3188,8 +3245,8 @@ export class Parser {
         }
 
         // `typeof x` / `typeof x.y.z` — TypeScript's type query: the type of a
-        // value, without parentheses. (`typeof(expr)` above is Luau's
-        // spelling.) Only a name path is allowed, as in TypeScript.
+        // value, without parentheses. Only a name path is allowed, as in
+        // TypeScript.
         if (t.type === "Identifier" && (t as any).value === "typeof" && this.peek(1).type === "Identifier") {
             this.advance()
             let expression: Expression = this.parseIdentifier()

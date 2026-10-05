@@ -573,6 +573,10 @@ export type Expression =
  *  (and is empty when nothing was written). Its type is `any`. */
 export interface ErrorExpression extends BaseNode {
     type: "ErrorExpression"
+    /** What was read before it broke: the `obj` of an `obj.` whose name is
+     *  still to be typed. It is analysed as it stands, so `obj` keeps its
+     *  type and its place among the names. */
+    expression?: Expression
 }
 
 export interface Identifier extends BaseNode {
@@ -712,7 +716,9 @@ export interface BinaryExpression extends BaseNode {
     right: Expression
 }
 
-export const UnaryOperators = ["-", "not", "#"] as const
+/** `typeof v` answers the name of what `v` is: Luau's `typeof`, with a table
+ *  told apart as an `"array"` or an `"object"`. */
+export const UnaryOperators = ["-", "not", "#", "typeof"] as const
 
 export interface UnaryExpression extends BaseNode {
     type: "UnaryExpression"
@@ -1014,8 +1020,7 @@ export interface ParenthesizedTypeNode extends BaseNode {
     typeAnnotation: TypeNode
 }
 
-/** `typeof x` / `typeof x.y` (TypeScript's type query) or `typeof(expr)`
- *  (Luau's spelling): the type of a value. */
+/** `typeof x` / `typeof x.y`, TypeScript's type query: the type of a value. */
 export interface TypeofTypeNode extends BaseNode {
     type: "TypeofTypeNode"
     expression: Expression
