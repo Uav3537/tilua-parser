@@ -69,7 +69,7 @@
               },
               "column": {
                 "start": 18,
-                "end": 33
+                "end": 19
               }
             }
           ],
@@ -352,7 +352,7 @@
               },
               "column": {
                 "start": 18,
-                "end": 33
+                "end": 19
               }
             }
           ],
@@ -635,7 +635,7 @@
               },
               "column": {
                 "start": 21,
-                "end": 36
+                "end": 22
               }
             }
           ],
@@ -964,7 +964,7 @@
               },
               "column": {
                 "start": 18,
-                "end": 41
+                "end": 23
               }
             }
           ],
@@ -1214,9 +1214,8 @@
                           }
                         },
                         "right": {
-                          "type": "UnaryExpression",
-                          "operator": "#",
-                          "argument": {
+                          "type": "MemberExpression",
+                          "object": {
                             "type": "Identifier",
                             "name": "present",
                             "line": {
@@ -1224,8 +1223,20 @@
                               "end": 37
                             },
                             "column": {
-                              "start": 26,
-                              "end": 33
+                              "start": 25,
+                              "end": 32
+                            }
+                          },
+                          "property": {
+                            "type": "Identifier",
+                            "name": "length",
+                            "line": {
+                              "start": 37,
+                              "end": 37
+                            },
+                            "column": {
+                              "start": 33,
+                              "end": 39
                             }
                           },
                           "line": {
@@ -1234,7 +1245,7 @@
                           },
                           "column": {
                             "start": 25,
-                            "end": 33
+                            "end": 39
                           }
                         },
                         "line": {
@@ -1243,7 +1254,7 @@
                         },
                         "column": {
                           "start": 17,
-                          "end": 33
+                          "end": 39
                         }
                       },
                       "line": {
@@ -1252,7 +1263,7 @@
                       },
                       "column": {
                         "start": 9,
-                        "end": 33
+                        "end": 39
                       }
                     }
                   ],
@@ -1262,7 +1273,7 @@
                   },
                   "column": {
                     "start": 9,
-                    "end": 33
+                    "end": 39
                   }
                 },
                 "line": {
@@ -1413,7 +1424,7 @@
               },
               "column": {
                 "start": 19,
-                "end": 42
+                "end": 24
               }
             }
           ],
@@ -1663,9 +1674,8 @@
                           }
                         },
                         "right": {
-                          "type": "UnaryExpression",
-                          "operator": "#",
-                          "argument": {
+                          "type": "MemberExpression",
+                          "object": {
                             "type": "Identifier",
                             "name": "present",
                             "line": {
@@ -1673,8 +1683,20 @@
                               "end": 48
                             },
                             "column": {
-                              "start": 24,
-                              "end": 31
+                              "start": 23,
+                              "end": 30
+                            }
+                          },
+                          "property": {
+                            "type": "Identifier",
+                            "name": "length",
+                            "line": {
+                              "start": 48,
+                              "end": 48
+                            },
+                            "column": {
+                              "start": 31,
+                              "end": 37
                             }
                           },
                           "line": {
@@ -1683,7 +1705,7 @@
                           },
                           "column": {
                             "start": 23,
-                            "end": 31
+                            "end": 37
                           }
                         },
                         "line": {
@@ -1692,7 +1714,7 @@
                         },
                         "column": {
                           "start": 16,
-                          "end": 31
+                          "end": 37
                         }
                       },
                       "line": {
@@ -1701,7 +1723,7 @@
                       },
                       "column": {
                         "start": 9,
-                        "end": 31
+                        "end": 37
                       }
                     }
                   ],
@@ -1711,7 +1733,7 @@
                   },
                   "column": {
                     "start": 9,
-                    "end": 31
+                    "end": 37
                   }
                 },
                 "line": {
@@ -1840,7 +1862,7 @@
               },
               "column": {
                 "start": 17,
-                "end": 32
+                "end": 18
               }
             }
           ],
@@ -2182,7 +2204,7 @@
               },
               "column": {
                 "start": 19,
-                "end": 34
+                "end": 20
               }
             }
           ],
@@ -2464,7 +2486,7 @@
               },
               "column": {
                 "start": 21,
-                "end": 36
+                "end": 22
               }
             }
           ],
@@ -2721,7 +2743,7 @@
               },
               "column": {
                 "start": 15,
-                "end": 24
+                "end": 16
               }
             }
           ],
@@ -3078,7 +3100,7 @@
               },
               "column": {
                 "start": 23,
-                "end": 46
+                "end": 28
               }
             }
           ],
@@ -3328,9 +3350,8 @@
                           }
                         },
                         "right": {
-                          "type": "UnaryExpression",
-                          "operator": "#",
-                          "argument": {
+                          "type": "MemberExpression",
+                          "object": {
                             "type": "Identifier",
                             "name": "present",
                             "line": {
@@ -3338,8 +3359,20 @@
                               "end": 94
                             },
                             "column": {
-                              "start": 26,
-                              "end": 33
+                              "start": 25,
+                              "end": 32
+                            }
+                          },
+                          "property": {
+                            "type": "Identifier",
+                            "name": "length",
+                            "line": {
+                              "start": 94,
+                              "end": 94
+                            },
+                            "column": {
+                              "start": 33,
+                              "end": 39
                             }
                           },
                           "line": {
@@ -3348,7 +3381,7 @@
                           },
                           "column": {
                             "start": 25,
-                            "end": 33
+                            "end": 39
                           }
                         },
                         "line": {
@@ -3357,7 +3390,7 @@
                         },
                         "column": {
                           "start": 17,
-                          "end": 33
+                          "end": 39
                         }
                       },
                       "line": {
@@ -3366,7 +3399,7 @@
                       },
                       "column": {
                         "start": 9,
-                        "end": 33
+                        "end": 39
                       }
                     }
                   ],
@@ -3376,7 +3409,7 @@
                   },
                   "column": {
                     "start": 9,
-                    "end": 33
+                    "end": 39
                   }
                 },
                 "line": {
@@ -3479,7 +3512,7 @@
               },
               "column": {
                 "start": 18,
-                "end": 27
+                "end": 19
               }
             }
           ],

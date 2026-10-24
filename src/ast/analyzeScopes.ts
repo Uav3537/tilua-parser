@@ -1,4 +1,5 @@
 import type { TypeNode, TypeofTypeNode } from "./nodes"
+import { standardGlobals } from "./standardLibrary"
 // ============================================================
 // Scope / binding analysis
 // ------------------------------------------------------------
@@ -98,11 +99,14 @@ export interface AnalyzeScopesOptions {
      *  one of these does not count as "defining" it, so `declarationNode`
      *  is left unset even though the binding exists up front. */
     builtinGlobals?: readonly string[]
+    /** Leave out the standard library's globals (`print`, `pairs`, ...),
+     *  which are otherwise there for every file. The config's `"noLib"`. */
+    noLib?: boolean
     /** Report each read of a name nothing declares — not a local, not one of
      *  `builtinGlobals`, not `declare`d in the file, never assigned as a
      *  global: "Cannot find name 'x'", as TypeScript says. Only meaningful
      *  when `builtinGlobals` lists everything the file's type libraries
-     *  declare, so it is off unless asked for. */
+     *  declare beyond the standard library, so it is off unless asked for. */
     reportUndeclared?: boolean
 }
 
@@ -154,7 +158,10 @@ class Analyzer {
     constructor(private readonly options: AnalyzeScopesOptions) {
         // The language's own: what the script was started with. Every file
         // sees it, library or none.
-        for (const name of [...LANGUAGE_GLOBALS, ...options.builtinGlobals ?? []]) {
+        // So does the standard library — `print`, `string` — unless the
+        // project asked for none of it.
+        const standard = options.noLib ? [] : standardGlobals()
+        for (const name of [...LANGUAGE_GLOBALS, ...standard, ...options.builtinGlobals ?? []]) {
             const id = this.getOrCreateGlobalBinding(name)
             this.bindings.get(id)!.isBuiltin = true
         }
@@ -984,6 +991,10 @@ class Analyzer {
                 this.visitExpression(expr.expression, scope)
                 return
 
+            case "ImportExpression":
+                this.visitExpression(expr.source, scope)
+                return
+
             case "TypeAssertionExpression":
                 this.visitExpression(expr.expression, scope)
                 this.visitType((expr as { typeAnnotation?: TypeNode }).typeAnnotation, scope)
@@ -1022,6 +1033,9 @@ class Analyzer {
             case "TableFieldComputed":
                 this.visitExpression(field.key, scope)
                 this.visitExpression(field.value, scope)
+                return
+            case "TableFieldAccessor":
+                this.visitFunctionBody(field.func, scope)
                 return
         }
     }

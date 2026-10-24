@@ -2,14 +2,14 @@ c1: (number | nil)[]
 c2: (number | nil)[]
 c3: number | nil
 choose: (flag: boolean, o: Counter, other: Counter) => (Counter | number)[]
-connect: (host: string, timeout: number | nil, port: number | nil) => (number | nil)[]
+connect: (host: string, timeout: number | nil, port?: number) => (number | nil)[]
 describe: (n: number, flag: boolean) => string
 flag: boolean
 flag: boolean
 full: Config
 host: string
 host: string
-later: (host: string, port: number | nil) => number | nil
+later: (host: string, port?: number) => number | nil
 minimal: Config
 n: number
 o: Counter

@@ -12,11 +12,13 @@ import { analyzeTypes, moduleExports } from '@ast/analyzeTypes'
 export type { TypeAnalysis, AnalyzeTypesOptions, TypeDiagnostic, ModuleExports, ExportedType } from '@ast/analyzeTypes'
 export * from '@ast/typeModel'
 // The language's own utility types (`Partial`, `ReturnType`, ...) are built
-// in; see `PRELUDE_SOURCE`. No globals are — not even `print`. A project names
-// the type libraries it wants in `tilua.config.json` (`"types": ["roblox"]`), and
-// the project functions find and load them. See `findConfig` and
-// `resolveTypeLibraries`.
+// in; see `PRELUDE_SOURCE`. So is Lua's standard library — `print`, `pairs`,
+// `string` — as JavaScript's is in TypeScript; see `STANDARD_LIBRARY_SOURCE`.
+// A project names the type libraries it wants on top of it in
+// `tilua.config.json` (`"types": ["roblox"]`), and the project functions find
+// and load them. See `findConfig` and `resolveTypeLibraries`.
 export { PRELUDE_SOURCE } from '@ast/prelude'
+export { STANDARD_LIBRARY_SOURCE, standardLibrary, standardGlobals } from '@ast/standardLibrary'
 export {
     readDirectives, directivesOf, applyDirectives, UNUSED_EXPECT_ERROR,
     type Directive, type DirectiveKind, type Directives, type DirectiveOutcome,

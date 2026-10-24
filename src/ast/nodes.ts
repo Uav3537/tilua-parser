@@ -80,6 +80,9 @@ export interface ExportNamedStatement extends BaseNode {
     type: "ExportNamedStatement"
     specifiers: ExportSpecifier[]
     source?: StringLiteral
+    /** `export type { A }`: the names are types, and only types are
+     *  exported — compiled code keeps no trace of it. */
+    typeOnly?: boolean
 }
 
 /** `export * from "./x"` — every named export of another module (not its
@@ -428,6 +431,9 @@ export interface CompoundAssignmentStatement extends BaseNode {
     operator: "+=" | "-=" | "*=" | "/=" | "//=" | "%=" | "^=" | "..="
     target: Expression
     value: Expression
+    /** Written `n++` / `n--`: the same statement as `n += 1` / `n -= 1`,
+     *  whose `value` is then a `1` spanning the operator. */
+    postfix?: "++" | "--"
 }
 
 export interface CallStatement extends BaseNode {
@@ -517,6 +523,17 @@ export interface TypeAliasStatement extends BaseNode {
     name: Identifier
     generics: GenericTypeParameter[]
     definition: TypeNode
+    /** Written `interface Name extends A, B { ... }`. The alias is then the
+     *  bases and the body together — `definition` is `A & B & { ... }` — and
+     *  two interfaces of one name are one, their members merged. */
+    interface?: InterfaceParts
+}
+
+/** What an `interface` was written as: the shapes it extends, and its own
+ *  members. */
+export interface InterfaceParts {
+    extends: TypeReference[]
+    body: TableTypeNode
 }
 
 export interface ExportTypeAliasStatement extends BaseNode {
@@ -535,6 +552,10 @@ export interface GenericTypeParameter extends BaseNode {
     /** `<T extends C>` upper bound (TS style). */
     constraint?: TypeNode
     default?: TypeNode
+    /** `<out T>`, `<in T>`, `<in out T>`: how the type compares by `T` —
+     *  `out` as `T` does, `in` the other way round, both only when equal.
+     *  Checked against how the body uses `T`. */
+    variance?: "in" | "out" | "in out"
 }
 
 // ============================================================
@@ -561,6 +582,7 @@ export type Expression =
     | ClassExpression
     | SpreadElement
     | ParenthesizedExpression
+    | ImportExpression
     | TypeAssertionExpression
     | SatisfiesExpression
     | AsConstExpression
@@ -678,6 +700,10 @@ export type TableField =
     | { type: "TableFieldShorthand"; name: Identifier }
     /** `{ ...expr }` — JS object spread. */
     | { type: "TableFieldSpread"; argument: Expression }
+    /** `{ get name() { ... } }` / `{ set name(v) { ... } }` — read as a
+     *  property, run as a function. `func` takes the object as `this`, an
+     *  implicit first parameter, as a class method does. */
+    | { type: "TableFieldAccessor"; kind: "get" | "set"; key: Identifier | StringLiteral; func: FunctionBody } & BaseNode
 
 /** `{ a: 1, [k]: v }` — object literal (Luau `{}` narrowed to objects only). */
 export interface TableExpression extends BaseNode {
@@ -707,6 +733,11 @@ export const BinaryOperators = [
     "+", "-", "*", "/", "//", "%", "^", "..",
     "==", "~=", "<", ">", "<=", ">=",
     "and", "or",
+    // `a ?? b` is `b` only where `a` is nil — unlike `or`, a `false` stays.
+    "??",
+    // `"key" in t` asks whether `t` holds something at `key`; `v instanceof
+    // C` whether `v` was built by `C` or a class extending it.
+    "in", "instanceof",
 ] as const
 
 export interface BinaryExpression extends BaseNode {
@@ -776,6 +807,16 @@ export interface MethodCallExpression extends BaseNode {
     optional?: boolean
 }
 
+/** `import("./module")` — the module's exports as one value, the one
+ *  `import * as M from "./module"` would name `M`, read where the expression
+ *  runs instead of before the file does. The module is loaded the first time
+ *  anything asks for it. `source` has to be a string literal: which module it
+ *  is must be known when the project is built. */
+export interface ImportExpression extends BaseNode {
+    type: "ImportExpression"
+    source: Expression
+}
+
 export interface ParenthesizedExpression extends BaseNode {
     type: "ParenthesizedExpression"
     expression: Expression
@@ -831,20 +872,7 @@ export type TypeNode =
     | InferTypeNode
     | MappedTypeNode
     | TemplateLiteralTypeNode
-    | DifferenceTypeNode
-
-/** `A - B` — every value of `A` that is not a `B`. Binds tighter than `|`
- *  and looser than `&`, so `A | B - C` is `A | (B - C)`.
- *
- *  Mostly it simplifies away (a union drops members; `string - "a"` is just
- *  `string`), but over an opaque type it is retained — which is what lets the
- *  `else` of `if a == 1` on an `unknown` say `unknown - 1` instead of
- *  forgetting the test. `Exclude<T, U>` is defined as `T - U`. */
-export interface DifferenceTypeNode extends BaseNode {
-    type: "DifferenceTypeNode"
-    base: TypeNode
-    excluded: TypeNode
-}
+    | RestTypeNode
 
 /** A template literal type: `` `on${string}` ``, `` `get${K}` ``.
  *  `quasis` are the literal chunks and `types` the interpolated types;
@@ -890,6 +918,15 @@ export interface InferTypeNode extends BaseNode {
     name: string
     /** The bound name as a node. */
     id?: Identifier
+    /** `infer N extends number`: what matched only counts if it is one — and
+     *  out of a template literal, `"42"` read as a `number` is `42`. */
+    constraint?: TypeNode
+}
+
+/** `...T` inside a tuple type: the elements of `T`, in its place. */
+export interface RestTypeNode extends BaseNode {
+    type: "RestTypeNode"
+    typeAnnotation: TypeNode
 }
 
 /** `{ [K in C]: V }` — a mapped type. `optional` / `readonly` carry the
@@ -958,11 +995,21 @@ export type TableTypeProperty =
     /** `name: T` (required) or `name?: T` (optional — TS style, the property
      *  may be absent). `optional` reflects the `?` after the name only;
      *  `name: T | nil` is a required property whose value may be nil. */
-    | ({ type: "TableTypeProperty"; name: string; key: Identifier; valueType: TypeNode; optional: boolean; readonly?: boolean } & BaseNode)
+    | ({ type: "TableTypeProperty"; name: string; key: Identifier; valueType: TypeNode; optional: boolean; readonly?: boolean
+        /** Written as a method, `name(x: T): R`: `valueType` is the function,
+         *  its receiver first — `(self: this, x: T) => R`. */
+        method?: boolean
+        /** Written as `get name(): T` / `set name(v: T)`: what the property
+         *  holds. A getter without a setter is read-only. */
+        accessor?: "get" | "set" | "both" } & BaseNode)
 
 export interface TableTypeNode extends BaseNode {
     type: "TableTypeNode"
     properties: TableTypeProperty[]
+    /** `{ (x: number): string }` — what calling a value of this type does.
+     *  Several are overloads. The type is then these functions together
+     *  with the properties. */
+    callSignatures?: FunctionTypeNode[]
 }
 
 /** `T[]` — array type. Replaces Luau's `{T}` array-table notation. */
@@ -974,14 +1021,22 @@ export interface ArrayTypeNode extends BaseNode {
 }
 
 /** `[number, string]` — a tuple type; `[string, ...number[]]` ends in a rest
- *  of as many more as there are. */
+ *  of as many more as there are. A spread of anything else — `[...T, U]`, a
+ *  type parameter or another tuple — stays among `elements` as a
+ *  `RestTypeNode`, and is laid out once what it spreads is known. */
 export interface TupleTypeNode extends BaseNode {
     type: "TupleTypeNode"
     elements: TypeNode[]
+    /** `[x: number, y: number]` — the name each element was written with,
+     *  where it was. Display only. */
+    labels?: (string | undefined)[]
     /** `...number[]` at the end: the array type the rest of it is. */
     rest?: TypeNode
     /** `readonly [A, B]` — see `ArrayTypeNode.isReadonly`. */
     isReadonly?: boolean
+    /** `[A, B?]`, `[a: A, b?: B]`: which elements may be left out — each
+     *  then read as `T | nil`, which in Lua is the same thing. */
+    optional?: boolean[]
 }
 
 export interface FunctionTypeParameter extends BaseNode {

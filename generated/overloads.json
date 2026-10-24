@@ -80,7 +80,7 @@
               },
               "column": {
                 "start": 14,
-                "end": 35
+                "end": 15
               }
             }
           ],
@@ -104,9 +104,8 @@
               {
                 "type": "ReturnStatement",
                 "argument": {
-                  "type": "UnaryExpression",
-                  "operator": "#",
-                  "argument": {
+                  "type": "MemberExpression",
+                  "object": {
                     "type": "Identifier",
                     "name": "x",
                     "line": {
@@ -114,8 +113,20 @@
                       "end": 6
                     },
                     "column": {
-                      "start": 13,
-                      "end": 14
+                      "start": 12,
+                      "end": 13
+                    }
+                  },
+                  "property": {
+                    "type": "Identifier",
+                    "name": "length",
+                    "line": {
+                      "start": 6,
+                      "end": 6
+                    },
+                    "column": {
+                      "start": 14,
+                      "end": 20
                     }
                   },
                   "line": {
@@ -124,7 +135,7 @@
                   },
                   "column": {
                     "start": 12,
-                    "end": 14
+                    "end": 20
                   }
                 },
                 "line": {
@@ -133,7 +144,7 @@
                 },
                 "column": {
                   "start": 5,
-                  "end": 14
+                  "end": 20
                 }
               }
             ],
@@ -143,7 +154,7 @@
             },
             "column": {
               "start": 5,
-              "end": 14
+              "end": 20
             }
           },
           "line": {
@@ -182,7 +193,7 @@
                 },
                 "column": {
                   "start": 14,
-                  "end": 23
+                  "end": 15
                 }
               }
             ],
@@ -258,7 +269,7 @@
                 },
                 "column": {
                   "start": 14,
-                  "end": 26
+                  "end": 15
                 }
               }
             ],
@@ -423,7 +434,7 @@
                 },
                 "column": {
                   "start": 18,
-                  "end": 27
+                  "end": 19
                 }
               }
             ],
@@ -499,7 +510,7 @@
                 },
                 "column": {
                   "start": 18,
-                  "end": 29
+                  "end": 19
                 }
               }
             ],

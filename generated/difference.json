@@ -9,8 +9,8 @@
           "type": "Identifier",
           "name": "classify",
           "line": {
-            "start": 14,
-            "end": 14
+            "start": 16,
+            "end": 16
           },
           "column": {
             "start": 10,
@@ -29,8 +29,8 @@
                 "base": "unknown",
                 "typeArguments": [],
                 "line": {
-                  "start": 14,
-                  "end": 14
+                  "start": 16,
+                  "end": 16
                 },
                 "column": {
                   "start": 22,
@@ -38,12 +38,12 @@
                 }
               },
               "line": {
-                "start": 14,
-                "end": 14
+                "start": 16,
+                "end": 16
               },
               "column": {
                 "start": 19,
-                "end": 29
+                "end": 20
               }
             }
           ],
@@ -63,8 +63,8 @@
                         "type": "Identifier",
                         "name": "a",
                         "line": {
-                          "start": 15,
-                          "end": 15
+                          "start": 17,
+                          "end": 17
                         },
                         "column": {
                           "start": 9,
@@ -76,8 +76,8 @@
                         "value": 1,
                         "raw": "1",
                         "line": {
-                          "start": 15,
-                          "end": 15
+                          "start": 17,
+                          "end": 17
                         },
                         "column": {
                           "start": 14,
@@ -85,8 +85,8 @@
                         }
                       },
                       "line": {
-                        "start": 15,
-                        "end": 15
+                        "start": 17,
+                        "end": 17
                       },
                       "column": {
                         "start": 9,
@@ -103,8 +103,8 @@
                             "type": "IdentifierPattern",
                             "name": "one",
                             "line": {
-                              "start": 16,
-                              "end": 16
+                              "start": 18,
+                              "end": 18
                             },
                             "column": {
                               "start": 15,
@@ -114,8 +114,8 @@
                               "type": "TypeLiteralNumber",
                               "value": 1,
                               "line": {
-                                "start": 16,
-                                "end": 16
+                                "start": 18,
+                                "end": 18
                               },
                               "column": {
                                 "start": 20,
@@ -127,8 +127,8 @@
                             "type": "Identifier",
                             "name": "a",
                             "line": {
-                              "start": 16,
-                              "end": 16
+                              "start": 18,
+                              "end": 18
                             },
                             "column": {
                               "start": 24,
@@ -136,8 +136,8 @@
                             }
                           },
                           "line": {
-                            "start": 16,
-                            "end": 16
+                            "start": 18,
+                            "end": 18
                           },
                           "column": {
                             "start": 9,
@@ -150,8 +150,8 @@
                             "type": "Identifier",
                             "name": "one",
                             "line": {
-                              "start": 17,
-                              "end": 17
+                              "start": 19,
+                              "end": 19
                             },
                             "column": {
                               "start": 16,
@@ -159,8 +159,8 @@
                             }
                           },
                           "line": {
-                            "start": 17,
-                            "end": 17
+                            "start": 19,
+                            "end": 19
                           },
                           "column": {
                             "start": 9,
@@ -169,8 +169,8 @@
                         }
                       ],
                       "line": {
-                        "start": 16,
-                        "end": 17
+                        "start": 18,
+                        "end": 19
                       },
                       "column": {
                         "start": 9,
@@ -178,8 +178,8 @@
                       }
                     },
                     "line": {
-                      "start": 15,
-                      "end": 18
+                      "start": 17,
+                      "end": 20
                     },
                     "column": {
                       "start": 8,
@@ -188,8 +188,8 @@
                   }
                 ],
                 "line": {
-                  "start": 15,
-                  "end": 18
+                  "start": 17,
+                  "end": 20
                 },
                 "column": {
                   "start": 5,
@@ -203,47 +203,50 @@
                   "type": "IdentifierPattern",
                   "name": "notOne",
                   "line": {
-                    "start": 20,
-                    "end": 20
+                    "start": 22,
+                    "end": 22
                   },
                   "column": {
                     "start": 11,
                     "end": 17
                   },
                   "typeAnnotation": {
-                    "type": "DifferenceTypeNode",
-                    "base": {
-                      "type": "TypeReference",
-                      "base": "unknown",
-                      "typeArguments": [],
-                      "line": {
-                        "start": 20,
-                        "end": 20
+                    "type": "TypeReference",
+                    "base": "Exclude",
+                    "typeArguments": [
+                      {
+                        "type": "TypeReference",
+                        "base": "unknown",
+                        "typeArguments": [],
+                        "line": {
+                          "start": 22,
+                          "end": 22
+                        },
+                        "column": {
+                          "start": 27,
+                          "end": 34
+                        }
                       },
-                      "column": {
-                        "start": 19,
-                        "end": 26
+                      {
+                        "type": "TypeLiteralNumber",
+                        "value": 1,
+                        "line": {
+                          "start": 22,
+                          "end": 22
+                        },
+                        "column": {
+                          "start": 36,
+                          "end": 37
+                        }
                       }
-                    },
-                    "excluded": {
-                      "type": "TypeLiteralNumber",
-                      "value": 1,
-                      "line": {
-                        "start": 20,
-                        "end": 20
-                      },
-                      "column": {
-                        "start": 29,
-                        "end": 30
-                      }
-                    },
+                    ],
                     "line": {
-                      "start": 20,
-                      "end": 20
+                      "start": 22,
+                      "end": 22
                     },
                     "column": {
                       "start": 19,
-                      "end": 30
+                      "end": 38
                     }
                   }
                 },
@@ -251,21 +254,21 @@
                   "type": "Identifier",
                   "name": "a",
                   "line": {
-                    "start": 20,
-                    "end": 20
+                    "start": 22,
+                    "end": 22
                   },
                   "column": {
-                    "start": 33,
-                    "end": 34
+                    "start": 41,
+                    "end": 42
                   }
                 },
                 "line": {
-                  "start": 20,
-                  "end": 20
+                  "start": 22,
+                  "end": 22
                 },
                 "column": {
                   "start": 5,
-                  "end": 34
+                  "end": 42
                 }
               },
               {
@@ -280,8 +283,8 @@
                         "type": "Identifier",
                         "name": "a",
                         "line": {
-                          "start": 23,
-                          "end": 23
+                          "start": 25,
+                          "end": 25
                         },
                         "column": {
                           "start": 9,
@@ -293,8 +296,8 @@
                         "value": 2,
                         "raw": "2",
                         "line": {
-                          "start": 23,
-                          "end": 23
+                          "start": 25,
+                          "end": 25
                         },
                         "column": {
                           "start": 14,
@@ -302,8 +305,8 @@
                         }
                       },
                       "line": {
-                        "start": 23,
-                        "end": 23
+                        "start": 25,
+                        "end": 25
                       },
                       "column": {
                         "start": 9,
@@ -320,8 +323,8 @@
                             "type": "IdentifierPattern",
                             "name": "two",
                             "line": {
-                              "start": 24,
-                              "end": 24
+                              "start": 26,
+                              "end": 26
                             },
                             "column": {
                               "start": 15,
@@ -332,8 +335,8 @@
                             "type": "Identifier",
                             "name": "a",
                             "line": {
-                              "start": 24,
-                              "end": 24
+                              "start": 26,
+                              "end": 26
                             },
                             "column": {
                               "start": 21,
@@ -341,8 +344,8 @@
                             }
                           },
                           "line": {
-                            "start": 24,
-                            "end": 24
+                            "start": 26,
+                            "end": 26
                           },
                           "column": {
                             "start": 9,
@@ -355,8 +358,8 @@
                             "type": "Identifier",
                             "name": "two",
                             "line": {
-                              "start": 25,
-                              "end": 25
+                              "start": 27,
+                              "end": 27
                             },
                             "column": {
                               "start": 16,
@@ -364,8 +367,8 @@
                             }
                           },
                           "line": {
-                            "start": 25,
-                            "end": 25
+                            "start": 27,
+                            "end": 27
                           },
                           "column": {
                             "start": 9,
@@ -374,8 +377,8 @@
                         }
                       ],
                       "line": {
-                        "start": 24,
-                        "end": 25
+                        "start": 26,
+                        "end": 27
                       },
                       "column": {
                         "start": 9,
@@ -383,8 +386,8 @@
                       }
                     },
                     "line": {
-                      "start": 23,
-                      "end": 26
+                      "start": 25,
+                      "end": 28
                     },
                     "column": {
                       "start": 8,
@@ -393,8 +396,8 @@
                   }
                 ],
                 "line": {
-                  "start": 23,
-                  "end": 26
+                  "start": 25,
+                  "end": 28
                 },
                 "column": {
                   "start": 5,
@@ -408,83 +411,75 @@
                   "type": "IdentifierPattern",
                   "name": "neither",
                   "line": {
-                    "start": 27,
-                    "end": 27
+                    "start": 29,
+                    "end": 29
                   },
                   "column": {
                     "start": 11,
                     "end": 18
                   },
                   "typeAnnotation": {
-                    "type": "DifferenceTypeNode",
-                    "base": {
-                      "type": "TypeReference",
-                      "base": "unknown",
-                      "typeArguments": [],
-                      "line": {
-                        "start": 27,
-                        "end": 27
+                    "type": "TypeReference",
+                    "base": "Exclude",
+                    "typeArguments": [
+                      {
+                        "type": "TypeReference",
+                        "base": "unknown",
+                        "typeArguments": [],
+                        "line": {
+                          "start": 29,
+                          "end": 29
+                        },
+                        "column": {
+                          "start": 28,
+                          "end": 35
+                        }
                       },
-                      "column": {
-                        "start": 20,
-                        "end": 27
-                      }
-                    },
-                    "excluded": {
-                      "type": "ParenthesizedTypeNode",
-                      "typeAnnotation": {
+                      {
                         "type": "UnionTypeNode",
                         "types": [
                           {
                             "type": "TypeLiteralNumber",
                             "value": 1,
                             "line": {
-                              "start": 27,
-                              "end": 27
+                              "start": 29,
+                              "end": 29
                             },
                             "column": {
-                              "start": 31,
-                              "end": 32
+                              "start": 37,
+                              "end": 38
                             }
                           },
                           {
                             "type": "TypeLiteralNumber",
                             "value": 2,
                             "line": {
-                              "start": 27,
-                              "end": 27
+                              "start": 29,
+                              "end": 29
                             },
                             "column": {
-                              "start": 35,
-                              "end": 36
+                              "start": 41,
+                              "end": 42
                             }
                           }
                         ],
                         "line": {
-                          "start": 27,
-                          "end": 27
+                          "start": 29,
+                          "end": 29
                         },
                         "column": {
-                          "start": 31,
-                          "end": 36
+                          "start": 37,
+                          "end": 42
                         }
-                      },
-                      "line": {
-                        "start": 27,
-                        "end": 27
-                      },
-                      "column": {
-                        "start": 30,
-                        "end": 37
                       }
-                    },
+                    ],
                     "line": {
-                      "start": 27,
-                      "end": 27
+                      "start": 29,
+                      "end": 29
                     },
                     "column": {
                       "start": 20,
-                      "end": 37
+                      "end": 43
                     }
                   }
                 },
@@ -492,21 +487,21 @@
                   "type": "Identifier",
                   "name": "a",
                   "line": {
-                    "start": 27,
-                    "end": 27
+                    "start": 29,
+                    "end": 29
                   },
                   "column": {
-                    "start": 40,
-                    "end": 41
+                    "start": 46,
+                    "end": 47
                   }
                 },
                 "line": {
-                  "start": 27,
-                  "end": 27
+                  "start": 29,
+                  "end": 29
                 },
                 "column": {
                   "start": 5,
-                  "end": 41
+                  "end": 47
                 }
               },
               {
@@ -516,8 +511,8 @@
                   "value": 0,
                   "raw": "0",
                   "line": {
-                    "start": 28,
-                    "end": 28
+                    "start": 30,
+                    "end": 30
                   },
                   "column": {
                     "start": 12,
@@ -525,8 +520,8 @@
                   }
                 },
                 "line": {
-                  "start": 28,
-                  "end": 28
+                  "start": 30,
+                  "end": 30
                 },
                 "column": {
                   "start": 5,
@@ -535,8 +530,8 @@
               }
             ],
             "line": {
-              "start": 15,
-              "end": 28
+              "start": 17,
+              "end": 30
             },
             "column": {
               "start": 5,
@@ -544,8 +539,8 @@
             }
           },
           "line": {
-            "start": 14,
-            "end": 29
+            "start": 16,
+            "end": 31
           },
           "column": {
             "start": 18,
@@ -553,8 +548,8 @@
           }
         },
         "line": {
-          "start": 14,
-          "end": 29
+          "start": 16,
+          "end": 31
         },
         "column": {
           "start": 1,
@@ -567,8 +562,8 @@
           "type": "Identifier",
           "name": "truthiness",
           "line": {
-            "start": 33,
-            "end": 33
+            "start": 35,
+            "end": 35
           },
           "column": {
             "start": 10,
@@ -587,8 +582,8 @@
                 "base": "unknown",
                 "typeArguments": [],
                 "line": {
-                  "start": 33,
-                  "end": 33
+                  "start": 35,
+                  "end": 35
                 },
                 "column": {
                   "start": 24,
@@ -596,12 +591,12 @@
                 }
               },
               "line": {
-                "start": 33,
-                "end": 33
+                "start": 35,
+                "end": 35
               },
               "column": {
                 "start": 21,
-                "end": 31
+                "end": 22
               }
             }
           ],
@@ -618,8 +613,8 @@
                       "type": "Identifier",
                       "name": "b",
                       "line": {
-                        "start": 34,
-                        "end": 34
+                        "start": 36,
+                        "end": 36
                       },
                       "column": {
                         "start": 9,
@@ -636,31 +631,31 @@
                             "type": "IdentifierPattern",
                             "name": "kept",
                             "line": {
-                              "start": 35,
-                              "end": 35
+                              "start": 37,
+                              "end": 37
                             },
                             "column": {
                               "start": 15,
                               "end": 19
                             },
                             "typeAnnotation": {
-                              "type": "DifferenceTypeNode",
-                              "base": {
-                                "type": "TypeReference",
-                                "base": "unknown",
-                                "typeArguments": [],
-                                "line": {
-                                  "start": 35,
-                                  "end": 35
+                              "type": "TypeReference",
+                              "base": "Exclude",
+                              "typeArguments": [
+                                {
+                                  "type": "TypeReference",
+                                  "base": "unknown",
+                                  "typeArguments": [],
+                                  "line": {
+                                    "start": 37,
+                                    "end": 37
+                                  },
+                                  "column": {
+                                    "start": 29,
+                                    "end": 36
+                                  }
                                 },
-                                "column": {
-                                  "start": 21,
-                                  "end": 28
-                                }
-                              },
-                              "excluded": {
-                                "type": "ParenthesizedTypeNode",
-                                "typeAnnotation": {
+                                {
                                   "type": "UnionTypeNode",
                                   "types": [
                                     {
@@ -668,52 +663,44 @@
                                       "base": "nil",
                                       "typeArguments": [],
                                       "line": {
-                                        "start": 35,
-                                        "end": 35
+                                        "start": 37,
+                                        "end": 37
                                       },
                                       "column": {
-                                        "start": 32,
-                                        "end": 35
+                                        "start": 38,
+                                        "end": 41
                                       }
                                     },
                                     {
                                       "type": "TypeLiteralBoolean",
                                       "value": false,
                                       "line": {
-                                        "start": 35,
-                                        "end": 35
+                                        "start": 37,
+                                        "end": 37
                                       },
                                       "column": {
-                                        "start": 38,
-                                        "end": 43
+                                        "start": 44,
+                                        "end": 49
                                       }
                                     }
                                   ],
                                   "line": {
-                                    "start": 35,
-                                    "end": 35
+                                    "start": 37,
+                                    "end": 37
                                   },
                                   "column": {
-                                    "start": 32,
-                                    "end": 43
+                                    "start": 38,
+                                    "end": 49
                                   }
-                                },
-                                "line": {
-                                  "start": 35,
-                                  "end": 35
-                                },
-                                "column": {
-                                  "start": 31,
-                                  "end": 44
                                 }
-                              },
+                              ],
                               "line": {
-                                "start": 35,
-                                "end": 35
+                                "start": 37,
+                                "end": 37
                               },
                               "column": {
                                 "start": 21,
-                                "end": 44
+                                "end": 50
                               }
                             }
                           },
@@ -721,21 +708,21 @@
                             "type": "Identifier",
                             "name": "b",
                             "line": {
-                              "start": 35,
-                              "end": 35
+                              "start": 37,
+                              "end": 37
                             },
                             "column": {
-                              "start": 47,
-                              "end": 48
+                              "start": 53,
+                              "end": 54
                             }
                           },
                           "line": {
-                            "start": 35,
-                            "end": 35
+                            "start": 37,
+                            "end": 37
                           },
                           "column": {
                             "start": 9,
-                            "end": 48
+                            "end": 54
                           }
                         },
                         {
@@ -744,8 +731,8 @@
                             "type": "Identifier",
                             "name": "kept",
                             "line": {
-                              "start": 36,
-                              "end": 36
+                              "start": 38,
+                              "end": 38
                             },
                             "column": {
                               "start": 16,
@@ -753,8 +740,8 @@
                             }
                           },
                           "line": {
-                            "start": 36,
-                            "end": 36
+                            "start": 38,
+                            "end": 38
                           },
                           "column": {
                             "start": 9,
@@ -763,8 +750,8 @@
                         }
                       ],
                       "line": {
-                        "start": 35,
-                        "end": 36
+                        "start": 37,
+                        "end": 38
                       },
                       "column": {
                         "start": 9,
@@ -772,8 +759,8 @@
                       }
                     },
                     "line": {
-                      "start": 34,
-                      "end": 37
+                      "start": 36,
+                      "end": 39
                     },
                     "column": {
                       "start": 8,
@@ -782,8 +769,8 @@
                   }
                 ],
                 "line": {
-                  "start": 34,
-                  "end": 37
+                  "start": 36,
+                  "end": 39
                 },
                 "column": {
                   "start": 5,
@@ -797,8 +784,8 @@
                   "type": "IdentifierPattern",
                   "name": "gone",
                   "line": {
-                    "start": 38,
-                    "end": 38
+                    "start": 40,
+                    "end": 40
                   },
                   "column": {
                     "start": 11,
@@ -812,8 +799,8 @@
                         "base": "nil",
                         "typeArguments": [],
                         "line": {
-                          "start": 38,
-                          "end": 38
+                          "start": 40,
+                          "end": 40
                         },
                         "column": {
                           "start": 17,
@@ -824,8 +811,8 @@
                         "type": "TypeLiteralBoolean",
                         "value": false,
                         "line": {
-                          "start": 38,
-                          "end": 38
+                          "start": 40,
+                          "end": 40
                         },
                         "column": {
                           "start": 23,
@@ -834,8 +821,8 @@
                       }
                     ],
                     "line": {
-                      "start": 38,
-                      "end": 38
+                      "start": 40,
+                      "end": 40
                     },
                     "column": {
                       "start": 17,
@@ -847,8 +834,8 @@
                   "type": "Identifier",
                   "name": "b",
                   "line": {
-                    "start": 38,
-                    "end": 38
+                    "start": 40,
+                    "end": 40
                   },
                   "column": {
                     "start": 31,
@@ -856,8 +843,8 @@
                   }
                 },
                 "line": {
-                  "start": 38,
-                  "end": 38
+                  "start": 40,
+                  "end": 40
                 },
                 "column": {
                   "start": 5,
@@ -870,8 +857,8 @@
                   "type": "Identifier",
                   "name": "gone",
                   "line": {
-                    "start": 39,
-                    "end": 39
+                    "start": 41,
+                    "end": 41
                   },
                   "column": {
                     "start": 12,
@@ -879,8 +866,8 @@
                   }
                 },
                 "line": {
-                  "start": 39,
-                  "end": 39
+                  "start": 41,
+                  "end": 41
                 },
                 "column": {
                   "start": 5,
@@ -889,8 +876,8 @@
               }
             ],
             "line": {
-              "start": 34,
-              "end": 39
+              "start": 36,
+              "end": 41
             },
             "column": {
               "start": 5,
@@ -898,8 +885,8 @@
             }
           },
           "line": {
-            "start": 33,
-            "end": 40
+            "start": 35,
+            "end": 42
           },
           "column": {
             "start": 20,
@@ -907,8 +894,8 @@
           }
         },
         "line": {
-          "start": 33,
-          "end": 40
+          "start": 35,
+          "end": 42
         },
         "column": {
           "start": 1,
@@ -921,8 +908,8 @@
           "type": "Identifier",
           "name": "refine",
           "line": {
-            "start": 43,
-            "end": 43
+            "start": 45,
+            "end": 45
           },
           "column": {
             "start": 10,
@@ -941,8 +928,8 @@
                 "base": "unknown",
                 "typeArguments": [],
                 "line": {
-                  "start": 43,
-                  "end": 43
+                  "start": 45,
+                  "end": 45
                 },
                 "column": {
                   "start": 20,
@@ -950,12 +937,12 @@
                 }
               },
               "line": {
-                "start": 43,
-                "end": 43
+                "start": 45,
+                "end": 45
               },
               "column": {
                 "start": 17,
-                "end": 27
+                "end": 18
               }
             }
           ],
@@ -975,8 +962,8 @@
                         "type": "Identifier",
                         "name": "v",
                         "line": {
-                          "start": 44,
-                          "end": 44
+                          "start": 46,
+                          "end": 46
                         },
                         "column": {
                           "start": 9,
@@ -986,8 +973,8 @@
                       "right": {
                         "type": "NilLiteral",
                         "line": {
-                          "start": 44,
-                          "end": 44
+                          "start": 46,
+                          "end": 46
                         },
                         "column": {
                           "start": 14,
@@ -995,8 +982,8 @@
                         }
                       },
                       "line": {
-                        "start": 44,
-                        "end": 44
+                        "start": 46,
+                        "end": 46
                       },
                       "column": {
                         "start": 9,
@@ -1013,48 +1000,51 @@
                             "type": "IdentifierPattern",
                             "name": "present",
                             "line": {
-                              "start": 45,
-                              "end": 45
+                              "start": 47,
+                              "end": 47
                             },
                             "column": {
                               "start": 15,
                               "end": 22
                             },
                             "typeAnnotation": {
-                              "type": "DifferenceTypeNode",
-                              "base": {
-                                "type": "TypeReference",
-                                "base": "unknown",
-                                "typeArguments": [],
-                                "line": {
-                                  "start": 45,
-                                  "end": 45
+                              "type": "TypeReference",
+                              "base": "Exclude",
+                              "typeArguments": [
+                                {
+                                  "type": "TypeReference",
+                                  "base": "unknown",
+                                  "typeArguments": [],
+                                  "line": {
+                                    "start": 47,
+                                    "end": 47
+                                  },
+                                  "column": {
+                                    "start": 32,
+                                    "end": 39
+                                  }
                                 },
-                                "column": {
-                                  "start": 24,
-                                  "end": 31
+                                {
+                                  "type": "TypeReference",
+                                  "base": "nil",
+                                  "typeArguments": [],
+                                  "line": {
+                                    "start": 47,
+                                    "end": 47
+                                  },
+                                  "column": {
+                                    "start": 41,
+                                    "end": 44
+                                  }
                                 }
-                              },
-                              "excluded": {
-                                "type": "TypeReference",
-                                "base": "nil",
-                                "typeArguments": [],
-                                "line": {
-                                  "start": 45,
-                                  "end": 45
-                                },
-                                "column": {
-                                  "start": 34,
-                                  "end": 37
-                                }
-                              },
+                              ],
                               "line": {
-                                "start": 45,
-                                "end": 45
+                                "start": 47,
+                                "end": 47
                               },
                               "column": {
                                 "start": 24,
-                                "end": 37
+                                "end": 45
                               }
                             }
                           },
@@ -1062,21 +1052,21 @@
                             "type": "Identifier",
                             "name": "v",
                             "line": {
-                              "start": 45,
-                              "end": 45
+                              "start": 47,
+                              "end": 47
                             },
                             "column": {
-                              "start": 40,
-                              "end": 41
+                              "start": 48,
+                              "end": 49
                             }
                           },
                           "line": {
-                            "start": 45,
-                            "end": 45
+                            "start": 47,
+                            "end": 47
                           },
                           "column": {
                             "start": 9,
-                            "end": 41
+                            "end": 49
                           }
                         },
                         {
@@ -1085,8 +1075,8 @@
                             "type": "Identifier",
                             "name": "present",
                             "line": {
-                              "start": 46,
-                              "end": 46
+                              "start": 48,
+                              "end": 48
                             },
                             "column": {
                               "start": 16,
@@ -1094,8 +1084,8 @@
                             }
                           },
                           "line": {
-                            "start": 46,
-                            "end": 46
+                            "start": 48,
+                            "end": 48
                           },
                           "column": {
                             "start": 9,
@@ -1104,8 +1094,8 @@
                         }
                       ],
                       "line": {
-                        "start": 45,
-                        "end": 46
+                        "start": 47,
+                        "end": 48
                       },
                       "column": {
                         "start": 9,
@@ -1113,8 +1103,8 @@
                       }
                     },
                     "line": {
-                      "start": 44,
-                      "end": 47
+                      "start": 46,
+                      "end": 49
                     },
                     "column": {
                       "start": 8,
@@ -1123,8 +1113,8 @@
                   }
                 ],
                 "line": {
-                  "start": 44,
-                  "end": 47
+                  "start": 46,
+                  "end": 49
                 },
                 "column": {
                   "start": 5,
@@ -1138,8 +1128,8 @@
                   "value": 0,
                   "raw": "0",
                   "line": {
-                    "start": 48,
-                    "end": 48
+                    "start": 50,
+                    "end": 50
                   },
                   "column": {
                     "start": 12,
@@ -1147,8 +1137,8 @@
                   }
                 },
                 "line": {
-                  "start": 48,
-                  "end": 48
+                  "start": 50,
+                  "end": 50
                 },
                 "column": {
                   "start": 5,
@@ -1157,8 +1147,8 @@
               }
             ],
             "line": {
-              "start": 44,
-              "end": 48
+              "start": 46,
+              "end": 50
             },
             "column": {
               "start": 5,
@@ -1166,8 +1156,8 @@
             }
           },
           "line": {
-            "start": 43,
-            "end": 49
+            "start": 45,
+            "end": 51
           },
           "column": {
             "start": 16,
@@ -1175,8 +1165,8 @@
           }
         },
         "line": {
-          "start": 43,
-          "end": 49
+          "start": 45,
+          "end": 51
         },
         "column": {
           "start": 1,
@@ -1190,8 +1180,8 @@
           "type": "IdentifierPattern",
           "name": "fromUnion",
           "line": {
-            "start": 53,
-            "end": 53
+            "start": 55,
+            "end": 55
           },
           "column": {
             "start": 7,
@@ -1204,8 +1194,8 @@
                 "type": "TypeLiteralString",
                 "value": "a",
                 "line": {
-                  "start": 53,
-                  "end": 53
+                  "start": 55,
+                  "end": 55
                 },
                 "column": {
                   "start": 18,
@@ -1216,8 +1206,8 @@
                 "type": "TypeLiteralString",
                 "value": "c",
                 "line": {
-                  "start": 53,
-                  "end": 53
+                  "start": 55,
+                  "end": 55
                 },
                 "column": {
                   "start": 24,
@@ -1226,8 +1216,8 @@
               }
             ],
             "line": {
-              "start": 53,
-              "end": 53
+              "start": 55,
+              "end": 55
             },
             "column": {
               "start": 18,
@@ -1242,8 +1232,8 @@
             "value": "a",
             "raw": "\"a\"",
             "line": {
-              "start": 53,
-              "end": 53
+              "start": 55,
+              "end": 55
             },
             "column": {
               "start": 30,
@@ -1251,115 +1241,96 @@
             }
           },
           "typeAnnotation": {
-            "type": "ParenthesizedTypeNode",
-            "typeAnnotation": {
-              "type": "DifferenceTypeNode",
-              "base": {
-                "type": "ParenthesizedTypeNode",
-                "typeAnnotation": {
-                  "type": "UnionTypeNode",
-                  "types": [
-                    {
-                      "type": "TypeLiteralString",
-                      "value": "a",
-                      "line": {
-                        "start": 53,
-                        "end": 53
-                      },
-                      "column": {
-                        "start": 39,
-                        "end": 42
-                      }
+            "type": "TypeReference",
+            "base": "Exclude",
+            "typeArguments": [
+              {
+                "type": "UnionTypeNode",
+                "types": [
+                  {
+                    "type": "TypeLiteralString",
+                    "value": "a",
+                    "line": {
+                      "start": 55,
+                      "end": 55
                     },
-                    {
-                      "type": "TypeLiteralString",
-                      "value": "b",
-                      "line": {
-                        "start": 53,
-                        "end": 53
-                      },
-                      "column": {
-                        "start": 45,
-                        "end": 48
-                      }
-                    },
-                    {
-                      "type": "TypeLiteralString",
-                      "value": "c",
-                      "line": {
-                        "start": 53,
-                        "end": 53
-                      },
-                      "column": {
-                        "start": 51,
-                        "end": 54
-                      }
+                    "column": {
+                      "start": 45,
+                      "end": 48
                     }
-                  ],
-                  "line": {
-                    "start": 53,
-                    "end": 53
                   },
-                  "column": {
-                    "start": 39,
-                    "end": 54
+                  {
+                    "type": "TypeLiteralString",
+                    "value": "b",
+                    "line": {
+                      "start": 55,
+                      "end": 55
+                    },
+                    "column": {
+                      "start": 51,
+                      "end": 54
+                    }
+                  },
+                  {
+                    "type": "TypeLiteralString",
+                    "value": "c",
+                    "line": {
+                      "start": 55,
+                      "end": 55
+                    },
+                    "column": {
+                      "start": 57,
+                      "end": 60
+                    }
                   }
-                },
+                ],
                 "line": {
-                  "start": 53,
-                  "end": 53
+                  "start": 55,
+                  "end": 55
                 },
                 "column": {
-                  "start": 38,
-                  "end": 55
+                  "start": 45,
+                  "end": 60
                 }
               },
-              "excluded": {
+              {
                 "type": "TypeLiteralString",
                 "value": "b",
                 "line": {
-                  "start": 53,
-                  "end": 53
+                  "start": 55,
+                  "end": 55
                 },
                 "column": {
-                  "start": 58,
-                  "end": 61
+                  "start": 62,
+                  "end": 65
                 }
-              },
-              "line": {
-                "start": 53,
-                "end": 53
-              },
-              "column": {
-                "start": 38,
-                "end": 61
               }
-            },
+            ],
             "line": {
-              "start": 53,
-              "end": 53
+              "start": 55,
+              "end": 55
             },
             "column": {
               "start": 37,
-              "end": 62
+              "end": 66
             }
           },
           "line": {
-            "start": 53,
-            "end": 53
+            "start": 55,
+            "end": 55
           },
           "column": {
             "start": 30,
-            "end": 62
+            "end": 66
           }
         },
         "line": {
-          "start": 53,
-          "end": 53
+          "start": 55,
+          "end": 55
         },
         "column": {
           "start": 1,
-          "end": 62
+          "end": 66
         }
       },
       {
@@ -1369,8 +1340,8 @@
           "type": "IdentifierPattern",
           "name": "stillString",
           "line": {
-            "start": 57,
-            "end": 57
+            "start": 59,
+            "end": 59
           },
           "column": {
             "start": 7,
@@ -1381,8 +1352,8 @@
             "base": "string",
             "typeArguments": [],
             "line": {
-              "start": 57,
-              "end": 57
+              "start": 59,
+              "end": 59
             },
             "column": {
               "start": 20,
@@ -1397,8 +1368,8 @@
             "value": "b",
             "raw": "\"b\"",
             "line": {
-              "start": 57,
-              "end": 57
+              "start": 59,
+              "end": 59
             },
             "column": {
               "start": 29,
@@ -1406,68 +1377,60 @@
             }
           },
           "typeAnnotation": {
-            "type": "ParenthesizedTypeNode",
-            "typeAnnotation": {
-              "type": "DifferenceTypeNode",
-              "base": {
+            "type": "TypeReference",
+            "base": "Exclude",
+            "typeArguments": [
+              {
                 "type": "TypeReference",
                 "base": "string",
                 "typeArguments": [],
                 "line": {
-                  "start": 57,
-                  "end": 57
+                  "start": 59,
+                  "end": 59
                 },
                 "column": {
-                  "start": 37,
-                  "end": 43
+                  "start": 44,
+                  "end": 50
                 }
               },
-              "excluded": {
+              {
                 "type": "TypeLiteralString",
                 "value": "a",
                 "line": {
-                  "start": 57,
-                  "end": 57
+                  "start": 59,
+                  "end": 59
                 },
                 "column": {
-                  "start": 46,
-                  "end": 49
+                  "start": 52,
+                  "end": 55
                 }
-              },
-              "line": {
-                "start": 57,
-                "end": 57
-              },
-              "column": {
-                "start": 37,
-                "end": 49
               }
-            },
+            ],
             "line": {
-              "start": 57,
-              "end": 57
+              "start": 59,
+              "end": 59
             },
             "column": {
               "start": 36,
-              "end": 50
+              "end": 56
             }
           },
           "line": {
-            "start": 57,
-            "end": 57
+            "start": 59,
+            "end": 59
           },
           "column": {
             "start": 29,
-            "end": 50
+            "end": 56
           }
         },
         "line": {
-          "start": 57,
-          "end": 57
+          "start": 59,
+          "end": 59
         },
         "column": {
           "start": 1,
-          "end": 50
+          "end": 56
         }
       },
       {
@@ -1477,47 +1440,50 @@
           "type": "IdentifierPattern",
           "name": "stillOpaque",
           "line": {
-            "start": 60,
-            "end": 60
+            "start": 62,
+            "end": 62
           },
           "column": {
             "start": 7,
             "end": 18
           },
           "typeAnnotation": {
-            "type": "DifferenceTypeNode",
-            "base": {
-              "type": "TypeReference",
-              "base": "unknown",
-              "typeArguments": [],
-              "line": {
-                "start": 60,
-                "end": 60
+            "type": "TypeReference",
+            "base": "Exclude",
+            "typeArguments": [
+              {
+                "type": "TypeReference",
+                "base": "unknown",
+                "typeArguments": [],
+                "line": {
+                  "start": 62,
+                  "end": 62
+                },
+                "column": {
+                  "start": 28,
+                  "end": 35
+                }
               },
-              "column": {
-                "start": 20,
-                "end": 27
+              {
+                "type": "TypeLiteralNumber",
+                "value": 1,
+                "line": {
+                  "start": 62,
+                  "end": 62
+                },
+                "column": {
+                  "start": 37,
+                  "end": 38
+                }
               }
-            },
-            "excluded": {
-              "type": "TypeLiteralNumber",
-              "value": 1,
-              "line": {
-                "start": 60,
-                "end": 60
-              },
-              "column": {
-                "start": 30,
-                "end": 31
-              }
-            },
+            ],
             "line": {
-              "start": 60,
-              "end": 60
+              "start": 62,
+              "end": 62
             },
             "column": {
               "start": 20,
-              "end": 31
+              "end": 39
             }
           }
         },
@@ -1528,77 +1494,197 @@
             "value": 2,
             "raw": "2",
             "line": {
-              "start": 60,
-              "end": 60
+              "start": 62,
+              "end": 62
             },
             "column": {
-              "start": 34,
-              "end": 35
+              "start": 42,
+              "end": 43
             }
           },
           "typeAnnotation": {
-            "type": "ParenthesizedTypeNode",
-            "typeAnnotation": {
-              "type": "DifferenceTypeNode",
-              "base": {
+            "type": "TypeReference",
+            "base": "Exclude",
+            "typeArguments": [
+              {
                 "type": "TypeReference",
                 "base": "unknown",
                 "typeArguments": [],
                 "line": {
-                  "start": 60,
-                  "end": 60
+                  "start": 62,
+                  "end": 62
                 },
                 "column": {
-                  "start": 40,
-                  "end": 47
+                  "start": 55,
+                  "end": 62
                 }
               },
-              "excluded": {
+              {
                 "type": "TypeLiteralNumber",
                 "value": 1,
                 "line": {
-                  "start": 60,
-                  "end": 60
+                  "start": 62,
+                  "end": 62
                 },
                 "column": {
-                  "start": 50,
-                  "end": 51
+                  "start": 64,
+                  "end": 65
                 }
-              },
-              "line": {
-                "start": 60,
-                "end": 60
-              },
-              "column": {
-                "start": 40,
-                "end": 51
               }
-            },
+            ],
             "line": {
-              "start": 60,
-              "end": 60
+              "start": 62,
+              "end": 62
             },
             "column": {
-              "start": 39,
-              "end": 52
+              "start": 47,
+              "end": 66
             }
           },
           "line": {
-            "start": 60,
-            "end": 60
+            "start": 62,
+            "end": 62
           },
           "column": {
-            "start": 34,
-            "end": 52
+            "start": 42,
+            "end": 66
           }
         },
         "line": {
-          "start": 60,
-          "end": 60
+          "start": 62,
+          "end": 62
         },
         "column": {
           "start": 1,
-          "end": 52
+          "end": 66
+        }
+      },
+      {
+        "type": "VariableDeclaration",
+        "kind": "const",
+        "name": {
+          "type": "IdentifierPattern",
+          "name": "anyButNil",
+          "line": {
+            "start": 63,
+            "end": 63
+          },
+          "column": {
+            "start": 7,
+            "end": 16
+          },
+          "typeAnnotation": {
+            "type": "TypeReference",
+            "base": "Exclude",
+            "typeArguments": [
+              {
+                "type": "TypeReference",
+                "base": "any",
+                "typeArguments": [],
+                "line": {
+                  "start": 63,
+                  "end": 63
+                },
+                "column": {
+                  "start": 26,
+                  "end": 29
+                }
+              },
+              {
+                "type": "TypeReference",
+                "base": "nil",
+                "typeArguments": [],
+                "line": {
+                  "start": 63,
+                  "end": 63
+                },
+                "column": {
+                  "start": 31,
+                  "end": 34
+                }
+              }
+            ],
+            "line": {
+              "start": 63,
+              "end": 63
+            },
+            "column": {
+              "start": 18,
+              "end": 35
+            }
+          }
+        },
+        "init": {
+          "type": "TypeAssertionExpression",
+          "expression": {
+            "type": "NumberLiteral",
+            "value": 2,
+            "raw": "2",
+            "line": {
+              "start": 63,
+              "end": 63
+            },
+            "column": {
+              "start": 38,
+              "end": 39
+            }
+          },
+          "typeAnnotation": {
+            "type": "TypeReference",
+            "base": "Exclude",
+            "typeArguments": [
+              {
+                "type": "TypeReference",
+                "base": "any",
+                "typeArguments": [],
+                "line": {
+                  "start": 63,
+                  "end": 63
+                },
+                "column": {
+                  "start": 51,
+                  "end": 54
+                }
+              },
+              {
+                "type": "TypeReference",
+                "base": "nil",
+                "typeArguments": [],
+                "line": {
+                  "start": 63,
+                  "end": 63
+                },
+                "column": {
+                  "start": 56,
+                  "end": 59
+                }
+              }
+            ],
+            "line": {
+              "start": 63,
+              "end": 63
+            },
+            "column": {
+              "start": 43,
+              "end": 60
+            }
+          },
+          "line": {
+            "start": 63,
+            "end": 63
+          },
+          "column": {
+            "start": 38,
+            "end": 60
+          }
+        },
+        "line": {
+          "start": 63,
+          "end": 63
+        },
+        "column": {
+          "start": 1,
+          "end": 60
         }
       },
       {
@@ -1609,8 +1695,8 @@
             "type": "Identifier",
             "name": "print",
             "line": {
-              "start": 62,
-              "end": 62
+              "start": 65,
+              "end": 65
             },
             "column": {
               "start": 1,
@@ -1624,8 +1710,8 @@
                 "type": "Identifier",
                 "name": "classify",
                 "line": {
-                  "start": 62,
-                  "end": 62
+                  "start": 65,
+                  "end": 65
                 },
                 "column": {
                   "start": 7,
@@ -1638,8 +1724,8 @@
                   "value": 1,
                   "raw": "1",
                   "line": {
-                    "start": 62,
-                    "end": 62
+                    "start": 65,
+                    "end": 65
                   },
                   "column": {
                     "start": 16,
@@ -1648,8 +1734,8 @@
                 }
               ],
               "line": {
-                "start": 62,
-                "end": 62
+                "start": 65,
+                "end": 65
               },
               "column": {
                 "start": 7,
@@ -1662,8 +1748,8 @@
                 "type": "Identifier",
                 "name": "truthiness",
                 "line": {
-                  "start": 62,
-                  "end": 62
+                  "start": 65,
+                  "end": 65
                 },
                 "column": {
                   "start": 20,
@@ -1674,8 +1760,8 @@
                 {
                   "type": "NilLiteral",
                   "line": {
-                    "start": 62,
-                    "end": 62
+                    "start": 65,
+                    "end": 65
                   },
                   "column": {
                     "start": 31,
@@ -1684,8 +1770,8 @@
                 }
               ],
               "line": {
-                "start": 62,
-                "end": 62
+                "start": 65,
+                "end": 65
               },
               "column": {
                 "start": 20,
@@ -1698,8 +1784,8 @@
                 "type": "Identifier",
                 "name": "refine",
                 "line": {
-                  "start": 62,
-                  "end": 62
+                  "start": 65,
+                  "end": 65
                 },
                 "column": {
                   "start": 37,
@@ -1712,8 +1798,8 @@
                   "value": 2,
                   "raw": "2",
                   "line": {
-                    "start": 62,
-                    "end": 62
+                    "start": 65,
+                    "end": 65
                   },
                   "column": {
                     "start": 44,
@@ -1722,8 +1808,8 @@
                 }
               ],
               "line": {
-                "start": 62,
-                "end": 62
+                "start": 65,
+                "end": 65
               },
               "column": {
                 "start": 37,
@@ -1734,8 +1820,8 @@
               "type": "Identifier",
               "name": "fromUnion",
               "line": {
-                "start": 62,
-                "end": 62
+                "start": 65,
+                "end": 65
               },
               "column": {
                 "start": 48,
@@ -1746,8 +1832,8 @@
               "type": "Identifier",
               "name": "stillString",
               "line": {
-                "start": 62,
-                "end": 62
+                "start": 65,
+                "end": 65
               },
               "column": {
                 "start": 59,
@@ -1758,49 +1844,61 @@
               "type": "Identifier",
               "name": "stillOpaque",
               "line": {
-                "start": 62,
-                "end": 62
+                "start": 65,
+                "end": 65
               },
               "column": {
                 "start": 72,
                 "end": 83
               }
+            },
+            {
+              "type": "Identifier",
+              "name": "anyButNil",
+              "line": {
+                "start": 65,
+                "end": 65
+              },
+              "column": {
+                "start": 85,
+                "end": 94
+              }
             }
           ],
           "line": {
-            "start": 62,
-            "end": 62
+            "start": 65,
+            "end": 65
           },
           "column": {
             "start": 1,
-            "end": 84
+            "end": 95
           }
         },
         "line": {
-          "start": 62,
-          "end": 62
+          "start": 65,
+          "end": 65
         },
         "column": {
           "start": 1,
-          "end": 84
+          "end": 95
         }
       }
     ],
     "line": {
-      "start": 14,
-      "end": 62
+      "start": 16,
+      "end": 65
     },
     "column": {
       "start": 1,
-      "end": 84
+      "end": 95
     }
   },
   "line": {
-    "start": 14,
-    "end": 62
+    "start": 16,
+    "end": 65
   },
   "column": {
     "start": 1,
-    "end": 84
+    "end": 95
   }
 }

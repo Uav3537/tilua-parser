@@ -3,7 +3,7 @@
 function len(x: string): number
 function len(x: unknown[]): number
 function len(x: string | unknown[]): number {
-    return #x
+    return x.length
 }
 
 function reverse(x: string): string

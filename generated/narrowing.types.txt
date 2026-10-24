@@ -5,7 +5,7 @@ bag: Bag
 branches: (a: string | number) => nil
 cond: boolean
 config: { debug: boolean } | nil
-firstWord: (s: string | nil) => string
+firstWord: (s?: string) => string
 flag: boolean
 inOr: 1 | "x"
 mergePaths: (cond: boolean) => boolean

@@ -1,6 +1,6 @@
 entry: Pair
 frozen: { readonly mode: "debug", readonly retries: 3 }
-frozenList: [10, 20, 30]
+frozenList: readonly [10, 20, 30]
 grid: Matrix
 litNum: 5
 maybe: number | nil

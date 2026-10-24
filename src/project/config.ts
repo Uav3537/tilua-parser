@@ -31,10 +31,24 @@ export interface TiluaConfig {
      *  syntax for. The parser does not care — it is the compiler's to act on,
      *  and lives here because it belongs to the project. */
     readonly target: BuildTarget
+    /** How many files the compiler writes. `"single"` (the default) is one
+     *  file holding every module. `"chunks"` keeps what the entry imports in
+     *  the entry's file and writes what only an `import()` reaches to files of
+     *  their own, loaded when first asked for. `"modules"` writes one file per
+     *  module. Like `target`, it is the compiler's to act on. */
+    readonly output: OutputMode
+    /** Leave out Lua's standard library, which every file otherwise has the
+     *  way every TypeScript file has JavaScript's: `print`, `string`, `pcall`.
+     *  For a host that offers none of it, or a library of one's own in its
+     *  place. `false` unless set. */
+    readonly noLib: boolean
 }
 
 /** `"luau"` is Roblox's Lua. `"lua51"` is stock Lua 5.1. */
 export type BuildTarget = "luau" | "lua51"
+
+/** See `TiluaConfig.output`. */
+export type OutputMode = "single" | "chunks" | "modules"
 
 export interface ConfigProblem {
     /** The file the problem is about: a config file, or a sourcemap it names. */
@@ -79,8 +93,9 @@ export function findConfig(file: string, host: ProjectHost = nodeHost): ConfigLo
     }
 }
 
-const OPTIONS = ["types", "paths", "baseUrl", "sourceMap", "target"] as const
+const OPTIONS = ["types", "paths", "baseUrl", "sourceMap", "target", "output", "noLib"] as const
 const TARGETS = ["luau", "lua51"] as const
+const OUTPUTS = ["single", "chunks", "modules"] as const
 
 /** Read and check one config file. Problems do not stop the rest of it from
  *  applying: an unknown option is reported and the known ones still work. */
@@ -153,7 +168,22 @@ export function loadConfig(path: string, host: ProjectHost = nodeHost): { config
         }
     }
 
-    return { config: { path: file, directory, source, types, paths, baseUrl, sourceMap, target }, problems }
+    let output: OutputMode = "single"
+    if (options.output !== undefined) {
+        if (typeof options.output === "string" && (OUTPUTS as readonly string[]).includes(options.output)) {
+            output = options.output as OutputMode
+        } else {
+            problem("output", `'output' must be one of: ${OUTPUTS.join(", ")}`)
+        }
+    }
+
+    let noLib = false
+    if (options.noLib !== undefined) {
+        if (typeof options.noLib === "boolean") noLib = options.noLib
+        else problem("noLib", "'noLib' must be true or false")
+    }
+
+    return { config: { path: file, directory, source, types, paths, baseUrl, sourceMap, target, output, noLib }, problems }
 }
 
 /** Blank out `//` and `/* *\/` comments and trailing commas, keeping every

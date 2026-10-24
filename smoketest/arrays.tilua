@@ -19,6 +19,6 @@ function firstTwo(xs: number[]): number[] {
     return [xs[1], xs[2]]
 }
 
-print(#nums, #joined, #empty, matrix, mixed, firstTwo(nums))
+print(nums.length, joined.length, empty.length, matrix, mixed, firstTwo(nums))
 
 type A = typeof matrix

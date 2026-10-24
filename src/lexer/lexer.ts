@@ -40,6 +40,9 @@ export const Operators = [
     "+=", "-=", "*=", "/=", "//=", "%=", "^=", "..=",
     "==", "~=", "<=", ">=",
     "//", "..", "...",
+    // `a ?? b`, and `n++` / `n--` (see `startsDecrement` for how a `--`
+    // that ends a statement is told from a comment).
+    "??", "++", "--",
     "+", "-", "*", "/", "%", "^", "#",
     "<", ">", "=",
 ] as const
@@ -263,6 +266,18 @@ export function tokenize(source: string, options: TokenizeOptions = {}): Token[]
         }
     }
 
+    /** `n--` at the end of a statement is the decrement, not a comment
+     *  that starts there: the `--` touches the name (or the `]` of an index)
+     *  before it, and nothing but the end of the line, a `;`, a `}` or a
+     *  comment follows it. Anything else after it — `n-- note` — keeps
+     *  Lua's reading, a comment. */
+    function startsDecrement(): boolean {
+        const before = tokens[tokens.length - 1]
+        if (!before || before.line.end !== line || before.column.end !== column) return false
+        const touches = before.type === "Identifier" || (before.type === "Punctuator" && before.value === "]")
+        return touches && /^[ \t]*(\r?\n|$|;|\}|--)/.test(source.slice(cursor + 2, cursor + 2 + 200))
+    }
+
     function skipLineComment() {
         while (!isAtEnd() && peek() !== "\n") advance()
     }
@@ -275,6 +290,7 @@ export function tokenize(source: string, options: TokenizeOptions = {}): Token[]
                 continue
             }
             if (ch === "-" && peek(1) === "-") {
+                if (startsDecrement()) break
                 const startLine = line
                 const startColumn = column
                 advance()
@@ -328,7 +344,16 @@ export function tokenize(source: string, options: TokenizeOptions = {}): Token[]
             }
         }
 
-        const raw = source.slice(start, cursor)
+        // `10n`, `3px`: a name may not start inside a number. Lua reads the
+        // two apart and the letters as the next token, which says nothing
+        // about what went wrong; the whole word is the malformed number.
+        const end = cursor
+        if (isAlpha(peek())) {
+            while (!isAtEnd() && isAlphaNumeric(peek())) advance()
+            fail(`'${source.slice(start, cursor)}' is not a number`, startLine, startColumn)
+        }
+
+        const raw = source.slice(start, end)
         const cleaned = raw.replace(/_/g, "")
         let value: number
         if (/^0[xX]/.test(cleaned)) {

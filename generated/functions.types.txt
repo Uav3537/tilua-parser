@@ -19,7 +19,7 @@ firstName: string
 firstOf: <T>(...args: T[]) => T | nil
 firstTwo: (...args: number[]) => [number, number]
 forward: (...args: string[]) => string
-greet: (who: string, punct: string) => string
+greet: (who: string, punct?: string) => string
 hp: number
 items: T[]
 join: (separator: string, ...args: string[]) => string

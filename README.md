@@ -13,13 +13,12 @@ the same one either way.
 |---|---|
 | [`@tilua/compiler`][compiler] | building a project to one Luau file |
 | [`@tilua/language-server`][server] | editor support over LSP |
-| [`@tilua-types/roblox`][roblox], [`@tilua-types/lua`][lua], [`@tilua-types/sunc`][sunc] | the globals a project may use |
+| [`@tilua-types/roblox`][roblox], [`@tilua-types/sunc`][sunc] | the globals a project adds to Lua's |
 | `@tilua/parser` | this: tokens, AST, scopes, types |
 
 [compiler]: https://www.npmjs.com/package/@tilua/compiler
 [server]: https://www.npmjs.com/package/@tilua/language-server
 [roblox]: https://www.npmjs.com/package/@tilua-types/roblox
-[lua]: https://www.npmjs.com/package/@tilua-types/lua
 [sunc]: https://www.npmjs.com/package/@tilua-types/sunc
 [vscode]: https://marketplace.visualstudio.com/search?term=tilua
 
@@ -75,19 +74,23 @@ Neither analysis mutates the AST; both return side tables.
 
 ## Projects
 
-**No globals are built in** — not `print`, not `string`, not `game`. Only the
-language's own utility types are (`Partial`, `Pick`, `Omit`, `Record`,
-`ReturnType`, `Truthy`, ...; see `PRELUDE_SOURCE`). A project lists the type
-libraries it uses in `tilua.config.json`, the way TypeScript uses `@types/*`:
+**Lua's standard library is built in**, as JavaScript's is in TypeScript:
+`print`, `pairs`, `pcall`, `string`, `math`, `table`, `os`, `coroutine` and
+`console` are there in every file with nothing listed (see
+`STANDARD_LIBRARY_SOURCE`), and so are the language's own utility types
+(`Partial`, `Pick`, `Omit`, `Record`, `ReturnType`, `Truthy`, ...; see
+`PRELUDE_SOURCE`). What a host adds — Luau's and Roblox's `game`, `task`,
+`Instance` — a project lists in `tilua.config.json`, the way TypeScript uses
+`@types/*`:
 
 ```bash
-npm i -D @tilua-types/roblox        # Luau + Roblox; or @tilua-types/lua on its own
+npm i -D @tilua-types/roblox        # Luau + Roblox
 ```
 
 ```jsonc
 // tilua.config.json
 {
-  "types": ["roblox"],                          // and what it depends on: @tilua-types/lua
+  "types": ["roblox"],                          // on top of Lua's standard library
   "paths": { "@shared/*": ["src/shared/*"] },   // import aliases, as in tsconfig
   "sourceMap": "sourcemap.json"                 // a Rojo sourcemap, or null
 }
@@ -103,7 +106,13 @@ npm i -D @tilua-types/roblox        # Luau + Roblox; or @tilua-types/lua on its 
   matches every installed type library it fits (`"@tilua-types/*"`), in name
   order. A relative path (`"./types"`, `"./defs.d.tilua"`) loads the project's
   own definitions. A type library's own type-library dependencies load first;
-  one that is not installed is an error.
+  one that is not installed is an error. `"lua"` — `@tilua-types/lua`, where
+  the standard library used to be — loads nothing: it is already there, and
+  a library that still depends on it does not bring it in twice.
+- **`noLib`** — `true` leaves the standard library out, as TypeScript's
+  `noLib` does: no `print`, no `string`, only what `types` declares. For a
+  host with none of Lua's, or a library of one's own in its place. With it,
+  `"lua"` in `types` loads that package as an ordinary library.
 - **`paths`** — tsconfig rules: an exact pattern wins, then the `*` pattern
   with the longest prefix; targets resolve from `baseUrl` (default: the
   config's folder).
@@ -111,6 +120,11 @@ npm i -D @tilua-types/roblox        # Luau + Roblox; or @tilua-types/lua on its 
   follow it, and a file the tree maps gets its own `script`, so
   `script.Parent.Remotes` is typed. A `.tilua` file matches the Luau file of
   the same path.
+- **`target`** and **`output`** — the compiler's: which Lua to emit for
+  (`"luau"`, the default, or `"lua51"`), and how many files to write
+  (`"single"`, the default; `"chunks"`, which also writes a file for what only
+  an `import()` reaches; or `"modules"`, one file per module). The parser only
+  checks them.
 
 | function | does |
 |---|---|
@@ -118,6 +132,7 @@ npm i -D @tilua-types/roblox        # Luau + Roblox; or @tilua-types/lua on its 
 | `loadConfig(path, host?)` | read and check one config |
 | `resolveTypeLibraries(config, host?)` | the `.d.tilua` files to load, in order |
 | `moduleCandidates(from, specifier, config?)` / `resolveModulePath(...)` | what an `import` means |
+| `importExpressions(program)` | every `import("...")` written in a file |
 | `sourceMapTypes(text, path, { classes })` | the tree's types, and `scriptFor(file)` |
 
 Every problem comes back as `{ file, message, line, column }`, pointing into
@@ -236,6 +251,23 @@ is what a JavaScript arrow is for.
 
 **Declarations** — `const` and `let` only; Lua's `local` is gone.
 
+What a `let` is first given is its type from then on, as in TypeScript:
+`let n = 1` holds numbers, and `n = "a"` is an error. Only a name that starts
+out holding nothing — `let x`, `let x = nil` — takes the type of whatever is
+put in it later. A `let` declared with a type and no value (`let x: number`)
+cannot be read until every way to the read has assigned it — `Variable 'x' is
+used before being assigned` — unless its type admits `nil`. A function
+written in between may read it: it runs later, when it is called.
+
+**`n++` and `n--`** are `n += 1` and `n -= 1`: statements, as Luau's compound
+assignments are, so they give no value and cannot be written inside an
+expression. They apply to anything `+=` does — `t.count++`, `xs[i]--` — and
+are checked as it is: the operator has to apply, and what it gives has to fit.
+`--` is also how a comment starts, so `n--` is the decrement only where the
+dashes touch the name (or the `]`) before them and nothing but the end of the
+line, a `;`, a `}` or a comment follows; `n-- note` is still `n` and a
+comment. `++n` is reported, with the spelling tilua uses.
+
 **Functions** — `function name() { ... }` declares `name` in the enclosing
 scope; like a TypeScript function declaration it cannot be reassigned.
 `const` and `let` do not apply to functions. `function T.name()` and
@@ -277,15 +309,39 @@ brings in names that are types and nothing else: unlike TypeScript, using one
 as a value is an error, and only type positions — `typeof A` included — may
 name it. Compiled code keeps no trace of it.
 
+`import("./m")` is an expression: the module's exports as one value — what
+`import * as M from "./m"` names `M` — read where the expression runs rather
+than before the file does. The module is loaded the first time anything asks
+for it, and the value comes back at once: there is no promise to wait on. The
+path has to be a string literal, since which module it is must be known when
+the project is built. On a line of its own, `import("./setup")` loads the
+module for what it does. `importExpressions(program)` lists every one in a
+file.
+
 **Methods of strings, arrays and tables** — a value answers to the methods
-its metatable's `__index` has, written with `:`:
+its metatable's `__index` has. They are members, as a JavaScript object's
+are: read with `.`, a method is a function whose first parameter is its
+`self`, handed to it as any argument is. `:` hands it over for you, as Lua's
+always has:
 
 ```luau
-const long = names:filter(n => #n > 3):map(string.upper)
-print(names:join(", "), text:trim(), text:upper())
+const long = names:filter(n => n.length > 3):map(n => n:upper())
+print(names.join(names, ", "), text.trim(text), "abc":upper())
 const point = { x: 1, y: "up" }
 const [x, y] = point:values()   -- [number, string]
+const join = names.join          -- (self: string[], separator?: string) => string
 ```
+
+`modes.includes(s)` leaves the `self` out, and is reported as that: call it
+with `:`. The other way round, `o:f(x)` on a function that takes no receiver
+would hand it `o` as `x`, and is reported too. `Stack.push(s, 1)`, which
+passes the receiver by hand, is an ordinary call.
+
+**`length`** — `xs.length` is how many a list holds and `text.length` a
+string's length: Luau's `#`, which tilua does not have (`#xs` is an error that
+says to write `xs.length`). A tuple's is known: `[number, string]` has length
+`2`. A table with a `length` of its own is that member, and a class that
+declares `__len` answers what `__len` does.
 
 Strings, arrays and tables are the language's own, so their metatables are
 too: the prelude declares them, in tilua, and they are there with no type
@@ -294,7 +350,12 @@ answers several: `find` is an array) plus the JavaScript-shaped ones (`trim`,
 `startsWith`, ...); an array's is JavaScript's (`filter`, `map`, `join`, ...),
 with Lua's indices — the first element is 1, `indexOf` answers `nil` rather
 than -1 — and `push`, `pop`, `shift`, `unshift`, `sort` and `reverse` change
-the array. A table's are `keys`, `values` and `entries`, which answer a tuple
+the array. Looking for a value is not adding one, so `includes` and `indexOf`
+take any value, not only one the array's type already holds — and `includes`
+is a guard: `if (modes:includes(s))` narrows `s` to a mode. `concat` may join
+arrays of other types (`(T | U)[]`). The ones that only read take a read-only
+list too (`readonly T[]`, what `as const` makes), as TypeScript's
+`ReadonlyArray` does; the ones that change it do not. A table's are `keys`, `values` and `entries`, which answer a tuple
 in the order the table's type wrote its members, not `string[]` as
 JavaScript's `Object.keys` does; the analyzer supplies that order as
 `ObjectKeys<T>`, `ObjectValues<T>` and `ObjectEntries<T>`. A member of a
@@ -302,7 +363,7 @@ value's own with the same name is what a call reaches, and a class instance,
 which has a metatable of its own, has none of them.
 
 No Lua array or table really has these methods, so the compiler lowers each
-call into its own runtime (`names:filter(f)` becomes `array.filter(names, f)`);
+call into its own runtime (`names.filter(f)` becomes `array.filter(names, f)`);
 a string's Lua methods stay plain method calls.
 
 A library adds to a metatable by declaring the same target again, and a
@@ -358,8 +419,8 @@ such as `print(x)`, and `globalValue` for a global read as a value, such as
 hook is asked about it. A runtime can read `__LINES__`, the bundle's line map
 (`nil` outside a bundle), to turn a line Luau reports back into a place in the
 project. One that answers with a new array wraps it in `__ARRAY__(...)`, which
-writes it down as an array for `typeof`. `console:log`, `print` and `error` in `@tilua-types/lua` are built on
-these hooks.
+writes it down as an array for `typeof`. The compiler's own lowering of the
+standard library — `console:log`, `error`, `pcall` — is built on these hooks.
 
 **A `(` that starts a line** continues the statement above it, as in Lua and
 in JavaScript — `const v = map[key]` followed by `("A"):upper()` is one
@@ -368,6 +429,53 @@ write `;` before the `(` when a new statement was meant.
 
 **Object types** — `{ name: T, name?: T, [K]: V }`, and a name that is not an
 identifier is quoted, as in the literal: `{ "Respawn After Kill": boolean }`.
+An index signature may name its key as TypeScript does, `[key: string]: V`, and
+its key may be a template literal: `` { [`on${string}`]: Handler } `` takes every
+`onX`, and an object literal with any other key is excess. A string or a list
+fits a shape that names what it answers to: `"abc"` is a `{ length: number }`.
+Members are separated by `,`, `;` or a line break, and may be written the
+other ways TypeScript writes them:
+
+```luau
+type Counter = {
+    readonly id: number
+    step(by: number): this        -- a method: (self: this, by: number) => this
+    reset?(): nil                 -- an optional one
+    get total(): number           -- read-only, unless a `set` is written too
+    set label(value: string)
+    (n: number): string           -- calling the value; several are overloads
+    new (seed: number): Counter   -- what its `new` makes: { new: (seed: number) => Counter }
+}
+```
+
+A method is called with `:`, as a class's methods are: its first parameter is
+the receiver, typed `this`, so `counter:step(1)` hands `counter` over and
+`counter.step(1)` is the missing argument it is. A signature with no return
+type returns `nil`. Calling the value and having members too is the functions
+and the members together — Lua builds such a value with a `__call` metatable.
+
+**Interfaces** — `interface Name<T> extends A, B<T> { ... }`, with the members
+an object type takes. It is a type alias for the bases and the members
+together, with what TypeScript adds: two interfaces of one name are one, their
+members merged (a method written in each is an overload set), and a member
+that does not fit the one it replaces in a base is reported. `export
+interface` exports it, as `export type` does.
+
+```luau
+interface Named { name: string }
+interface Greeter extends Named {
+    greet(other: Named): string
+}
+class Person implements Greeter {
+    name = "Ada"
+    function greet(other: Named): string { return `hi ${other.name}` }
+}
+```
+
+**`this` in a type** — TypeScript's polymorphic `this`: the value a member is
+read from. A method that returns `this` returns whatever it was called on, so
+`Builder.new():add(1):done()` keeps the subclass's members through the chain.
+Inside the class it is the instance.
 
 **Optionality** — there is no `T?` shorthand. `?` in type position always
 belongs to a conditional type, and in expression position to a ternary or an
@@ -389,6 +497,29 @@ touch the `.` or `:`; `c ? a : b` stays a
 ternary. Parentheses end a chain. A chain cannot be assigned to (`a?.b = 1` is
 an error). A chain that got through narrows what it tested: inside
 `if (part?.Parent)`, and `if (part?.Name == "Door")`, `part` is not nil.
+
+**`??`** — `a ?? b` is `a`, or `b` where `a` is nil; `b` is read only then.
+Unlike `a or b` a `false` stays, which is what a `boolean | nil` wants:
+`settings.enabled ?? true`. As in TypeScript it does not mix with `and` or
+`or` without parentheses.
+
+**`in`** — `"key" in t` asks whether `t` holds something at `key`: in Lua a
+key whose value is nil is a key that is not there, so it is `t.key ~= nil`.
+The key is a string or a number and `t` a table. It narrows as TypeScript's
+does: where it holds, `t` is one of the union members that can have `key`, and
+`t.key` is not nil; where it does not, `t` is none of the members that must.
+
+**`instanceof`** — `v instanceof Dog` is true when `v` was built by `Dog` or
+by a class extending it. It walks the links every instance has: `v.ClassObject`,
+then each `.ParentClass` up the chain. It narrows `v` to `Dog`, and only a
+class written in tilua can stand on its right — a `declare class` is the
+host's, and Roblox's answer `IsA` instead.
+
+**Accessors in an object literal** — `{ get full() { ... }, set full(v) { ...
+} }` reads and writes `full` through functions, with the object as `this`. Lua
+has no such thing, so the object gets a metatable that runs them; a name with a
+getter and no setter is read-only, and assigning it is an error at runtime as
+well as in the types.
 
 **Classes** — types are structural, except for classes. A definitions file
 declares one with `declare class`, and it is nominal, as Roblox's classes are:
@@ -522,7 +653,7 @@ class Square extends Shape {
 instances' metatable, so `function __add(other: Vec): Vec` in a class is the
 `+` of its instances — and the type checker reads it the same way: `a + b`
 between two `Vec`s is a `Vec`. `__sub`, `__mul`, `__div`, `__idiv`, `__mod`,
-`__pow`, `__unm`, `__concat`, `__len` (`#v`), `__eq`, `__lt` and `__le` (`<`,
+`__pow`, `__unm`, `__concat`, `__len` (`v.length`), `__eq`, `__lt` and `__le` (`<`,
 `>`, `<=`, `>=`), `__call` (calling an instance), `__iter` (`for a, b in v`)
 and `__tostring` all work this way, and a class extending another inherits
 them. Each is checked: it takes the operands Luau hands it, returns what Luau
@@ -708,14 +839,24 @@ destructuring instead.
 ```luau
 join("-", ...names)              -- every name
 join("-", ...names, "z")         -- and one more after them
-add3(...nums)                    -- however many `nums` turns out to hold
+add3(...trio)                    -- `trio: [number, number, number]`: exactly three
 const both = [...names, "z"]
 ```
 
-What the array holds is checked against what it fills. How many it holds is
-not known, so nothing is said about the count — unless it is a tuple, which
-holds a known value at each position and is checked one by one. Spreading
-something that is not a list is reported.
+What the array holds is checked against what it fills. How many an array
+holds is not known, so, as in TypeScript, it can only fill a rest parameter —
+`add3(...nums)` with `nums: number[]` is an error, and so is `h(...nums)` for
+an `h(a: number, ...more: number[])`, whose `a` it would have to fill. A
+tuple holds a known value at each position: it fills exactly that many
+parameters, checked one by one and counted, several tuples together too.
+Spreading something that is not a list is reported, and so is spreading a
+list that may be nil — write `...(xs ?? [])`.
+
+In an object literal, `...source` copies what `source` has: over a union, one
+object per member; over a value that may be nil, every member optional; over
+a class instance, its fields — its methods live on the class table, which a
+copy does not reach. A copy is a new table, so nothing in it is read-only.
+`const [first, ...rest] = tuple` leaves `rest` a tuple of what is left.
 
 **Branded types** — nothing in the type model is about branding; an
 intersection already means it. `string & { __brand }` is assignable to
@@ -732,7 +873,7 @@ findUser(id)                    -- ok
 findUser("raw")                 -- '"raw"' is not assignable to 'UserId'
 findUser(postId)                -- 'PostId' is not assignable to 'UserId'
 
-#id                             -- still a string: 5
+id.length                       -- still a string: 5
 id:upper()                      -- and its methods, giving a plain string
 ```
 
@@ -771,6 +912,26 @@ parameter reads `Extract<Rows, { Page: P }>["Skills"][number]`. A type that
 waits on a type parameter — a conditional, an index, `T[K]` — is worked out
 where that parameter is.
 
+**Functions compare as under `strictFunctionTypes`.** A function fits a
+function type when it takes whatever that type's callers pass — its parameters
+are contravariant — and needs no more arguments than they hand it: `(x: Part)
+=> nil` is not a `(x: Instance) => nil`, which may be called with any
+instance. A method — a function taking its receiver first, `self` or `this`
+— is compared both ways, as TypeScript compares methods, so an override may
+narrow what it takes.
+
+**Every way through returns.** A function that declares a return type which
+does not admit `nil` has to return on every way to its end: `Not every path
+returns a value` otherwise. A call that is `never` (`error(...)`) ends a way,
+and so does `while (true)` with no `break` of its own.
+
+**An `if` chain can be exhaustive.** tilua has no `switch`; an `if` /
+`elseif` chain whose tests leave no value for an `else` — every member of
+`x: "a" | "b"` tested — has no way past it but its branches. A function whose
+chain returns in every branch needs no `return` after it, and after it `x` is
+`never`, which is how `const unreachable: never = x` checks that a new
+member was not forgotten.
+
 **Trailing commas** are allowed wherever TypeScript allows them: parameter
 lists, call arguments, generic parameters and type arguments, tables, arrays,
 tuples, imports and exports.
@@ -807,18 +968,79 @@ type says so — it is `any`, and `any` turns off every check made of it.
 **Types** — unions, intersections, tuples `[A, B]` (with a rest, `[A,
 ...B[]]`), `keyof`, `T[K]`, conditional types with
 `infer`, mapped types with `as` remapping, template literal types
-(`` `on${Event}` ``), and set difference `A - B`. The utility types
+(`` `on${Event}` ``), and `Exclude<A, B>`. The utility types
 (`Partial`, `Pick`, `Omit`, `ReturnType`, `Parameters`, `Exclude`, …) are
 built in, and written in tilua on top of those rather than special-cased in
 the analyzer. A type library or a file may declare one again; the later
 declaration wins.
+
+Type-level programs work as they do in TypeScript. A tuple may spread anywhere
+(`[...A, ...B]`, `[infer H, ...infer R]`) and name its elements
+(`[x: number, y?: number]`) — an element marked `?` may be left out, so
+`[number, string?]` takes `[1]` and its `length` is `1 | 2`, and
+`Parameters<(a: number, b?: string) => nil>` is `[a: number, b?: string]`; a
+list of any length may stand before the elements written after it
+(`[...unknown[], infer L]`); `T["length"]` counts a tuple, and `keyof` a list is
+its positions and its `length`, `number | "length"` (`keyof string[]` is the
+list's keys, `(keyof T)[]` a list of keys, as TypeScript reads them); an alias may
+recurse (`type Reverse<T> = T extends [infer H, ...infer R] ? [...Reverse<R>,
+H] : []`); a template literal pattern takes a string apart (`` S extends
+`${infer A}.${infer B}` ``), and `infer N extends number` reads `"42"` as
+`42`. `object` is anything that is not a primitive. One difference: a tuple's
+positions count from 1, as Lua's do, so the first element of `T` is `T[1]`.
+A recursion that never ends stops after 100 levels and gives `any`.
+
+**What `${...}` may hold** — a template string writes each value with
+`tostring`, so it takes what reads as text: a string, a number, a boolean,
+`nil`, and a value that says how to print itself — a class with `__tostring`,
+or one the host made (a Roblox `Instance`, a `Vector3`). A table, a list, a
+function or a class instance without `__tostring` would print as its address
+(`table: 0x...`), and is an error. A template literal *type* holds a string,
+a number, a boolean or `nil` in each placeholder, as TypeScript's does:
+`` `a${number[]}` `` is an error, and so is a `T extends object` there.
+
+A generic function may take and give variadic tuples: `<T extends unknown[]>(xs:
+[...T]): T` reads `[1, "a"]` as `[number, string]`, `(...args: [...T, string])`
+takes the last argument apart from the others, and `(fn: (...args: [...A,
+...B]) => R, ...a: A): (...b: B) => R` binds the first arguments of `fn`.
+
+`Exclude<T, U>` — what of `T` is not a `U` — is the analyzer's own, and unlike
+TypeScript's it is kept where TypeScript's would forget it: `Exclude<unknown,
+nil>` and `Exclude<any, nil>` stay, as a value known not to be `nil`, and so
+does `Exclude<string, "a">`, a string that is not `"a"` — of which `if (s ==
+"a")` is reported as a test that can never pass. Over a union it drops the
+members it takes whole (`Exclude<"a" | "b", "b">` is `"a"`), and `boolean` is
+the union `true | false`.
+tilua has no `A - B` in types; `Exclude` is the one way to write it.
 
 A call may write its type arguments out — `find<Folder>("Remotes")`,
 `inst:WaitForChild<Folder>("Remotes")` — and a type parameter may have a
 default (`<T = Instance>`) for the calls that do not. `a < b > (c)` is still
 three operators: only a call after the `>` makes it type arguments.
 
-`<const T>` infers an argument at its narrowest, as in TypeScript 5.
+`<const T>` infers an argument at its narrowest, as in TypeScript 5. Without it
+a literal is still kept where the function gives `T` itself back —
+`identity("x")` is `"x"`, and a `let` it is given to widens it to `string` —
+and a `K extends keyof T`, or a `T extends string`, keeps the key or the text
+written. Literals of one primitive read for one parameter are either:
+`pair(1, 2)` is `1 | 2`. `as const` makes its lists read-only:
+`[1, 2] as const` is a `readonly [1, 2]`. `ReturnType` of an overloaded
+function is its last signature's, as in TypeScript.
+
+`NoInfer<T>` is `T`, except that a call does not work `T` out from an
+argument written there: `function pick<T>(a: T, fallback: NoInfer<T>): T`
+takes `T` from `a` alone, and checks `fallback` against it.
+
+A type alias or an interface may say how it compares by a parameter:
+`type Getter<out T>` as `T` does, `type Setter<in T>` the other way round,
+`<in out T>` only by the same `T`. It is checked against the body —
+`type Getter<in T> = { get: () => T }` is an error — and a function's or a
+class's parameters take none.
+
+`new (name: string) => Dog` is the type of a class table that builds a `Dog`:
+tilua builds with `Dog.new(name)`, so it is `{ new: (name: string) => Dog }`.
+`InstanceType<typeof Dog>` and `ConstructorParameters<typeof Dog>` read it
+back, as TypeScript's do.
 
 `typeof x` in a type is TypeScript's type query — the type of a value
 (`typeof config`, `typeof config.volume`, `ReturnType<typeof f>`). Luau's
@@ -827,6 +1049,14 @@ three operators: only a call after the `>` makes it type arguments.
 runs.
 
 **Modules** — `import` / `export`, export lists, re-exports and `export *`.
+`export type { A }` (and `export type { A } from "./m"`) exports types and
+nothing else; naming a value there is an error.
+
+**What TypeScript has and tilua does not** says what to write instead, rather
+than reading as something else: `enum`, `namespace`, `try` / `catch`,
+`switch`, `declare module` and `declare global` are each reported with the
+tilua spelling. (A name followed by `{` is otherwise a call with a table
+argument, so `enum Color { ... }` would have meant `enum(Color { ... })`.)
 
 **`satisfies`** — checks a value against a type without giving it that type,
 as in TypeScript 4.9:
@@ -888,11 +1118,9 @@ analyzeTypes(program, scopes, {
 
 ## Known limitations
 
-- `export * as ns from` and namespace imports (`import * as ns`) are not
-  supported.
-- `setmetatable` and metatables are not modelled.
-- Accessing a property a type does not have yields `unknown` rather than an
-  error; assigning to a `readonly` property is not reported.
+- `export * as ns from` is not supported.
+- `setmetatable` is not modelled: a table given a metatable at runtime keeps
+  the type it had.
 - A sourcemap child whose name is not an identifier (`"My Part"`) is not typed.
 
 ## Development

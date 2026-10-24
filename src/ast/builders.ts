@@ -10,7 +10,7 @@ import type {
     ImportStatement, ImportSpecifier, ExportStatement, ExportDefaultStatement, DeclareStatement,
     DeclareClassStatement, DeclareMetatableStatement, ExportNamedStatement, ExportSpecifier, ExportAllStatement,
     FunctionName, TypedIdentifier, GenericTypeParameter, FunctionSignature, TypePredicateNode,
-    MappedTypeNode,
+    MappedTypeNode, ErrorStatement,
     BindingTarget, IdentifierPattern, ObjectPattern, ObjectPatternProperty,
     ArrayPattern, ArrayPatternElement, SpreadElement,
     Identifier, NilLiteral, BooleanLiteral, NumberLiteral, StringLiteral,
@@ -18,11 +18,11 @@ import type {
     FunctionExpression, FunctionBody, FunctionParameter,
     TableExpression, TableField, ArrayExpression,
     BinaryExpression, UnaryExpression, MemberExpression, IndexExpression,
-    CallExpression, MethodCallExpression, ParenthesizedExpression,
+    CallExpression, MethodCallExpression, ParenthesizedExpression, ImportExpression,
     ClassDeclaration, ClassExpression, ClassMember, ClassAccessibility, SuperExpression,
     TypeAssertionExpression, AsConstExpression, IfElseExpression, ErrorExpression,
     TypeReference, TypeLiteralString, TypeLiteralBoolean, TypeLiteralNumber, TableTypeNode,
-    ArrayTypeNode, TupleTypeNode,
+    ArrayTypeNode, TupleTypeNode, RestTypeNode,
     TableTypeProperty, FunctionTypeNode, FunctionTypeParameter,
     UnionTypeNode, IntersectionTypeNode, SatisfiesExpression,
     ParenthesizedTypeNode, TypeofTypeNode,
@@ -36,6 +36,9 @@ const NO_MEMBER_NAME = "Expected a name after '.'"
 
 /** What `typeof(v)` is instead. */
 const NO_TYPEOF_CALL = "'typeof' is an operator, not a function: write 'typeof v'"
+
+/** tilua counts the way JavaScript does: `xs.length`, `text.length`. */
+const NO_LENGTH_OPERATOR = "tilua has no '#': write 'xs.length' for how many a list holds or a string's length"
 
 /** Words that can open a class member before what it is. */
 const ACCESSIBILITIES: ReadonlySet<string> = new Set(["public", "private", "protected"])
@@ -68,6 +71,14 @@ class ParseRecover extends Error {}
 
 /** Statements that bind a name, and so cannot be a braceless body: the name
  *  would be gone at the next line. TypeScript rejects the same set. */
+/** Statements TypeScript has and tilua does not, and what to write instead. */
+const UNSUPPORTED_STATEMENTS: Readonly<Record<string, string>> = {
+    enum: "tilua has no 'enum': write a union of literals, 'type Color = \"Red\" | \"Green\"', or an object 'as const'",
+    namespace: "tilua has no 'namespace': a module is a file, 'import * as N from \"./n\"'",
+    try: "tilua has no 'try': call the function with 'pcall', which answers whether it ran",
+    switch: "tilua has no 'switch': write an 'if' / 'elseif' chain — one that leaves no value for an 'else' is exhaustive",
+}
+
 const DECLARATION_STATEMENTS: ReadonlySet<string> = new Set([
     "VariableDeclaration", "FunctionDeclaration", "FunctionDeclarationStatement",
     "ClassDeclaration", "TypeAliasStatement", "ExportTypeAliasStatement",
@@ -135,15 +146,27 @@ function nameIdentifier(name: string, at: Span): Identifier {
 // ------------------------------------------------------------
 
 export const BINARY_PRECEDENCE: Record<string, number> = {
+    // `??` sits with `or`, and the two do not mix without parentheses — as
+    // in TypeScript, where `a ?? b || c` is an error.
+    "??": 1,
     "or": 1,
     "and": 2,
     "<": 3, ">": 3, "<=": 3, ">=": 3, "~=": 3, "==": 3,
+    "in": 3, "instanceof": 3,
     "..": 4,
     "+": 5, "-": 5,
     "*": 6, "/": 6, "//": 6, "%": 6,
     "^": 8,
 }
 export const RIGHT_ASSOCIATIVE = new Set(["..", "^"])
+
+/** Is `side`, an operand of `op`, a `??` beside `and`/`or` (or the other way
+ *  round) that no parentheses separate? */
+function mixesNullish(side: Expression, op: string): boolean {
+    if (side.type !== "BinaryExpression") return false
+    const logical = (o: string): boolean => o === "and" || o === "or"
+    return (op === "??" && logical(side.operator)) || (logical(op) && side.operator === "??")
+}
 export const UNARY_PRECEDENCE = 7
 
 export const COMPOUND_ASSIGN_OPS = new Set(["+=", "-=", "*=", "/=", "//=", "%=", "^=", "..="])
@@ -491,7 +514,9 @@ export class Parser {
         const inFunction = closers.includes("end") || closers.includes("until")
         if (!inFunction && t.type === "Keyword" && typeof value === "string") {
             const inIfExpression = closers.includes("else") && (value === "then" || value === "elseif" || value === "else")
-            if (STATEMENT_KEYWORDS.has(value) && !inIfExpression && !(mode === "statement" && value === "then")) return true
+            // `import(` is an expression, and stops nothing.
+            const importExpression = value === "import" && this.punctuatorAt(1, "(")
+            if (STATEMENT_KEYWORDS.has(value) && !importExpression && !inIfExpression && !(mode === "statement" && value === "then")) return true
             if (mode === "statement" && closers.length === 0 &&
                 (value === "if" || (value === "function" && this.peek(1).type === "Identifier"))) return true
         }
@@ -728,7 +753,11 @@ export class Parser {
                 case "for": return this.parseForStatement()
                 case "function": return this.parseFunctionStatement()
                 case "return": return this.parseReturnStatement()
-                case "import": return this.parseImportStatement()
+                // `import("./m")` is an expression; anything else after
+                // `import` is the statement.
+                case "import":
+                    if (this.punctuatorAt(1, "(")) break
+                    return this.parseImportStatement()
                 case "export": return this.parseExportStatement()
                 case "break": {
                     this.advance()
@@ -738,6 +767,19 @@ export class Parser {
                     this.advance()
                     return { type: "ContinueStatement", ...spanFrom(t, this.previous()) } as ContinueStatement
                 }
+            }
+        }
+
+        // `++n`: tilua writes it after the name. Read as what it meant.
+        if (t.type === "Operator" && (t as any).value === "++") {
+            this.problemAt(t, "tilua writes an increment after its target: 'n++'")
+            this.advance()
+            const target = this.parsePrefixExpression()
+            this.rejectOptionalTarget(target)
+            const one: NumberLiteral = { type: "NumberLiteral", value: 1, raw: "1", ...spanFrom(t, t) }
+            return {
+                type: "CompoundAssignmentStatement", operator: "+=", target, value: one, postfix: "++",
+                ...spanFrom(t, this.previous()),
             }
         }
 
@@ -753,6 +795,17 @@ export class Parser {
             return this.parseTypeAliasStatement()
         }
 
+        if (this.startsInterface()) return this.parseInterfaceStatement()
+
+        // Words TypeScript has and tilua does not. A name followed by `{` is
+        // a call with a table argument — `enum Color { ... }` would quietly
+        // mean `enum(Color { ... })` — so each says what to write instead.
+        if (t.type === "Identifier" && UNSUPPORTED_STATEMENTS[(t as any).value] && this.startsUnsupported()) {
+            this.problemAt(t, UNSUPPORTED_STATEMENTS[(t as any).value])
+            this.skipUnsupported()
+            return { type: "ErrorStatement", ...spanFrom(t, this.previous()) } as ErrorStatement
+        }
+
         // `class` is a soft keyword: it only starts a declaration when a name
         // follows it, so `const class = 1` and `t.class` still read as names.
         if (this.startsClassDeclaration()) {
@@ -766,6 +819,18 @@ export class Parser {
             if (p1.type === "Identifier" && (p1 as any).value === "class" &&
                 this.peek(2).type === "Identifier") {
                 return this.parseDeclareClassStatement()
+            }
+            // TypeScript's ambient blocks. A module is a file in tilua, and a
+            // definitions file's top level is already global.
+            const ambient = p1.type === "Identifier" && (p1 as any).value === "module" && this.peek(2).type === "Literal"
+                ? "tilua has no 'declare module': a module is a file — point an import at a .d.tilua file with 'paths'"
+                : p1.type === "Identifier" && (p1 as any).value === "global" && this.punctuatorAt(2, "{")
+                ? "tilua has no 'declare global': a 'declare' at the top level of a definitions file is already global"
+                : undefined
+            if (ambient) {
+                this.problemAt(t, ambient)
+                this.skipUnsupported()
+                return { type: "ErrorStatement", ...spanFrom(t, this.previous()) } as ErrorStatement
             }
             // `metatable` too: `declare metatable: T` is a global of that name.
             if (p1.type === "Identifier" && (p1 as any).value === "metatable" && !this.punctuatorAt(2, ":")) {
@@ -989,6 +1054,15 @@ export class Parser {
             return { type: "ExportTypeAliasStatement", alias, ...spanFrom(start, this.previous()) }
         }
 
+        if (this.startsInterface()) {
+            const alias = this.parseInterfaceStatement()
+            return { type: "ExportTypeAliasStatement", alias, ...spanFrom(start, this.previous()) }
+        }
+
+        // `export type { A, B }`, `export type { A } from "./m"`
+        const typeOnly = this.checkIdentifierValue("type") && this.punctuatorAt(1, "{")
+        if (typeOnly) this.advance()
+
         if (this.checkKeyword("const") || this.checkKeyword("let")) {
             const declaration = this.parseVariableDeclaration()
             return { type: "ExportStatement", declaration, ...spanFrom(start, this.previous()) }
@@ -1021,7 +1095,11 @@ export class Parser {
             }
             this.expectPunctuator("}")
             const source = this.checkKeyword("from") ? this.parseModuleSource() : undefined
-            return { type: "ExportNamedStatement", specifiers, source, ...spanFrom(start, this.previous()) }
+            return {
+                type: "ExportNamedStatement", specifiers, source,
+                ...(typeOnly ? { typeOnly: true } : {}),
+                ...spanFrom(start, this.previous()),
+            }
         }
 
         // `export * from "./x"`
@@ -1032,7 +1110,7 @@ export class Parser {
             return { type: "ExportAllStatement", source, ...spanFrom(start, this.previous()) }
         }
 
-        this.error("Expected 'const', 'let', 'function', 'class', 'type', 'default', '{' or '*' after 'export'")
+        this.error("Expected 'const', 'let', 'function', 'class', 'type', 'interface', 'default', '{' or '*' after 'export'")
     }
 
     // `const x = ...` / `let [a, b] = ...`.
@@ -1378,7 +1456,7 @@ export class Parser {
     private parseClassBody(start: Token): ClassMember[] {
         void start
         if (!this.checkPunctuator("{")) this.error("Expected '{' to open the class body")
-        this.advance()
+        const brace = this.advance()
         const members: ClassMember[] = []
         this.classDepth++
         try {
@@ -1386,14 +1464,74 @@ export class Parser {
                 // A stray `,` or `;` between members is allowed and means
                 // nothing, as a `;` between statements does.
                 if (this.matchPunctuator(",") || this.matchPunctuator(";")) continue
-                const member = this.parseClassMember()
-                if (member) members.push(member)
+                if (this.dedentedPast(brace)) break
+                if (!this.recover) {
+                    const member = this.parseClassMember()
+                    if (member) members.push(member)
+                    continue
+                }
+                // A member that cannot be read costs that member, not the
+                // class: the ones around it are still what the class has.
+                const at = this.cursor
+                const first = this.current()
+                try {
+                    const member = this.parseClassMember()
+                    if (member) members.push(member)
+                } catch (e) {
+                    if (e instanceof ParseError) this.record(e)
+                    else if (!(e instanceof ParseRecover)) throw e
+                    this.skipClassMember(first, at)
+                }
             }
         } finally {
             this.classDepth--
         }
-        this.expectCloser("}")
+        if (this.matchPunctuator("}")) return members
+        if (!this.recover) this.error(`Expected '}' to close the class opened on line ${brace.line.start}`)
+        this.softError(`Expected '}' to close the class opened on line ${brace.line.start}`)
+        // As a block without its `}`: the indentation says where it ended.
+        this.missingEnd = true
         return members
+    }
+
+    /** Recovery: move past a member that could not be read, to the next one
+     *  or to the `}` that closes the class. Brackets opened on the way are
+     *  skipped whole. A line indented no deeper than the member began is the
+     *  next member whatever the brackets say — one left open is the usual
+     *  reason a member could not be read. */
+    private skipClassMember(first: Token, from: number): void {
+        const closers: string[] = []
+        const nest = (t: Token): void => {
+            if (t.type !== "Punctuator") return
+            const value = (t as { value?: unknown }).value
+            if (value === "(") closers.push(")")
+            else if (value === "[") closers.push("]")
+            else if (value === "{") closers.push("}")
+            else if (value === ")" || value === "]" || value === "}") {
+                const open = closers.lastIndexOf(value)
+                if (open >= 0) closers.length = open
+            }
+        }
+        for (let i = from; i < this.cursor; i++) nest(this.tokens[i])
+        while (!this.isAtEnd()) {
+            const t = this.current()
+            if (this.cursor > from && this.onNewLine() &&
+                t.line.start > first.line.start && t.column.start <= first.column.start) return
+            if (!closers.length && this.checkPunctuator("}")) return
+            this.advance()
+            nest(t)
+            if (!closers.length && t.type === "Punctuator" && (t.value === ";" || t.value === ",")) return
+        }
+    }
+
+    /** Recovery: is this the start of a line that opens the next member —
+     *  `name(`, `name:`, `name =`, a modifier, `function`? It is where a
+     *  field left half-written ends. */
+    private atNextClassMember(): boolean {
+        if (!this.recover || !this.onNewLine()) return false
+        if (this.checkKeyword("function") || this.startsClassModifier()) return true
+        return this.checkType("Identifier") &&
+            (this.punctuatorAt(1, "(") || this.punctuatorAt(1, ":") || this.operatorAt(1, "="))
     }
 
     /** `<A, B>` in a type position that is not a call: the arguments a class
@@ -1506,23 +1644,29 @@ export class Parser {
         // `name: T`, `name = v`, `name: T = v`
         if (this.checkType("Identifier")) {
             const memberName = this.parseIdentifier()
+            // Half-written, a field is still a member of that name: what
+            // follows the `:` or `=` is missing, and says so.
+            const known = this.errors.length
             let typeAnnotation: TypeNode | undefined
             if (this.matchPunctuator(":")) {
-                typeAnnotation = this.typeOr(() => this.checkOperator("="))
+                if (this.atNextClassMember() || (this.recover && this.checkPunctuator("}"))) this.softError("Expected a type")
+                else typeAnnotation = this.typeOr(() => this.checkOperator("=") || this.atNextClassMember())
             }
             let init: Expression | undefined
-            if (this.matchOperator("=")) init = this.expressionOr(() => false)
-            if (!typeAnnotation && !init) {
-                this.error("A class field needs a type ('name: T') or a value ('name = v')")
+            if (this.matchOperator("=")) {
+                if (this.atNextClassMember()) {
+                    this.softError("Expected a value")
+                    init = this.errorExpression(this.current(), this.cursor)
+                } else {
+                    init = this.expressionOr(() => this.atNextClassMember())
+                }
+            }
+            if (!typeAnnotation && !init && this.errors.length === known) {
+                this.problemAt(memberName as unknown as Token, "A class field needs a type ('name: T') or a value ('name = v')")
             }
             return { type: "ClassField", name: memberName, isStatic, typeAnnotation, init, ...spanFrom(start, this.previous()) }
         }
 
-        if (this.recover) {
-            this.softError("Expected a class member: a field, a method, 'constructor', 'get' or 'set'")
-            this.advance()
-            return undefined
-        }
         this.error("Expected a class member: a field, a method, 'constructor', 'get' or 'set'")
     }
 
@@ -1631,7 +1775,7 @@ export class Parser {
         const t = this.current()
         if (t.type === "Literal" || t.type === "InterpolatedString" || t.type === "Identifier") return true
         if (t.type === "Keyword") {
-            return ["function", "if", "not", "nil", "true", "false"].includes((t as any).value)
+            return ["function", "if", "not", "nil", "true", "false"].includes((t as any).value) || this.startsImportExpression()
         }
         if (t.type === "Operator") {
             return ["...", "-", "#"].includes((t as any).value)
@@ -1668,11 +1812,95 @@ export class Parser {
 
         let generics: GenericTypeParameter[] = []
         if (this.checkOperator("<")) {
-            generics = this.parseGenericTypeParameterList()
+            generics = this.parseGenericTypeParameterList(true)
         }
         this.expectOperator("=")
         const definition = this.parseType()
         return { type: "TypeAliasStatement", name, generics, definition, ...spanFrom(start, this.previous()) }
+    }
+
+    /** `interface` is a soft keyword: a declaration only when a name and
+     *  then `{`, `<` or `extends` follow it. */
+    private startsInterface(): boolean {
+        if (!this.checkIdentifierValue("interface") || this.peek(1).type !== "Identifier") return false
+        const after = this.peek(2)
+        return (after.type === "Punctuator" && (after as { value?: unknown }).value === "{")
+            || (after.type === "Operator" && (after as { value?: unknown }).value === "<")
+            || (after.type === "Identifier" && (after as { value?: unknown }).value === "extends")
+    }
+
+    /** `interface Name<T> extends A, B<T> { members }` — a type alias for the
+     *  bases and the members together (see `InterfaceParts`). */
+    private parseInterfaceStatement(): TypeAliasStatement {
+        const start = this.advance() // 'interface'
+        const name = this.parseTypeName()
+        const generics = this.checkOperator("<") ? this.parseGenericTypeParameterList(true) : []
+        const bases: TypeReference[] = []
+        if (this.checkIdentifierValue("extends")) {
+            this.advance()
+            do {
+                const base = this.parsePrimaryType()
+                if (base.type !== "TypeReference") {
+                    this.problemAt(this.previous(), "An interface extends named types: 'interface B extends A { ... }'")
+                } else {
+                    bases.push(base)
+                }
+            } while (this.matchPunctuator(","))
+        }
+        const bodyStart = this.current()
+        this.expectPunctuator("{")
+        const members = this.parseTypeMembers(bodyStart)
+        this.expectPunctuator("}")
+        const body: TableTypeNode = { ...members, ...spanFrom(bodyStart, this.previous()) }
+        const definition: TypeNode = bases.length
+            ? { type: "IntersectionTypeNode", types: [...bases, body], ...spanFrom(bases[0], body) } as TypeNode
+            : body
+        return {
+            type: "TypeAliasStatement", name, generics, definition,
+            interface: { extends: bases, body },
+            ...spanFrom(start, this.previous()),
+        }
+    }
+
+    /** `enum Color {`, `namespace N {`, `try {`, `switch (x) {`: the
+     *  word, then what TypeScript would write after it. */
+    private startsUnsupported(): boolean {
+        const word = (this.current() as { value?: unknown }).value
+        if (word === "try") return this.punctuatorAt(1, "{")
+        if (word === "switch") return this.punctuatorAt(1, "(") && this.braceFollowsGroupAt(1)
+        return this.peek(1).type === "Identifier" && this.punctuatorAt(2, "{")
+    }
+
+    /** Is the `(` at `offset` closed by a `)` followed by `{`? */
+    private braceFollowsGroupAt(offset: number): boolean {
+        let depth = 0
+        for (let i = offset; this.peek(i).type !== "EOF"; i++) {
+            const t = this.peek(i)
+            if (t.type !== "Punctuator") continue
+            const v = (t as { value?: unknown }).value
+            if (v === "(") depth++
+            else if (v === ")" && --depth === 0) return this.punctuatorAt(i + 1, "{")
+        }
+        return false
+    }
+
+    /** Past the statement an unsupported word starts: up to the `{` that
+     *  opens its body, then to the `}` that closes it — and, for `try`, its
+     *  `catch` and `finally` blocks too. */
+    private skipUnsupported(): void {
+        const skipBraces = (): void => {
+            while (!this.checkPunctuator("{") && !this.isAtEnd()) this.advance()
+            let depth = 0
+            while (!this.isAtEnd()) {
+                const t = this.advance()
+                if (t.type !== "Punctuator") continue
+                const v = (t as { value?: unknown }).value
+                if (v === "{") depth++
+                else if (v === "}" && --depth === 0) return
+            }
+        }
+        skipBraces()
+        while (this.checkIdentifierValue("catch") || this.checkIdentifierValue("finally")) skipBraces()
     }
 
     private parseExportTypeAliasStatement(): ExportTypeAliasStatement {
@@ -1713,6 +1941,21 @@ export class Parser {
         }
 
         const t = this.current()
+        // `n++` / `n--`: a statement, as Luau's `n += 1` is — it gives no
+        // value, so it cannot be written inside an expression.
+        if (t.type === "Operator" && ((t as any).value === "++" || (t as any).value === "--")) {
+            this.rejectOptionalTarget(first)
+            const op = this.advance() as Token & { value: "++" | "--" }
+            const one: NumberLiteral = { type: "NumberLiteral", value: 1, raw: "1", ...spanFrom(op, op) }
+            return {
+                type: "CompoundAssignmentStatement",
+                operator: op.value === "++" ? "+=" : "-=",
+                target: first,
+                value: one,
+                postfix: op.value,
+                ...spanFrom(start, op),
+            }
+        }
         if (t.type === "Operator" && COMPOUND_ASSIGN_OPS.has((t as any).value)) {
             this.rejectOptionalTarget(first)
             const op = (this.advance() as any).value
@@ -1776,8 +2019,13 @@ export class Parser {
 
     private isBinaryOperator(): string | null {
         const t = this.current()
-        if (t.type === "Keyword" && ((t as any).value === "and" || (t as any).value === "or")) {
+        if (t.type === "Keyword" && ((t as any).value === "and" || (t as any).value === "or" || (t as any).value === "in")) {
             return (t as any).value
+        }
+        // `instanceof` is a soft keyword: an operator only where one can
+        // stand, after an operand on the same line.
+        if (t.type === "Identifier" && (t as any).value === "instanceof" && this.previous()?.line.end === t.line.start) {
+            return "instanceof"
         }
         if (t.type === "Operator" && (t as any).value in BINARY_PRECEDENCE) {
             return (t as any).value
@@ -1819,7 +2067,14 @@ export class Parser {
         const t = this.current()
         const isString = t.type === "InterpolatedString" ||
             (t.type === "Literal" && (t as { kind?: unknown }).kind === "string")
-        return isString && this.punctuatorAt(1, ":") && this.startsMethodCall(1)
+        return isString && ((this.punctuatorAt(1, ":") && this.startsMethodCall(1)) || this.startsDotMember(1))
+    }
+
+    /** `"a".length`, `[1, 2].concat(xs)`: a `.` and a name on the same line,
+     *  at `offset`. */
+    private startsDotMember(offset: number): boolean {
+        return this.punctuatorAt(offset, ".") && this.peek(offset + 1).type === "Identifier" &&
+            !this.startsOwnLine(this.peek(offset), this.peek(offset + 1))
     }
 
     /** Is there no member name at `offset`, after the `.` or `:` before it? */
@@ -1985,10 +2240,13 @@ export class Parser {
             const prec = BINARY_PRECEDENCE[op]
             if (prec < minPrec) break
 
-            this.advance()
+            const opToken = this.advance()
             const rightAssoc = RIGHT_ASSOCIATIVE.has(op)
             const nextMinPrec = rightAssoc ? prec : prec + 1
             const right = this.parseBinaryExpression(nextMinPrec)
+            if (mixesNullish(left, op) || mixesNullish(right, op)) {
+                this.problemAt(opToken, "'??' cannot be mixed with 'and' or 'or' without parentheses")
+            }
             left = {
                 type: "BinaryExpression",
                 operator: op as any,
@@ -2011,7 +2269,17 @@ export class Parser {
                 && next.line.start === opTok.line.end && next.column.start === opTok.column.end) {
                 this.problemAt(next, NO_TYPEOF_CALL)
             }
+            if (op === "#") this.problemAt(opTok, NO_LENGTH_OPERATOR)
             const argument = this.parseExpression(UNARY_PRECEDENCE)
+            // In recovery `#xs` is read as the `xs.length` it meant.
+            if (op === "#") {
+                return {
+                    type: "MemberExpression",
+                    object: argument,
+                    property: { type: "Identifier", name: "length", ...spanFrom(opTok, opTok) },
+                    ...spanFrom(opTok, argument),
+                }
+            }
             return {
                 type: "UnaryExpression",
                 operator: op as any,
@@ -2065,7 +2333,7 @@ export class Parser {
     private parseAtom(): Expression {
         const t = this.current()
 
-        // `"a":upper()`: Luau wants the string in parentheses; tilua does not.
+        // `"a".upper()`: Luau wants the string in parentheses; tilua does not.
         if (this.startsStringMethodCall()) return this.parsePrefixExpression()
 
         if (t.type === "Literal") {
@@ -2111,11 +2379,13 @@ export class Parser {
             return this.parseClassExpression()
         }
 
-        // `{ a: 1 }:keys()`, `[1, 2]:map(f)`: like a string, a literal is
+        // `{ a: 1 }.keys()`, `[1, 2].map(f)`: like a string, a literal is
         // called on without the parentheses Luau would want.
         if (t.type === "Punctuator" && ((t as any).value === "{" || (t as any).value === "[")) {
             const literal = (t as any).value === "{" ? this.parseTableExpression() : this.parseArrayExpression()
-            return this.checkPunctuator(":") && this.startsMethodCall() ? this.parseSuffixes(literal) : literal
+            return (this.checkPunctuator(":") && this.startsMethodCall()) || this.startsDotMember(0)
+                ? this.parseSuffixes(literal)
+                : literal
         }
 
         // `x => x * 2`, `(a, b) => a + b`, `(a: number): string => a`.
@@ -2127,7 +2397,7 @@ export class Parser {
             if (arrow) return arrow
         }
 
-        if (t.type === "Identifier" || (t.type === "Punctuator" && (t as any).value === "(")) {
+        if (t.type === "Identifier" || (t.type === "Punctuator" && (t as any).value === "(") || this.startsImportExpression()) {
             return this.parsePrefixExpression()
         }
 
@@ -2202,6 +2472,8 @@ export class Parser {
             base = t.type === "InterpolatedString"
                 ? this.buildInterpolatedString(t)
                 : { type: "StringLiteral", value: t.value, raw: t.raw, ...spanFrom(t, t) } as StringLiteral
+        } else if (this.startsImportExpression()) {
+            base = this.parseImportExpression()
         } else if (this.matchPunctuator("(")) {
             const inner = this.inBrackets(() => this.parseExpression())
             this.expectPunctuator(")")
@@ -2210,6 +2482,20 @@ export class Parser {
             this.error("Expected identifier or '('")
         }
         return this.parseSuffixes(base)
+    }
+
+    /** `import(` — the expression, not the statement that starts `import {`. */
+    private startsImportExpression(): boolean {
+        return this.checkKeyword("import") && this.punctuatorAt(1, "(")
+    }
+
+    /** `import("./module")`: the module's exports, loaded when this runs. */
+    private parseImportExpression(): ImportExpression {
+        const start = this.advance() // consume 'import'
+        this.expectPunctuator("(")
+        const source = this.inBrackets(() => this.parseExpression())
+        this.expectPunctuator(")")
+        return { type: "ImportExpression", source, ...spanFrom(start, this.previous()) }
     }
 
     /** What follows a prefix expression's base: `.name`, `[key]`, `:m(...)`,
@@ -2513,6 +2799,7 @@ export class Parser {
 
     /** Does a `key: value` field, or a spread, start here? */
     private startsTableField(): boolean {
+        if (this.startsAccessorField()) return true
         const next = this.peek(1)
         const colon = next.type === "Punctuator" && (next as { value?: unknown }).value === ":"
         if (this.checkType("Identifier")) return colon
@@ -2520,7 +2807,28 @@ export class Parser {
         return this.checkOperator("...")
     }
 
+    /** `get name(` / `set name(`: an accessor, not a field named `get`. */
+    private startsAccessorField(): boolean {
+        if (!this.checkIdentifierValue("get") && !this.checkIdentifierValue("set")) return false
+        const key = this.peek(1)
+        const named = key.type === "Identifier" || (key.type === "Literal" && (key as { kind?: unknown }).kind === "string")
+        return named && this.punctuatorAt(2, "(")
+    }
+
     private parseTableField(stop: () => boolean): TableField {
+        if (this.startsAccessorField()) {
+            const start = this.advance() as Token & { value: "get" | "set" }
+            const keyTok = this.advance() as Token & { value?: unknown; raw?: string }
+            const key: Identifier | StringLiteral = keyTok.type === "Identifier"
+                ? tokenIdentifier(keyTok)
+                : { type: "StringLiteral", value: String(keyTok.value), raw: keyTok.raw ?? "", ...spanFrom(keyTok, keyTok) }
+            const func = this.parseFunctionBody(start)
+            bindThis(func, start)
+            const written = func.params.length - 1
+            if (start.value === "get" && written !== 0) this.problemAt(start, "A 'get' accessor takes no parameters")
+            if (start.value === "set" && written !== 1) this.problemAt(start, "A 'set' accessor takes exactly one parameter")
+            return { type: "TableFieldAccessor", kind: start.value, key, func, ...spanFrom(start, this.previous()) }
+        }
         if (this.checkOperator("...")) {
             this.advance()
             return { type: "TableFieldSpread", argument: this.expressionOr(stop) }
@@ -2802,7 +3110,8 @@ export class Parser {
                             type: "FunctionParameter",
                             name: nameTok.value as string,
                             typeAnnotation, rest: true,
-                            ...spanFrom(dots, this.previous()),
+                            // The name alone, as every binding's span is.
+                            ...spanFrom(nameTok, nameTok),
                         })
                         if (this.checkPunctuator(",")) {
                             this.problem("A rest parameter is the last one: nothing can follow '...'")
@@ -2849,7 +3158,9 @@ export class Parser {
                     type: "FunctionParameter",
                     name, pattern, typeAnnotation, default: def,
                     optional: optional || undefined,
-                    ...spanFrom(paramStart, this.previous()),
+                    // A named parameter's span is its name alone, as every
+                    // binding's is; a destructured one has only its pattern.
+                    ...(pattern ? spanFrom(paramStart, this.previous()) : spanFrom(paramStart, paramStart)),
                 })
                 // A trailing comma is allowed, as in TypeScript: a parameter
                 // list written one per line ends with one.
@@ -2857,7 +3168,7 @@ export class Parser {
                 break
             }
         }
-        this.expectPunctuator(")")
+        this.expectCloser(")")
 
         let returnType: TypeNode | undefined
         let predicate: TypePredicateNode | undefined
@@ -3085,15 +3396,19 @@ export class Parser {
         return left
     }
 
-    /** `A - B` — set difference. Between `|` and `&` in precedence, and left
-     *  associative, so `A - B - C` removes both. The lexer gives `->` its own
-     *  token, so a function type's arrow is never mistaken for one. */
+    /** tilua once wrote set difference `A - B`; it is `Exclude<A, B>` now,
+     *  one spelling for one thing. Writing `-` is reported, and in recovery
+     *  read as the `Exclude` it meant. */
     private parseDifferenceType(): TypeNode {
         let left = this.parseIntersectionType()
         while (this.checkOperator("-")) {
+            this.problem("A type has no '-': write 'Exclude<A, B>' for what of 'A' is not a 'B'")
             this.advance()
             const excluded = this.parseIntersectionType()
-            left = { type: "DifferenceTypeNode", base: left, excluded, ...spanFrom(left, excluded) }
+            left = {
+                type: "TypeReference", base: "Exclude", typeArguments: [left, excluded],
+                ...spanFrom(left, excluded),
+            } as TypeReference
         }
         return left
     }
@@ -3159,31 +3474,76 @@ export class Parser {
             const quasis: string[] = []
             const types: TypeNode[] = []
             let pending = ""
-            for (const part of (t as unknown as { parts: { kind: string; value?: string; raw: string }[] }).parts) {
+            for (const part of (t as unknown as { parts: { kind: string; value?: string; raw: string; line: number; column: number }[] }).parts) {
                 if (part.kind === "string") {
                     pending += part.value ?? ""
                 } else {
                     quasis.push(pending)
                     pending = ""
-                    types.push(parseTypeFromSource(part.raw))
+                    // Placed where it is written, as an expression's is.
+                    types.push(shiftSpans(parseTypeFromSource(part.raw), part.line, part.column))
                 }
             }
             quasis.push(pending)
             return { type: "TemplateLiteralTypeNode", quasis, types, ...spanFrom(t, this.previous()) }
         }
 
+        // `new (x: T) => R`: a type whose `new` makes an `R` — a class
+        // table's shape. tilua builds with `Name.new(x)`, so this is
+        // `{ new: (x: T) => R }`, written the way TypeScript writes it.
+        if (this.checkIdentifierValue("new") && (this.punctuatorAt(1, "(") || (this.peek(1).type === "Operator" && (this.peek(1) as { value?: unknown }).value === "<"))) {
+            const newTok = this.advance()
+            const generics = this.checkOperator("<") ? this.parseGenericTypeParameterList() : []
+            const parenStart = this.current()
+            this.expectPunctuator("(")
+            const made = this.parseFunctionTypeAfterParen(parenStart, generics)
+            if (made.type !== "FunctionTypeNode") this.error("Expected '=>' after the parameters of a constructor type")
+            return {
+                type: "TableTypeNode",
+                properties: [{
+                    type: "TableTypeProperty", name: "new", key: tokenIdentifier(newTok), valueType: made,
+                    optional: false, readonly: true, ...spanFrom(newTok, this.previous()),
+                }],
+                ...spanFrom(newTok, this.previous()),
+            } as TableTypeNode
+        }
+
         // `keyof T` / `infer U` — soft-keyword prefixes. Both require a type to
         // follow, so an ordinary type actually named `keyof` still parses.
+        // `keyof` takes the type with its suffixes, as TypeScript reads it:
+        // `keyof string[]` is the keys of a list, `(keyof T)[]` a list of keys.
         if (this.checkIdentifierValue("keyof") && this.startsType(this.peek(1))) {
             this.advance()
-            const target = this.parsePrimaryType()
+            const target = this.parseSuffixType()
             return { type: "KeyofTypeNode", target, ...spanFrom(t, this.previous()) }
         }
         if (this.checkIdentifierValue("infer") && this.peek(1).type === "Identifier") {
             this.advance()
             const nameTok = this.expectIdentifier()
             const name = nameTok.value as string
-            return { type: "InferTypeNode", name, id: tokenIdentifier(nameTok), ...spanFrom(t, this.previous()) }
+            // `infer N extends number` — unless the `extends` opens a
+            // conditional of its own (`infer U extends string ? A : B`),
+            // which only the `?` after it tells.
+            let constraint: TypeNode | undefined
+            if (this.checkIdentifierValue("extends")) {
+                const cursor = this.cursor
+                const errors = this.errors.length
+                const read = this.tryParse(() => {
+                    this.advance()
+                    return this.parseUnionType()
+                })
+                if (read && !this.checkPunctuator("?")) {
+                    constraint = read
+                } else {
+                    this.cursor = cursor
+                    this.errors.length = errors
+                }
+            }
+            return {
+                type: "InferTypeNode", name, id: tokenIdentifier(nameTok),
+                ...(constraint ? { constraint } : {}),
+                ...spanFrom(t, this.previous()),
+            }
         }
 
         if (t.type === "Operator" && (t as any).value === "<") {
@@ -3199,7 +3559,7 @@ export class Parser {
 
         if (t.type === "Operator" && (t as any).value === "...") {
             // Reported, and read as the array it would be.
-            this.problem("'...' in a type goes before a rest parameter, '...args: T[]', or at the end of a tuple, '[A, ...B[]]'")
+            this.problem("'...' in a type goes before a rest parameter, '...args: T[]', or inside a tuple, '[A, ...B]'")
             this.advance()
             const element = this.parseType()
             return { type: "ArrayTypeNode", element, ...spanFrom(t, this.previous()) } as TypeNode
@@ -3210,26 +3570,82 @@ export class Parser {
         }
 
         // `[number, string]` — tuple type; `[string, ...number[]]` ends in a
-        // rest of as many as there are.
+        // rest of as many as there are. A spread may stand anywhere —
+        // `[...T, U]`, `[infer H, ...infer R]` — and an element may be named,
+        // `[x: number, y?: number]`, as in TypeScript.
         if (t.type === "Punctuator" && (t as any).value === "[") {
             this.advance()
             const elements: TypeNode[] = []
-            let rest: TypeNode | undefined
+            const labels: (string | undefined)[] = []
+            const optionals: boolean[] = []
+            let labelled = false
             while (!this.checkPunctuator("]")) {
-                if (this.matchOperator("...")) {
-                    rest = this.parseType()
-                    if (rest.type !== "ArrayTypeNode" && !(rest.type === "TypeReference" && rest.base !== "nil")) {
-                        this.problem("The rest of a tuple is an array type: '...T[]'")
+                if (this.checkOperator("...")) {
+                    const dots = this.advance()
+                    // `...rest: T[]` — a named spread.
+                    if (this.checkType("Identifier") && this.punctuatorAt(1, ":")) {
+                        labels.push(this.expectIdentifier().value as string)
+                        labelled = true
+                        this.advance()
+                    } else {
+                        labels.push(undefined)
                     }
-                    this.matchPunctuator(",")
-                    break
+                    const spread = this.parseType()
+                    elements.push({ type: "RestTypeNode", typeAnnotation: spread, ...spanFrom(dots, this.previous()) } as RestTypeNode)
+                    optionals.push(false)
+                } else {
+                    let label: string | undefined
+                    let optional = false
+                    if (this.checkType("Identifier") && (this.punctuatorAt(1, ":") ||
+                        (this.punctuatorAt(1, "?") && this.punctuatorAt(2, ":")))) {
+                        label = this.expectIdentifier().value as string
+                        labelled = true
+                        optional = this.matchPunctuator("?")
+                        this.advance()
+                    }
+                    const start = this.current()
+                    let element = this.parseType()
+                    // `[A, B?]` — an element that may be left out; read as one
+                    // that may be nil, which in Lua is the same thing.
+                    if (!label && this.checkPunctuator("?")) { this.advance(); optional = true }
+                    if (optional) {
+                        element = {
+                            type: "UnionTypeNode",
+                            types: [element, { type: "TypeReference", base: "nil", typeArguments: [], ...spanFrom(start, start) } as TypeReference],
+                            ...spanFrom(start, this.previous()),
+                        }
+                    }
+                    elements.push(element)
+                    labels.push(label)
+                    optionals.push(optional)
                 }
-                elements.push(this.parseType())
                 if (this.matchPunctuator(",")) continue
                 break
             }
             this.expectPunctuator("]")
-            return { type: "TupleTypeNode", elements, ...(rest ? { rest } : {}), ...spanFrom(t, this.previous()) } as TupleTypeNode
+            // A spread of an array at the very end is the tuple's rest, as it
+            // always was.
+            let rest: TypeNode | undefined
+            const last = elements[elements.length - 1]
+            if (last?.type === "RestTypeNode" && last.typeAnnotation.type === "ArrayTypeNode") {
+                rest = last.typeAnnotation
+                elements.pop()
+                labels.pop()
+                optionals.pop()
+            }
+            // An element that has to be there cannot follow one that may be
+            // left out, as in TypeScript.
+            const firstOptional = optionals.indexOf(true)
+            if (firstOptional >= 0 && optionals.slice(firstOptional).some(o => !o)) {
+                this.problemAt(t, "A required element cannot follow an optional one")
+            }
+            return {
+                type: "TupleTypeNode", elements,
+                ...(rest ? { rest } : {}),
+                ...(labelled ? { labels } : {}),
+                ...(firstOptional >= 0 ? { optional: optionals } : {}),
+                ...spanFrom(t, this.previous()),
+            } as TupleTypeNode
         }
 
         // `typeof(x)` is Luau's spelling, and tilua has no such function, in a
@@ -3303,10 +3719,32 @@ export class Parser {
         this.error("Unexpected token in type annotation")
     }
 
-    private parseFunctionTypeAfterParen(start: Token, generics: GenericTypeParameter[]): TypeNode {
+    /** `(x: number): string` after a member's name, in an object type — a
+     *  signature, which says what it returns after a `:` rather than `=>`.
+     *  The cursor is at the `(` (or at the `<` of its type parameters). */
+    private parseSignatureType(start: Token): FunctionTypeNode {
+        const generics = this.checkOperator("<") ? this.parseGenericTypeParameterList() : []
+        this.expectPunctuator("(")
+        const { params } = this.parseFunctionTypeParams()
+        let returnType: TypeNode
+        let predicate: TypePredicateNode | undefined
+        if (this.matchPunctuator(":")) {
+            predicate = this.tryParseTypePredicate()
+            returnType = predicate
+                ? { type: "TypeReference", base: "boolean", typeArguments: [], ...spanFrom(start, this.previous()) } as TypeReference
+                : this.parseReturnType()
+        } else {
+            // TypeScript reads a signature with no return type as `any`;
+            // tilua says what it returns, so it is `nil` — it returns nothing.
+            returnType = { type: "TypeReference", base: "nil", typeArguments: [], ...spanFrom(this.previous(), this.previous()) } as TypeReference
+        }
+        return { type: "FunctionTypeNode", generics, params, returnType, predicate, ...spanFrom(start, this.previous()) }
+    }
+
+    /** The parameters of a function type, from after its `(` to past its `)`. */
+    private parseFunctionTypeParams(): { params: FunctionTypeParameter[]; rested: boolean } {
         const params: FunctionTypeParameter[] = []
         let rested = false
-
         if (!this.checkPunctuator(")")) {
             while (true) {
                 if (this.checkOperator("...")) {
@@ -3371,8 +3809,12 @@ export class Parser {
                 break
             }
         }
-
         this.expectPunctuator(")")
+        return { params, rested }
+    }
+
+    private parseFunctionTypeAfterParen(start: Token, generics: GenericTypeParameter[]): TypeNode {
+        const { params, rested } = this.parseFunctionTypeParams()
 
         // `->` is Luau's arrow, and reading both spellings only invited the
         // question of whether they differ. They never did: one arrow, for the
@@ -3493,84 +3935,176 @@ export class Parser {
             return this.parseMappedType(start)
         }
         this.expectPunctuator("{")
-        const properties: TableTypeProperty[] = []
+        const body = this.parseTypeMembers(start)
+        this.expectPunctuator("}")
+        return { ...body, ...spanFrom(start, this.previous()) }
+    }
 
-        while (!this.checkPunctuator("}")) {
+    /** The members of an object type or an interface, up to its `}`: each
+     *  separated from the next by `,`, `;` or a line break, as TypeScript
+     *  separates them.
+     *
+     *      name: T                 name?: T          readonly name: T
+     *      "Not An Identifier": T  [K]: V
+     *      name(x: T): R           name?<U>(x: U): R           -- a method
+     *      get name(): T           set name(value: T)          -- an accessor
+     *      (x: T): R                                           -- a call
+     *      new (x: T): R                                       -- what `new` makes
+     */
+    private parseTypeMembers(start: Token): TableTypeNode {
+        const properties: TableTypeProperty[] = []
+        const callSignatures: FunctionTypeNode[] = []
+        /** Accessors already read, by name, so a `get` and a `set` of one
+         *  name are one property. */
+        const accessors = new Map<string, Extract<TableTypeProperty, { type: "TableTypeProperty" }>>()
+
+        /** A member's name: an identifier, or a string for one that is not. */
+        const atKey = (offset = 0): boolean => {
+            const t = this.peek(offset)
+            return t.type === "Identifier" || (t.type === "Literal" && (t as { kind?: unknown }).kind === "string")
+        }
+        const keyAt = (offset: number, what: string): boolean =>
+            this.punctuatorAt(offset, what) || (what === "<" && this.peek(offset).type === "Operator" && (this.peek(offset) as { value?: unknown }).value === "<")
+        const takeKey = (): { name: string; key: Identifier } => {
+            const tok = this.advance() as Token & { value?: unknown }
+            return { name: String(tok.value), key: tokenIdentifier(tok) }
+        }
+
+        while (!this.checkPunctuator("}") && !this.isAtEnd()) {
             const propStart = this.current()
             if (this.checkPunctuator("[")) {
                 this.advance()
+                // `[key: string]: V`, TypeScript's spelling: the name says
+                // nothing, the type after it is the key.
+                if (this.checkType("Identifier") && this.punctuatorAt(1, ":")) {
+                    this.advance()
+                    this.advance()
+                }
                 const keyType = this.parseType()
                 this.expectPunctuator("]")
                 this.expectPunctuator(":")
                 const valueType = this.parseType()
                 properties.push({ type: "TableTypeIndexer", keyType, valueType, ...spanFrom(propStart, this.previous()) })
-            } else if (this.checkIdentifierValue("readonly") && this.peek(1).type === "Identifier") {
+            } else if (this.checkPunctuator("(") || this.checkOperator("<")) {
+                // `(x: T): R` — calling the value.
+                callSignatures.push(this.parseSignatureType(propStart))
+            } else if (this.checkIdentifierValue("new") && (keyAt(1, "(") || keyAt(1, "<"))) {
+                // `new (x: T): R` — what the type's `new` makes. A class table
+                // is built with `Name.new(...)`, called with `.`: no receiver.
+                const { name, key } = takeKey()
+                const valueType = this.parseSignatureType(propStart)
+                properties.push({
+                    type: "TableTypeProperty", name, key, valueType, optional: false, readonly: true,
+                    ...spanFrom(propStart, this.previous()),
+                })
+            } else if ((this.checkIdentifierValue("get") || this.checkIdentifierValue("set")) && atKey(1) && keyAt(2, "(")) {
+                // `get name(): T` / `set name(value: T)`: what the property
+                // holds, read-only when there is no setter.
+                const kind = (this.advance() as Token & { value: "get" | "set" }).value
+                const { name, key } = takeKey()
+                const signature = this.parseSignatureType(propStart)
+                const held = kind === "get" ? signature.returnType : signature.params[0]?.typeAnnotation
+                if (kind === "set" && signature.params.length !== 1) this.problemAt(propStart, "A 'set' accessor takes exactly one parameter")
+                if (kind === "get" && signature.params.length) this.problemAt(propStart, "A 'get' accessor takes no parameters")
+                const valueType: TypeNode = held ?? { type: "TypeReference", base: "unknown", typeArguments: [], ...spanFrom(propStart, propStart) } as TypeReference
+                const earlier = accessors.get(name)
+                if (earlier && earlier.accessor !== "both" && earlier.accessor !== kind) {
+                    earlier.accessor = "both"
+                    earlier.readonly = undefined
+                    // The getter says what is read.
+                    if (kind === "get") earlier.valueType = valueType
+                } else {
+                    if (earlier) this.problemAt(propStart, `Duplicate '${kind}' accessor '${name}'`)
+                    const property: Extract<TableTypeProperty, { type: "TableTypeProperty" }> = {
+                        type: "TableTypeProperty", name, key, valueType, optional: false,
+                        readonly: kind === "get" ? true : undefined, accessor: kind,
+                        ...spanFrom(propStart, this.previous()),
+                    }
+                    accessors.set(name, property)
+                    properties.push(property)
+                }
+            } else {
                 // `readonly name: T` — the property may not be assigned to.
                 // Still a soft keyword: a property actually named `readonly`
-                // is followed by `:` or `?`, not by another identifier.
-                this.advance()
-                const keyTok = this.expectIdentifier()
-                const name = keyTok.value as string
-                const optional = this.matchPunctuator("?")
-                this.expectPunctuator(":")
-                const valueType = this.parseType()
-                properties.push({
-                    type: "TableTypeProperty", name, key: tokenIdentifier(keyTok), valueType, optional, readonly: true,
-                    ...spanFrom(propStart, this.previous()),
-                })
-            } else if (this.checkType("Identifier") &&
-                ((this.peek(1).type === "Punctuator" && (this.peek(1) as any).value === ":") ||
-                 (this.peek(1).type === "Punctuator" && (this.peek(1) as any).value === "?" &&
-                  this.peek(2).type === "Punctuator" && (this.peek(2) as any).value === ":"))) {
-                // tilua uses TS-style `name?: T` for an optional property
-                // (it may be absent). A required property whose value may be
-                // nil is written `name: T | nil`.
-                const keyTok = this.expectIdentifier()
-                const name = keyTok.value as string
-                const optional = this.matchPunctuator("?")
-                this.expectPunctuator(":")
-                const valueType = this.parseType()
-                properties.push({
-                    type: "TableTypeProperty",
-                    name, key: tokenIdentifier(keyTok), valueType, optional,
-                    ...spanFrom(propStart, this.previous()),
-                })
-            } else if (this.checkType("Literal") && (this.current() as { kind?: unknown }).kind === "string" &&
-                this.peek(1).type === "Punctuator" &&
-                ((this.peek(1) as { value?: unknown }).value === ":" ||
-                 ((this.peek(1) as { value?: unknown }).value === "?" &&
-                  this.peek(2).type === "Punctuator" && (this.peek(2) as { value?: unknown }).value === ":"))) {
-                // `"Respawn After Kill": T` — a property whose name is not an
-                // identifier, written the way the object literal writes it.
-                const keyTok = this.advance() as Span & { value?: unknown }
-                const name = String(keyTok.value)
-                const optional = this.matchPunctuator("?")
-                this.expectPunctuator(":")
-                const valueType = this.parseType()
-                properties.push({
-                    type: "TableTypeProperty",
-                    name, key: tokenIdentifier(keyTok), valueType, optional,
-                    ...spanFrom(propStart, this.previous()),
-                })
-            } else {
-                this.error("Expected object type property ('name: T', '\"name\": T' or '[K]: V'); use 'T[]' for arrays and '[T, U]' for tuples")
+                // is followed by `:`, `?` or `(`, not by a name.
+                const readonly = this.checkIdentifierValue("readonly") && atKey(1) || undefined
+                if (readonly) this.advance()
+                if (!atKey()) {
+                    this.error("Expected object type property ('name: T', '\"name\": T', 'name(x: T): R' or '[K]: V'); use 'T[]' for arrays and '[T, U]' for tuples")
+                }
+                const afterName = this.punctuatorAt(1, "?") ? 2 : 1
+                if (keyAt(afterName, "(") || keyAt(afterName, "<")) {
+                    // `name(x: T): R` — a method: called with `:`, it is
+                    // handed its receiver first, as a class's methods are.
+                    const { name, key } = takeKey()
+                    const optional = this.matchPunctuator("?")
+                    const signature = this.parseSignatureType(propStart)
+                    const self: FunctionTypeParameter = {
+                        type: "FunctionTypeParameter", name: "self",
+                        typeAnnotation: { type: "TypeReference", base: "this", typeArguments: [], ...spanFrom(key, key) } as TypeReference,
+                        ...spanFrom(key, key),
+                    }
+                    signature.params.unshift(self)
+                    properties.push({
+                        type: "TableTypeProperty", name, key, valueType: signature, optional, readonly, method: true,
+                        ...spanFrom(propStart, this.previous()),
+                    })
+                } else if (this.punctuatorAt(afterName, ":")) {
+                    // tilua uses TS-style `name?: T` for an optional property
+                    // (it may be absent). A required property whose value may
+                    // be nil is written `name: T | nil`.
+                    const { name, key } = takeKey()
+                    const optional = this.matchPunctuator("?")
+                    this.expectPunctuator(":")
+                    const valueType = this.parseType()
+                    properties.push({
+                        type: "TableTypeProperty", name, key, valueType, optional, readonly,
+                        ...spanFrom(propStart, this.previous()),
+                    })
+                } else {
+                    this.error("Expected object type property ('name: T', '\"name\": T', 'name(x: T): R' or '[K]: V'); use 'T[]' for arrays and '[T, U]' for tuples")
+                }
             }
 
             if (this.matchPunctuator(",") || this.matchPunctuator(";")) continue
+            // A member on a line of its own needs nothing between it and the
+            // one before, as in TypeScript.
+            if (!this.checkPunctuator("}") && this.current().line.start > this.previous().line.end) continue
             break
         }
 
-        this.expectPunctuator("}")
-        return { type: "TableTypeNode", properties, ...spanFrom(start, this.previous()) }
+        return {
+            type: "TableTypeNode", properties,
+            ...(callSignatures.length ? { callSignatures } : {}),
+            ...spanFrom(start, this.previous()),
+        }
     }
 
-    private parseGenericTypeParameterList(): GenericTypeParameter[] {
+    private parseGenericTypeParameterList(allowVariance = false): GenericTypeParameter[] {
         const list: GenericTypeParameter[] = []
         this.expectOperator("<")
         while (true) {
             // `<const T>` — a hard keyword here, and unambiguous: a type
             // parameter cannot itself be named `const`.
             const isConst = this.matchKeyword("const")
+            // `<in T>`, `<out T>`, `<in out T>`: soft words, a modifier only
+            // when a name follows (`<out>` is a parameter called `out`).
+            let variance: "in" | "out" | "in out" | undefined
+            const varianceStart = this.current()
+            if (this.checkKeyword("in")) {
+                this.advance()
+                variance = "in"
+            }
+            if (this.checkIdentifierValue("out") && this.peek(1).type === "Identifier") {
+                this.advance()
+                variance = variance ? "in out" : "out"
+            }
+            // A function's or a class's parameter is read off what it is
+            // given, not compared by: only a type's says how it compares.
+            if (variance && !allowVariance) {
+                this.problemAt(varianceStart, "'in' and 'out' can only be written on the type parameters of a type alias or an interface")
+                variance = undefined
+            }
             const nameTok = this.expectIdentifier()
             // `T...`: a pack parameter. The arguments it stood for are a
             // tuple type now — `<T extends unknown[]>`, taken by `...args: T`.
@@ -3595,6 +4129,7 @@ export class Parser {
                 isConst: isConst || undefined,
                 constraint,
                 default: def,
+                ...(variance ? { variance } : {}),
                 ...spanFrom(nameTok, this.previous()),
             })
             if (this.matchPunctuator(",") && !this.checkOperator(">")) continue

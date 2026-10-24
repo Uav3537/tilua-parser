@@ -6,8 +6,8 @@
  */
 import { join, resolve, sep } from "node:path"
 import {
-    findConfig, loadConfig, resolveTypeLibraries, resolveModulePath, sourceMapTypes,
-    parse, parseWithRecovery, analyzeScopes, analyzeTypes, moduleExports, formatType, applyDirectives,
+    findConfig, loadConfig, resolveTypeLibraries, resolveModulePath, importExpressions, sourceMapTypes,
+    parse, parseWithRecovery, analyzeScopes, analyzeTypes, moduleExports, formatType, withoutAliasName, applyDirectives,
     type ProjectHost, type ModuleExports, type GenericForStatement,
     luauString, escapeLuauString, isLuauName, isIdentifier, withoutNil, isFunctionType, isInstanceOf, returnsTuple,
 } from "../src/index.js"
@@ -126,7 +126,7 @@ const rel = (path: string | undefined): string | undefined =>
     const LUAU = "node_modules/@tilua-types/luau/index.d.tilua"
     const ROBLOX = "node_modules/@tilua-types/roblox/index.d.tilua"
 
-    check("types: nothing is loaded by default", libraries([]).files, [])
+    check("types: no library is loaded by default", libraries([]).files, [])
     check("types: a library brings its dependencies first", libraries(["roblox"]).files, [LUAU, ROBLOX])
     check("types: a library listed twice loads once", libraries(["luau", "roblox"]).files, [LUAU, ROBLOX])
     check("types: a full package name", libraries(["@tilua-types/roblox"]).files, [LUAU, ROBLOX])
@@ -147,6 +147,45 @@ const rel = (path: string | undefined): string | undefined =>
         { files: [], problems: ["Cannot find type library '@tilua-types/nope' or 'nope'. Install it with: npm i -D @tilua-types/nope"] })
     check("types: a missing scoped one, by its own name", libraries(["@me/gone"]).problems,
         ["Cannot find type library '@me/gone'. Install it with: npm i -D @me/gone"])
+
+    // Lua's standard library is built in: its old package loads nothing,
+    // whether it is named, matched or depended on — unless `noLib`.
+    const withLua = {
+        ...files,
+        "node_modules/@tilua-types/lua/package.json": JSON.stringify({ name: "@tilua-types/lua" }),
+        "node_modules/@tilua-types/lua/index.d.tilua": "declare function print(...args: unknown[]): nil",
+        "node_modules/@tilua-types/game/package.json": JSON.stringify({ name: "@tilua-types/game", dependencies: { "@tilua-types/lua": "^5.0.0" } }),
+        "node_modules/@tilua-types/game/index.d.tilua": "declare game: unknown",
+    }
+    const LUA = "node_modules/@tilua-types/lua/index.d.tilua"
+    const GAME = "node_modules/@tilua-types/game/index.d.tilua"
+    const standard = (options: Record<string, unknown>): { files: (string | undefined)[]; problems: string[] } => {
+        const h = host({ ...withLua, "tilua.config.json": JSON.stringify(options) })
+        const config = loadConfig(join(ROOT, "tilua.config.json"), h).config!
+        const result = resolveTypeLibraries(config, h)
+        return { files: result.files.map(rel), problems: result.problems.map(p => p.message) }
+    }
+    check("types: `lua` is built in, so naming it loads nothing", standard({ types: ["lua"] }), { files: [], problems: [] })
+    check("types: nor does depending on it, or matching it", [
+        standard({ types: ["game"] }).files, standard({ types: ["@tilua-types/*"] }).files.includes(LUA),
+    ], [[GAME], false])
+    check("types: with `noLib` it is a library like any other", standard({ types: ["game"], noLib: true }).files, [LUA, GAME])
+    check("config: `noLib` is a boolean", (() => {
+        const h = host({ "tilua.config.json": JSON.stringify({ noLib: "yes" }) })
+        return loadConfig(join(ROOT, "tilua.config.json"), h).problems.map(p => p.message)
+    })(), ["'noLib' must be true or false"])
+
+    // And it is there in every file, with no library at all.
+    const bare = (code: string, noLib = false) => {
+        const program = parse(code)
+        const scopes = analyzeScopes(program, { reportUndeclared: true, noLib })
+        const types = analyzeTypes(program, scopes, { noLib })
+        return [...scopes.diagnostics, ...types.diagnostics].map(d => d.message)
+    }
+    check("standard library: `print`, `math`, `pcall` are there with nothing loaded", [
+        bare("const n: number = math.floor(1.5)\nprint(n)\nconst r = pcall(() => 1)\nconst ok: boolean = r.success"),
+        bare("print(1)", true),
+    ], [[], ["Cannot find name 'print'"]])
 }
 
 // --- import paths -----------------------------------------------------------
@@ -295,6 +334,25 @@ const rel = (path: string | undefined): string | undefined =>
     check("imports: `import * as` holds the module's exports", [namespace.bindings.area, namespace.bindings.c, namespace.bindings.d], ["number", "{ r: number }", "3"])
     check("imports: and its types, by qualified name", namespace.errors, [])
 
+    // `import("./m")`: the same value, read where the expression runs.
+    const dynamic = analyze(
+        `const Shapes = import("./shapes")\nconst area = Shapes.area(2)\nconst d = import("./shapes").default\nfunction late() { return import("./shapes").area }\nimport("./shapes")`,
+        { "./shapes": "export type Circle = { r: number }\nexport function area(r: number): number { return r * r }\nexport default 3" })
+    check("import(): the module's exports as one value", [dynamic.bindings.area, dynamic.bindings.d, dynamic.errors], ["number", "3", []])
+    check("import(): its members are read-only",
+        analyze(`const M = import("./m")\nM.value = 2`, { "./m": "export let value = 1" }).errors,
+        ["Cannot assign to 'value' because it is a read-only property"])
+    check("import(): a module that is not there",
+        analyze(`const M = import("./missing")`, {}).errors, ["Cannot find module './missing'"])
+    check("import(): the module is named by a string literal",
+        analyze(`const name = "./m"\nconst M = import(name)`, { "./m": "export const value = 1" }).errors,
+        ["import() takes a string literal: which module it loads is decided when the project is built"])
+    check("import(): `import` still starts a statement", analyze(`import { value } from "./m"\nconst v = value`, { "./m": "export const value = 1" }).bindings.v, "1")
+    check("import(): every one in a file can be listed",
+        importExpressions(parse(`const a = import("./a")\nfunction f() { return [import("./b"), import("./a").x] }`))
+            .map(node => (node.source as { value?: string }).value), ["./a", "./b", "./a"])
+
+
     // Imports are read-only.
     check("imports: an imported name cannot be assigned",
         analyze(`import { value } from "./m"\nvalue = 2`, { "./m": "export const value = 1" }).errors, ["Cannot assign to 'value' — it is an import"])
@@ -429,7 +487,7 @@ const rel = (path: string | undefined): string | undefined =>
         const scopes = analyzeScopes(program)
         const types = analyzeTypes(program, scopes)
         const bindings: Record<string, string> = {}
-        for (const [id, type] of types.bindingType) bindings[scopes.bindings.get(id)!.name] = formatType(type)
+        for (const [id, type] of types.bindingType) { const b = scopes.bindings.get(id)!; if (!b.isBuiltin) bindings[b.name] = formatType(type) }
         return {
             errors: errors.map(e => e.message.replace(/, got .*$/, "").replace(/ \(\d+:\d+\)$/, "")),
             statements: program.body.statements.map(st => st.type),
@@ -517,7 +575,7 @@ const rel = (path: string | undefined): string | undefined =>
             "Unexpected token in expression",
             "Expected ')'",
             "Unexpected token in expression",
-        ], ["scriptArgs", "print", "a", "b", "part", "n", "c", "s", "d"]])
+        ], ["a", "b", "part", "n", "c", "s", "d"]])
     }
 
     // `satisfies`: checked against the contract, typed as the value.
@@ -626,7 +684,7 @@ const rel = (path: string | undefined): string | undefined =>
         analyze("function f(a: any) { return a * 2 }").errors,
         analyze("function f(s: string | nil) { return s .. \"x\" }").errors,
         analyze("function f(n: number) { return n .. \"x\" }").errors,
-        analyze("function f(n: number) { return #n }").errors,
+        analyze("function f(n: number) { return n.length }").errors,
         analyze("function f(a: number, b: string) { return a < b }").errors,
         analyze("function f(a: string, b: string) { return a < b }").errors,
     ], [
@@ -635,7 +693,7 @@ const rel = (path: string | undefined): string | undefined =>
         [],
         ["Operator '..' cannot be applied to types 'string | nil' and '\"x\"'"],
         [],
-        ["Operator '#' cannot be applied to type 'number'"],
+        ["Property 'length' does not exist on type 'number'"],
         ["Operator '<' cannot be applied to types 'number' and 'string'"],
         [],
     ])
@@ -682,8 +740,8 @@ const rel = (path: string | undefined): string | undefined =>
         ], [
             ["Parameter 'v' has no type, so it is 'any': give it one, or a default to read it from", "Argument of type '(v: any) => true' is not assignable to parameter of type '{ Name: string }'"],
             ["Argument of type '1' is not assignable to parameter of type '{ Name: string }'"],
-            ["Argument of type '\"a\"' is not assignable to parameter of type 'number'"],
-            "number",
+            ["Argument of type '\"a\"' is not assignable to parameter of type '1'"],
+            "1 | 2",
             "number | string",
             "number[]",
             "boolean[]",
@@ -876,7 +934,7 @@ const rel = (path: string | undefined): string | undefined =>
         `    Blocking: ["Blocking"],`,
         `    BlockingTick: ["Blocking", "Tick"],`,
         `    Health: ["Health"],`,
-        `} as const satisfies { [string]: string[] }`,
+        `} as const satisfies { [string]: readonly string[] }`,
         `declare known: "Blocking" | "Health"`,
         `declare partly: "Blocking" | "Missing"`,
         "const both = Paths[known]",
@@ -890,13 +948,13 @@ const rel = (path: string | undefined): string | undefined =>
     check("indexing: a key that is one of several reads each, and one that may miss reads nil", [
         indexed.bindings.both, indexed.bindings.some, indexed.bindings.one, indexed.bindings.element,
     ], [
-        `["Blocking"] | ["Health"]`,
-        `["Blocking"] | nil`,
-        `["Health"]`,
+        `readonly ["Blocking"] | readonly ["Health"]`,
+        `readonly ["Blocking"] | nil`,
+        `readonly ["Health"]`,
         "number",
     ])
     check("indexing: a key that certainly is not there is an error, as `.Nope` would be",
-        [indexed.errors, indexed.bindings.none], [["Property 'Nope' does not exist on type '{ readonly Blocking: [\"Blocking\"], readonly BlockingTick: [\"Blocking\", \"Tick\"], readonly Health: [\"Health\"] }'"], "any"])
+        [indexed.errors, indexed.bindings.none], [["Property 'Nope' does not exist on type '{ Blocking, BlockingTick, Health }'"], "any"])
 
     // A key that cannot be a key of the table is an error, not an `unknown`.
     const badKeys = analyze([
@@ -1036,7 +1094,7 @@ const rel = (path: string | undefined): string | undefined =>
     check("subtraction: one fits another that removes no more", [
         analyze([
             `declare value: unknown`,
-            "declare function take(v: string | (unknown - (nil | false))): nil",
+            "declare function take(v: string | Exclude<unknown, nil | false>): nil",
             "if (value) { take(value) }",
         ].join("\n")).errors,
         analyze([
@@ -1377,7 +1435,7 @@ const a: A = { p: 1 }`).errors.length,
         const named = (name: string) => formatType(types.aliases.get(name)!)
         check("indexed access: a key the table does not have reads as nil",
             [named("Present"), named("WithMissing"), named("Gone"), named("Partly")],
-            [`[1] | ["x"]`, `[1] | ["x"] | nil`, "nil", "number | nil"])
+            [`readonly [1] | readonly ["x"]`, `readonly [1] | readonly ["x"] | nil`, "nil", "number | nil"])
 
         // A class is nominal: a member it does not declare is not nil, it is
         // nothing at all.
@@ -1405,8 +1463,8 @@ const a: A = { p: 1 }`).errors.length,
         ].join("\n"))
         const program = parse([
             `const names = ["a", "bb"]`,
-            "const long = names:filter(function(v) { return #v > 1 })",
-            "const sizes = names:map(function(v) { return #v })",
+            "const long = names:filter(function(v) { return v.length > 1 })",
+            "const sizes = names:map(function(v) { return v.length })",
             "const last = ([1, 2]):pop()",
             "declare text: string",
             "const up = text:upper()",
@@ -1454,7 +1512,7 @@ const a: A = { p: 1 }`).errors.length,
         const ownTypes = analyzeTypes(own, ownScopes, { libs: [first, second] })
         const mine: Record<string, string> = {}
         for (const [id, type] of ownTypes.bindingType) mine[ownScopes.bindings.get(id)!.name] = formatType(type)
-        check("layered aliases: the file's own replaces them", mine.c, "unknown")
+        check("layered aliases: the file's own replaces them", mine.c, "any")
     }
 
     // A literal written in an argument keeps its literal type when the
@@ -1511,7 +1569,7 @@ const a: A = { p: 1 }`).errors.length,
             "",
         ].join("\n"))
         const scopes = analyzeScopes(program)
-        const types = analyzeTypes(program, scopes, { libs: [lua, luau] })
+        const types = analyzeTypes(program, scopes, { libs: [lua, luau], noLib: true })
         const bindings: Record<string, string> = {}
         for (const [id, type] of types.bindingType) bindings[scopes.bindings.get(id)!.name] = formatType(type)
         check("layered definitions: a table declared twice keeps both files' members",
@@ -1647,7 +1705,7 @@ function g() {
     ].join("\n"))
     check("correlation: a value read by key says which key it was",
         [correlated.bindings.inMap, correlated.bindings.thePath, correlated.bindings.missing],
-        [`"Blocking" | "Health"`, `["Blocking"] | ["Health"]`, `"KB" | "Knocked"`])
+        [`"Blocking" | "Health"`, `readonly ["Blocking"] | readonly ["Health"]`, `"KB" | "Knocked"`])
 
     // Each line of an overload set is a node of its own.
     {
@@ -1901,7 +1959,7 @@ function g() {
     ].join("\n"), { "./classes": classes })
     check("type queries: an exported alias of `typeof` a value, imported elsewhere",
         [exportedQuery.bindings.t, exportedQuery.bindings.n, exportedQuery.errors],
-        [`["Sans", "Asgore"]`, `"Sans" | "Asgore"`, [`Type '"Nope"' is not assignable to '"Sans" | "Asgore"'`]])
+        [`readonly ["Sans", "Asgore"]`, `"Sans" | "Asgore"`, [`Type '"Nope"' is not assignable to '"Sans" | "Asgore"'`]])
 
     // `--@tilua-...` comments switch checking off.
     const directed = (code: string) => {
@@ -2004,7 +2062,7 @@ function g() {
         "    const d = z.Name",
         "}",
         "function looped(list: (Node | nil)[]) {",
-        "    for (i = 1, #list) {",
+        "    for (i = 1, list.length) {",
         "        const item = list[i]",
         "        const e = item.Name",
         "    }",
@@ -2114,7 +2172,7 @@ function g() {
         [emptyBranch.bindings.active, emptyBranch.bindings.picked, emptyBranch.bindings.shape, emptyBranch.bindings.mixed,
             emptyBranch.bindings.maybe, emptyBranch.bindings.names, emptyBranch.bindings.keyed],
         ["string[]", "string[]", "{ x: number } | {}", "1 | unknown[]",
-            "[\"KJ\"] | []", "[\"Sans\", \"Asgore\", \"KJ\"] | [\"Sans\", \"Asgore\"]", "(\"Sans\" | \"Asgore\" | \"KJ\")[]"])
+            "readonly [\"KJ\"] | []", "[\"Sans\", \"Asgore\", \"KJ\"] | [\"Sans\", \"Asgore\"]", "(\"Sans\" | \"Asgore\" | \"KJ\")[]"])
     // A literal written into a table or array widens; a value read into one
     // keeps its type, as in TypeScript.
     const kept = analyze([
@@ -2319,6 +2377,59 @@ function g() {
     check("rest: the arguments say what a generic rest parameter holds",
         [generic.errors, generic.bindings.ofNumbers, generic.bindings.ofStrings],
         [[], "number | nil", "string | nil"])
+
+    // A rest parameter can depend on the call's own type arguments: once `N`
+    // is inferred from the arguments before it, the list is known.
+    const dependent = analyze([
+        'type Commands = { Name: "attack", Args: [number] } | { Name: "heal", Args: [number, boolean] }',
+        'type ArgsOf<N> = Extract<Commands, { Name: N }>["Args"]',
+        'declare function run<N extends "attack" | "heal">(name: N, ...args: ArgsOf<N>): nil',
+        'run("attack", 1)',
+        'run("heal", 1, true)',
+        'run("attack", "x")',
+        'run("attack")',
+        'run("heal", 1, true, 2)',
+    ].join("\n"))
+    check("rest: a list that depends on a type parameter is read once it is inferred",
+        dependent.errors, [
+            "Argument of type '\"x\"' is not assignable to parameter of type 'number'",
+            "Expected 2 arguments, got 1",
+            "Expected 3 arguments, got 4",
+        ])
+
+    // A union of tuples is one of those lists: how a trailing argument is
+    // made optional.
+    const lists = analyze([
+        'declare function opt(...args: [number] | [number, string]): nil',
+        'opt(1)',
+        'opt(1, "a")',
+        'opt("a")',
+        'opt()',
+        'type Opt<N> = N extends "a" ? [number] | [number, boolean] : [string]',
+        'declare function pick<N extends "a" | "b">(n: N, ...args: Opt<N>): nil',
+        'pick("a", 1)',
+        'pick("a", 1, true)',
+        'pick("b", "s")',
+        'pick("b", 1)',
+        'pick("a", 1, 2)',
+    ].join("\n"))
+    check("rest: a union of tuples takes any one of its lists",
+        lists.errors, [
+            "Argument of type '\"a\"' is not assignable to parameter of type 'number'",
+            "Expected 1-2 arguments, got 0",
+            "Argument of type '1' is not assignable to parameter of type 'string'",
+            "Argument of type '2' is not assignable to parameter of type 'boolean'",
+        ])
+
+    // Inside the body, such a parameter is every list its constraint allows.
+    const inside = analyze([
+        'type Opt<N> = N extends "a" ? [number] | [number, boolean] : [string]',
+        'function impl<N extends "a" | "b">(n: N, ...args: Opt<N>): nil {',
+        '    const held = args',
+        '}',
+    ].join("\n"))
+    check("rest: a dependent list is every list it can be, inside the body",
+        [inside.errors, inside.bindings.held], [[], "[number] | [number, boolean] | [string]"])
 
     check("rest: no annotation is an array of anything",
         analyze("function f(...rest) {\n    const held = rest\n}").bindings.held, "unknown[]")
@@ -2553,7 +2664,7 @@ function g() {
     ].join("\n"))
     check("arrows: one parameter bare, and a generic one",
         [short.errors, short.bindings.identity, short.bindings.one],
-        [[], "<T>(v: T) => T", "number"])
+        [[], "<T>(v: T) => T", "1"])
 
     // What starts the same way still reads the way it did.
     const unchanged = analyze([
@@ -2605,7 +2716,7 @@ function g() {
         `const id = "raw" as UserId`,
         "findUser(id)",
         "take(id)",
-        "const length = #id",
+        "const length = id.length",
     ].join("\n"))
     check("branded: `as` makes one, and it is still what it was branded from",
         [made.errors, made.bindings.id, made.bindings.length],
@@ -2656,28 +2767,35 @@ function g() {
         "declare words: string[]",
     ].join("\n")
 
+    // An array's length is not known, so it fills a rest parameter and
+    // nothing else, as in TypeScript; a tuple fills exactly its own length.
     const fills = analyze([
         DECLARED,
-        "const summed = add3(...nums)",
-        "const withOne = add3(1, ...nums)",
+        "declare trio: [number, number, number]",
+        "declare pair: [number, number]",
+        "const summed = add3(...trio)",
+        "const withOne = add3(1, ...pair)",
         `const joined = join("-", ...words)`,
+        "const fromArray = add3(...nums)",
+        "const afterOne = add3(1, ...nums)",
     ].join("\n"))
-    check("spread: an array fills the parameters from there on",
+    check("spread: an array fills a rest parameter, a tuple fills its own length",
         [fills.errors, fills.bindings.summed, fills.bindings.withOne, fills.bindings.joined],
-        [[], "number", "number", "string"])
+        [["A spread of 'number[]' may hold any number of values, so it can only fill a rest parameter: spread a tuple of the right length to fill fixed parameters", "A spread of 'number[]' may hold any number of values, so it can only fill a rest parameter: spread a tuple of the right length to fill fixed parameters"], "number", "number", "string"])
 
     check("spread: and what it holds still has to fit", analyze([
         DECLARED,
-        "add3(...words)",
+        "declare strings: [string, string, string]",
+        "add3(...strings)",
         `join("-", ...nums)`,
     ].join("\n")).errors, [
         "Argument of type 'string' is not assignable to parameter of type 'number'",
         "Argument of type 'number' is not assignable to parameter of type 'string'",
     ])
 
-    // How many an array holds is not known, so the count says nothing — but a
-    // tuple's is, and it does.
-    check("spread: an array says nothing about how many, a tuple says exactly", analyze([
+    // How many an array holds is not known, so it may only fill a rest
+    // parameter; a tuple's is, and the count is checked.
+    check("spread: an array cannot fill fixed parameters, a tuple is counted", analyze([
         DECLARED,
         "declare pair: [number, string]",
         "declare trio: [number, number, number]",
@@ -2688,6 +2806,7 @@ function g() {
         "add3(...trio)",
         "takes(...trio)",
     ].join("\n")).errors, [
+        "A spread of 'number[]' may hold any number of values, so it can only fill a rest parameter: spread a tuple of the right length to fill fixed parameters",
         "Expected 3 arguments, got 0",
         "Expected 2 arguments, got 3",
     ])
@@ -3164,7 +3283,7 @@ function g() {
         "const b = Vec.new(2)",
         "const sum = a + b",
         "const less = a < b",
-        "const size = #a",
+        "const size = a.length",
         "const scaled = a(3)",
         "for (const [index, label] in a) {",
         "    const i: number = index",
@@ -3192,6 +3311,34 @@ function g() {
         ["Only a field can be 'readonly' (2:5)", "'static' is written twice (3:12)"],
         true,
     ])
+
+    // A member that cannot be read costs that member: the class keeps the
+    // others, and what follows the class is untouched.
+    {
+        const recovered = (code: string): unknown[] => {
+            const { program, errors } = parseWithRecovery(code)
+            const [first, ...rest] = program.body.statements
+            const members = first.type === "ClassDeclaration"
+                ? first.members.map(m => m.type === "ClassConstructor" ? "constructor" : m.name.name)
+                : first.type
+            return [members, rest.map(s => s.type), errors.map(e => e.message)]
+        }
+        check("class: recovery keeps the members around a broken one", [
+            recovered("class A {\n    x: number\n    private y\n    m() { return 1 }\n}\nconst after = 1"),
+            recovered("class A {\n    x: number\n    y:\n    m() { return 1 }\n}\nconst after = 1"),
+            recovered("class A {\n    x: (a: ) => nil\n    m() { return 1 }\n}\nconst after = 1"),
+            recovered("class A {\n    x: number\n    +\n    m() { return 1 }\n}\nconst after = 1"),
+            recovered("class A {\n    constructor(a: number {\n        this.x = a\n    }\n    m() { return 1 }\n}\nconst after = 1"),
+            recovered("class A {\n    k(a: number, { return 1 }\n    m() { return 1 }\n}\nconst after = 1"),
+        ], [
+            [["x", "y", "m"], ["VariableDeclaration"], ["A class field needs a type ('name: T') or a value ('name = v') (3:13)"]],
+            [["x", "y", "m"], ["VariableDeclaration"], ["Expected a type, got 'm' (4:5)"]],
+            [["x", "m"], ["VariableDeclaration"], ["Unexpected token in type annotation, got ')' (2:12)"]],
+            [["x", "m"], ["VariableDeclaration"], ["Expected a class member: a field, a method, 'constructor', 'get' or 'set', got '+' (3:5)"]],
+            [["constructor", "m"], ["VariableDeclaration"], ["Expected ')', got '{' (2:27)"]],
+            [["m"], ["VariableDeclaration"], ["Expected identifier, got 'return' (2:20)"]],
+        ])
+    }
 
     // A class written inside a function names a type there too.
     const nested = analyze([
@@ -3702,6 +3849,23 @@ function g() {
         [], [], [],
     ])
 
+    // A pattern's key is a member read like `v.key`: one the value certainly
+    // lacks is reported, in a declaration, a nested pattern or a parameter.
+    check("destructuring: a key the value does not have", [
+        analyze("declare load: () => { BridgeNet: number }\nconst { ClassMap } = load()").errors,
+        analyze("declare u: { p: { a: number } }\nconst { p: { b } } = u").errors,
+        analyze("function f({ z }: { a: number }) { return z }").errors,
+        analyze("declare u: { a: number }\nlet a = 0\n{ b: a } = u").errors,
+        analyze("declare u: { [string]: number }\nconst { anything } = u").errors,
+        analyze("declare u: { a?: number }\nconst { a = 1 } = u").errors,
+    ], [
+        ["Property 'ClassMap' does not exist on type '{ BridgeNet: number }'"],
+        ["Property 'b' does not exist on type '{ a: number }'"],
+        ["Property 'z' does not exist on type '{ a: number }'"],
+        ["Property 'b' does not exist on type '{ a: number }'"],
+        [], [],
+    ])
+
     // `private` is checked where the member is reached: inside the class that
     // declared it, including functions nested in its methods, and nowhere
     // else — a subclass is outside.
@@ -3888,6 +4052,761 @@ function g() {
         "}",
         "const v = A.new():get2()",
     ].join("\n"), "v"), "number")
+}
+
+// --- type-level programming ------------------------------------------------
+// The recursive, tuple- and string-walking types TypeScript programs write,
+// each worked out to the type TypeScript gives.
+{
+    /** What each `type __name = ...` comes to, printed as its structure. */
+    const computed = (code: string): { types: Record<string, string>; errors: string[] } => {
+        const program = parse(code)
+        const scopes = analyzeScopes(program)
+        const types = analyzeTypes(program, scopes, {})
+        const out: Record<string, string> = {}
+        for (const [name, type] of types.aliases) {
+            if (name.startsWith("__")) out[name.slice(2)] = formatType(withoutAliasName(type))
+        }
+        return { types: out, errors: [...scopes.diagnostics, ...types.diagnostics].map(d => d.message) }
+    }
+    const analyze = (code: string) => {
+        const program = parse(code)
+        const scopes = analyzeScopes(program)
+        const types = analyzeTypes(program, scopes, {})
+        const bindings: Record<string, string> = {}
+        for (const [id, type] of types.bindingType) bindings[scopes.bindings.get(id)!.name] = formatType(type)
+        return { errors: [...scopes.diagnostics, ...types.diagnostics].map(d => d.message), bindings }
+    }
+    const typeOf = (code: string): string | undefined => {
+        const { types, errors } = computed(code)
+        return errors.length ? `errors: ${errors.join("; ")}` : types.r
+    }
+
+    check("type-level: a tuple's head, tail and length", [
+        typeOf("type First<T> = T extends [infer H, ...infer _] ? H : never\ntype __r = First<[1, 2, 3]>"),
+        typeOf("type Last<T> = T extends [...infer _, infer L] ? L : never\ntype __r = Last<[1, 2, 3]>"),
+        typeOf("type __r = [1, 2, 3][\"length\"]"),
+        typeOf("type __r = number[][\"length\"]"),
+    ], ["1", "3", "3", "number"])
+
+    check("type-level: spreads lay out where they stand", [
+        typeOf("type Concat<A extends unknown[], B extends unknown[]> = [...A, ...B]\ntype __r = Concat<[1, 2], [3]>"),
+        typeOf("type __r = [0, ...[1, 2], 3]"),
+        typeOf("type __r = [0, ...string[]]"),
+        typeOf("type __r = [x: number, y?: string]"),
+    ], ["[1, 2, 3]", "[0, 1, 2, 3]", "[0, ...string[]]", "[x: number, y?: string]"])
+
+    check("type-level: a recursive alias recurses", [
+        typeOf("type Reverse<T extends unknown[]> = T extends [infer H, ...infer R] ? [...Reverse<R>, H] : []\ntype __r = Reverse<[1, 2, 3]>"),
+        typeOf("type Flatten<T> = T extends [infer H, ...infer R] ? (H extends unknown[] ? [...Flatten<H>, ...Flatten<R>] : [H, ...Flatten<R>]) : []\ntype __r = Flatten<[1, [2, [3]], 4]>"),
+        typeOf("type Unwrap<T> = T extends { value: infer V } ? Unwrap<V> : T\ntype __r = Unwrap<{ value: { value: number } }>"),
+    ], ["[3, 2, 1]", "[1, 2, 3, 4]", "number"])
+
+    check("type-level: counting with tuples", [
+        typeOf([
+            "type Build<N extends number, Acc extends unknown[] = []> = Acc[\"length\"] extends N ? Acc : Build<N, [...Acc, unknown]>",
+            "type Add<A extends number, B extends number> = [...Build<A>, ...Build<B>][\"length\"]",
+            "type __r = Add<3, 4>",
+        ].join("\n")),
+        typeOf([
+            "type Build<N extends number, Acc extends unknown[] = []> = Acc[\"length\"] extends N ? Acc : Build<N, [...Acc, 1]>",
+            "type Sub<A extends number, B extends number> = Build<A> extends [...Build<B>, ...infer R] ? R[\"length\"] : never",
+            "type __r = Sub<10, 3>",
+        ].join("\n")),
+        typeOf([
+            "type Build<N extends number, Acc extends unknown[] = []> = Acc[\"length\"] extends N ? Acc : Build<N, [...Acc, 1]>",
+            "type __r = Build<60>[\"length\"]",
+        ].join("\n")),
+    ], ["7", "7", "60"])
+
+    check("type-level: a recursion that never ends gives up rather than hanging",
+        typeOf("type Inf<T> = Inf<[T]>\ntype __r = Inf<1>"), "any")
+
+    check("type-level: template literals take strings apart", [
+        typeOf("type Split<S extends string, D extends string> = S extends `${infer A}${D}${infer B}` ? [A, ...Split<B, D>] : [S]\ntype __r = Split<\"a.b.c\", \".\">"),
+        typeOf("type TrimLeft<S extends string> = S extends ` ${infer R}` ? TrimLeft<R> : S\ntype __r = TrimLeft<\"   hi\">"),
+        typeOf("type StrLen<S extends string, Acc extends unknown[] = []> = S extends `${infer _}${infer R}` ? StrLen<R, [...Acc, 1]> : Acc[\"length\"]\ntype __r = StrLen<\"hello\">"),
+        typeOf("type Camel<S extends string> = S extends `${infer H}_${infer T}` ? `${H}${Camel<Capitalize<T>>}` : S\ntype __r = Camel<\"foo_bar_baz\">"),
+        typeOf("type ReplaceAll<S extends string, F extends string, T extends string> = F extends \"\" ? S : S extends `${infer A}${F}${infer B}` ? `${A}${T}${ReplaceAll<B, F, T>}` : S\ntype __r = ReplaceAll<\"a-b-c\", \"-\", \"+\">"),
+    ], ['["a", "b", "c"]', '"hi"', "5", '"fooBarBaz"', '"a+b+c"'])
+
+    check("type-level: `infer N extends number` reads a number out of a string", [
+        typeOf("type Num<T> = T extends `${infer N extends number}` ? N : never\ntype __r = Num<\"42\">"),
+        typeOf("type Num<T> = T extends `${infer N extends number}` ? N : never\ntype __r = Num<\"x\">"),
+        typeOf("type Str<T> = T extends [infer S extends string, ...unknown[]] ? S : never\ntype __r = Str<[1, 2]>"),
+    ], ["42", "never", "never"])
+
+    check("type-level: distribution, and the bracket that stops it", [
+        typeOf("type ToArray<T> = T extends unknown ? T[] : never\ntype __r = ToArray<string | number>"),
+        typeOf("type ToArray<T> = [T] extends [unknown] ? T[] : never\ntype __r = ToArray<string | number>"),
+        typeOf("type IsNever<T> = [T] extends [never] ? true : false\ntype __r = IsNever<never>"),
+        typeOf("type IsAny<T> = 0 extends 1 & T ? true : false\ntype __r = [IsAny<any>, IsAny<string>]"),
+    ], ["string[] | number[]", "(string | number)[]", "true", "[true, false]"])
+
+    check("type-level: a parameter's place infers an intersection",
+        typeOf("type U2I<U> = (U extends unknown ? (k: U) => nil : never) extends (k: infer I) => nil ? I : never\ntype __r = U2I<{ a: number } | { b: string }>"),
+        "{ a: number } & { b: string }")
+
+    check("type-level: mapped types rename, filter and recurse", [
+        typeOf("type Getters<T> = { [K in keyof T as `get${Capitalize<K & string>}`]: () => T[K] }\ntype __r = Getters<{ name: string, age: number }>"),
+        typeOf("type PickByValue<T, V> = { [K in keyof T as T[K] extends V ? K : never]: T[K] }\ntype __r = PickByValue<{ a: number, b: string, c: number }, number>"),
+        typeOf("type DeepPartial<T> = { [K in keyof T]?: T[K] extends object ? DeepPartial<T[K]> : T[K] }\ntype __r = DeepPartial<{ a: { b: number }, c: string }>"),
+        typeOf("type FromEntries<E extends [string, unknown]> = { [P in E as P[1]]: P[2] }\ntype __r = FromEntries<[\"a\", number] | [\"b\", string]>"),
+        typeOf("type Boxed<T extends unknown[]> = { [K in keyof T]: { v: T[K] } }\ntype __r = Boxed<[number, string]>"),
+    ], [
+        "{ getAge: () => number, getName: () => string }",
+        "{ a: number, c: number }",
+        "{ a?: { b?: number }, c?: string }",
+        "{ a: number, b: string }",
+        "[{ v: number }, { v: string }]",
+    ])
+
+    check("type-level: paths through an object", [
+        typeOf("type Paths<T> = T extends object ? { [K in keyof T]: K extends string ? K | `${K}.${Paths<T[K]>}` : never }[keyof T] : never\ntype __r = Paths<{ a: { b: number }, c: string }>"),
+        typeOf("type Get<T, P extends string> = P extends `${infer H}.${infer R}` ? (H extends keyof T ? Get<T[H], R> : never) : (P extends keyof T ? T[P] : never)\ntype __r = Get<{ a: { b: { c: number } } }, \"a.b.c\">"),
+    ], ['"a" | "a.b" | "c"', "number"])
+
+    check("type-level: `object` is anything that is not a primitive", [
+        typeOf("type IsObject<T> = T extends object ? true : false\ntype __r = [IsObject<{}>, IsObject<number[]>, IsObject<() => nil>, IsObject<string>, IsObject<nil>]"),
+    ], ["[true, true, true, false, false]"])
+
+    check("type-level: `K & string` keeps the keys that are strings", [
+        typeOf("type __r = (\"a\" | \"b\" | 1) & string"),
+        typeOf("type __r = \"a\" & number"),
+    ], ['"a" | "b"', "never"])
+
+    check("type-level: a variadic rest is laid out once known",
+        typeOf("type Fn<A extends unknown[]> = (...args: [...A, string]) => nil\ntype __r = Fn<[number]>"),
+        "(number, string) => nil")
+
+    // A computation still waiting on its parameter is shown as what it was
+    // written as, not as the machinery it expands to.
+    const deferred = analyze([
+        "type Reverse<T extends unknown[]> = T extends [infer H, ...infer R] ? [...Reverse<R>, H] : []",
+        "declare function reverse<const T extends unknown[]>(xs: T): Reverse<T>",
+        "const r = reverse([1, \"a\", true])",
+        "const f = reverse",
+    ].join("\n"))
+    check("type-level: a generic signature reads by the alias's name", [deferred.bindings.r, deferred.bindings.f, deferred.errors], [
+        '[true, "a", 1]', "<const T extends unknown[]>(xs: T) => Reverse<T>", [],
+    ])
+
+    check("type-level: a tuple literal fits the literal tuple it is annotated with",
+        analyze("const r: [\"a\", 1] = [\"a\", 1]").errors, [])
+}
+
+// --- variadic tuples, Exclude, and the array methods ------------------------
+{
+    const analyze = (code: string) => {
+        const program = parse(code)
+        const scopes = analyzeScopes(program)
+        const types = analyzeTypes(program, scopes, {})
+        const bindings: Record<string, string> = {}
+        for (const [id, type] of types.bindingType) bindings[scopes.bindings.get(id)!.name] = formatType(type)
+        return { errors: [...scopes.diagnostics, ...types.diagnostics].map(d => d.message), bindings }
+    }
+    const result = (code: string): string => {
+        const { bindings, errors } = analyze(code)
+        return errors.length ? `errors: ${errors.join("; ")}` : bindings.r
+    }
+
+    check("variadic: a literal written for `[...T]` is a tuple of what it holds", [
+        result("declare function id<T extends unknown[]>(xs: [...T]): T\nconst r = id([1, \"a\", true])"),
+        result("declare function tail<T extends unknown[]>(xs: [unknown, ...T]): T\nconst r = tail([1, \"a\", true])"),
+        result("declare function last<T extends unknown[], L>(xs: [...T, L]): L\nconst r = last([1, \"a\", true])"),
+        result("declare function lit<const T extends unknown[]>(xs: [...T]): T\nconst r = lit([1, \"a\"])"),
+        result("declare function id<T extends unknown[]>(xs: [...T]): T\nconst arr: number[] = []\nconst r = id(arr)"),
+    ], ["[number, string, boolean]", "[string, boolean]", "boolean", '[1, "a"]', "number[]"])
+
+    check("variadic: the result spreads what was inferred", [
+        result("declare function append<T extends unknown[], V>(xs: [...T], v: V): [...T, V]\nconst r = append([1, \"a\"], true)"),
+        result("declare function concat<A extends unknown[], B extends unknown[]>(a: [...A], b: [...B]): [...A, ...B]\nconst r = concat([1, 2], [\"x\"])"),
+        result("function push<T extends unknown[], V>(xs: [...T], v: V): [...T, V] {\n    return [...xs, v]\n}\nconst r = push([1, \"a\"], true)"),
+    ], ["[number, string, boolean]", "[number, number, string]", "[number, string, boolean]"])
+
+    const restVariadic = analyze([
+        "declare function f<T extends unknown[]>(...args: [...T, string]): T",
+        "const r = f(1, true, \"x\")",
+        "const only = f(\"x\")",
+        "f(1, 2)",
+    ].join("\n"))
+    check("variadic: a rest that ends in a fixed place", [restVariadic.bindings.r, restVariadic.bindings.only, restVariadic.errors],
+        ["[number, boolean]", "[]", ["Argument of type '2' is not assignable to parameter of type 'string'"]])
+
+    check("variadic: binding a function's first arguments", result([
+        "declare function bind<A extends unknown[], B extends unknown[], R>(fn: (...args: [...A, ...B]) => R, ...a: A): (...b: B) => R",
+        "declare function add3(a: number, b: string, c: boolean): number",
+        "const r = bind(add3, 1)",
+    ].join("\n")), "(b: string, c: boolean) => number")
+
+    const forward = analyze([
+        "declare function call<A extends unknown[], R>(fn: (...args: A) => R, ...args: A): R",
+        "declare function add(a: number, b: number): number",
+        "const r = call(add, 1, 2)",
+        "call(add, 1, \"x\")",
+    ].join("\n"))
+    check("variadic: arguments forwarded to a function are checked against it", [forward.bindings.r, forward.errors],
+        ["number", [`Argument of type '"x"' is not assignable to parameter of type 'number'`]])
+
+    check("variadic: currying through a recursive alias", result([
+        "type Curried<A extends unknown[], R> = A extends [infer H, ...infer T] ? (x: H) => Curried<T, R> : R",
+        "declare function curry<A extends unknown[], R>(f: (...args: A) => R): Curried<A, R>",
+        "declare function add3(a: number, b: string, c: boolean): number",
+        "const r = curry(add3)(1)(\"x\")",
+    ].join("\n")), "(x: boolean) => number")
+
+    // `-` is gone from types: `Exclude` is how it is written.
+    check("exclude: `-` in a type is an error that says what to write", (() => {
+        try {
+            parse("type X = number - 1")
+            return undefined
+        } catch (error) {
+            return (error as Error).message.replace(/ \(\d+:\d+\)$/, "")
+        }
+    })(), "A type has no '-': write 'Exclude<A, B>' for what of 'A' is not a 'B'")
+    const exclude = analyze([
+        "const u: Exclude<unknown, nil> = 1",
+        "declare a: Exclude<any, nil>",
+        "const n: number = a",
+        "const bad: nil = a",
+        "const fromUnion = \"a\" as Exclude<\"a\" | \"b\", \"b\">",
+        "const plain = \"a\" as Exclude<string, \"a\">",
+        "function f<T>(x: T): NonNullable<T> { return x as NonNullable<T> }",
+        "const g = f",
+    ].join("\n"))
+    check("exclude: kept over unknown, any and a primitive, worked out over a union", [
+        exclude.bindings.u, exclude.bindings.a, exclude.bindings.fromUnion, exclude.bindings.plain, exclude.bindings.g, exclude.errors,
+    ], [
+        "Exclude<unknown, nil>", "Exclude<any, nil>", '"a"', 'Exclude<string, "a">', "<T>(x: T) => Exclude<T, nil>",
+        ["Type 'Exclude<any, nil>' is not assignable to 'nil'"],
+    ])
+
+    const arrays = analyze([
+        "const modes = [\"a\", \"b\"] as const",
+        "declare s: string",
+        "const found = modes:includes(s)",
+        "const at = modes:indexOf(s)",
+        "if (modes:includes(s)) { const narrowed = s }",
+        "const joined = [1, 2]:concat([\"x\"])",
+    ].join("\n"))
+    check("arrays: looking for a value takes any value, and finding it narrows", [
+        arrays.bindings.found, arrays.bindings.at, arrays.bindings.narrowed, arrays.bindings.joined, arrays.errors,
+    ], ["boolean", "number | nil", '"a" | "b"', "(number | string)[]", []])
+}
+
+// --- methods called with `.`, `.length`, and `Exclude` over a primitive -----
+{
+    const analyze = (code: string) => {
+        const program = parse(code)
+        const scopes = analyzeScopes(program)
+        const types = analyzeTypes(program, scopes, {})
+        const bindings: Record<string, string> = {}
+        for (const [id, type] of types.bindingType) bindings[scopes.bindings.get(id)!.name] = formatType(type)
+        return { errors: [...scopes.diagnostics, ...types.diagnostics].map(d => d.message), bindings, types }
+    }
+
+    const excluded = analyze([
+        "declare a: Exclude<string, \"a\">",
+        "if (a == \"a\") { }",
+        "if (a == \"b\") { const b = a }",
+        "const plain: string = a",
+        "const upper = a.upper(a)",
+        "declare u: Exclude<string | number, \"a\">",
+        "declare flag: Exclude<boolean, true>",
+        "const either = u",
+        "const notTrue = flag",
+    ].join("\n"))
+    check("exclude: a string that is not \"a\" is never \"a\"", [
+        excluded.bindings.a, excluded.bindings.b, excluded.bindings.upper, excluded.bindings.either, excluded.bindings.notTrue, excluded.errors,
+    ], [
+        'Exclude<string, "a">', '"b"', "string", 'Exclude<string, "a"> | number', "false",
+        [`This comparison is always false: 'Exclude<string, "a">' and '"a"' have no value in common`],
+    ])
+
+    // A method is a member like any other, read with `.`: a function whose
+    // first parameter is its `self`, handed to it as any argument is.
+    const dotted = analyze([
+        "const upper = \"a\".upper(\"a\")",
+        "const names = [\"ab\", \"c\"]",
+        "const long = names.filter(names, n => n.length > 1)",
+        "const joined = names.join(names, \", \")",
+        "const keys = { x: 1 }.keys({ x: 1 })",
+        "const modes = [\"a\", \"b\"] as const",
+        "declare s: string",
+        "if (modes.includes(modes, s)) { const mode = s }",
+        "const join = names.join",
+        "const t = { f: (n: number) => n * 2 }",
+        "const own = t.f(2)",
+    ].join("\n"))
+    check("methods: read with `.`, a method takes its `self` first", [
+        dotted.bindings.upper, dotted.bindings.long, dotted.bindings.joined, dotted.bindings.keys,
+        dotted.bindings.mode, dotted.bindings.join, dotted.bindings.own, dotted.errors,
+    ], ["string", "string[]", "string", '["x"]', '"a" | "b"', "(self: readonly string[], separator?: string) => string", "number", []])
+    check("methods: each `.` read of a method is recorded, and a table's own function is not",
+        dotted.types.methodReads.size, 6)
+    check("methods: leaving the `self` out says to call it with a colon",
+        analyze("const modes = [\"a\", \"b\"] as const\ndeclare s: string\nconst found = modes.includes(s)").errors,
+        ["'includes' is a method, and takes 'modes' first: call it with ':', 'modes:includes(...)'"])
+
+    const lengths = analyze([
+        "const text = \"abc\".length",
+        "const list = [1, 2, 3].length",
+        "const pair: [number, string] = [1, \"a\"]",
+        "const two = pair.length",
+        "const o = { length: \"own\" }",
+        "const own = o.length",
+        "function count<S extends string>(s: S): number { return s.length }",
+        "const xs = [1]",
+        "xs.length = 0",
+    ].join("\n"))
+    check("length: a string's and a list's, a tuple's known, a table's own its own", [
+        lengths.bindings.text, lengths.bindings.list, lengths.bindings.two, lengths.bindings.own, lengths.errors,
+    ], ["number", "number", "2", "string", ["Cannot assign to 'length': it is how many there are, and only changes with them"]])
+    check("length: `#` is gone", (() => {
+        try {
+            parse("const n = #\"abc\"")
+            return undefined
+        } catch (error) {
+            return (error as Error).message.replace(/ \(\d+:\d+\)$/, "")
+        }
+    })(), "tilua has no '#': write 'xs.length' for how many a list holds or a string's length")
+}
+
+// --- what `${...}` may hold ------------------------------------------------
+{
+    const errorsOf = (code: string): string[] => {
+        const program = parse(code)
+        return analyzeTypes(program, analyzeScopes(program), {}).diagnostics.map(d => d.message)
+    }
+    const printed = (type: string, as: string): string =>
+        `'${type}' cannot be written into a string: it would read '${as}: 0x...'. ` +
+        "A template takes a string, a number, a boolean, nil, or a value with '__tostring'"
+    check("template: a table, a list, a function or a class instance prints as its address", [
+        errorsOf("const t = { a: 1 }\nconst s = `${t}`"),
+        errorsOf("const xs = [1]\nconst s = `${xs}`"),
+        errorsOf("const f = () => 1\nconst s = `${f}`"),
+        errorsOf("class A { }\nconst s = `${A.new()}`"),
+    ], [[printed("{ a: number }", "table")], [printed("number[]", "table")], [printed("() => 1", "function")], [printed("A", "table")]])
+    check("template: what reads as text, or says how to print itself, is written", [
+        errorsOf("declare n: number | nil\nconst s = `${n} ${true} ${\"x\"} ${1}`"),
+        errorsOf("class B { function __tostring(): string { return \"b\" } }\nconst s = `${B.new()}`"),
+        errorsOf("declare class Part { Name: string }\ndeclare p: Part\nconst s = `${p}`"),
+        errorsOf("type Id = string & { __brand: \"id\" }\ndeclare id: Id\nconst s = `${id}`"),
+        errorsOf("declare a: any\ndeclare u: unknown\nconst s = `${a}${u}`"),
+        errorsOf("function f<T>(x: T) { return `${x}` }"),
+    ], [[], [], [], [], [], []])
+
+    const placeholder = (type: string): string =>
+        `Type '${type}' cannot stand in a template literal type: a placeholder holds a string, a number, a boolean or nil`
+    check("template types: a placeholder holds text, as in TypeScript", [
+        errorsOf("type T = `a${{ x: number }}`"),
+        errorsOf("type T = `a${number[]}`"),
+        errorsOf("type G<T extends object> = `a${T}`"),
+        errorsOf("type T = `a${nil}${number}${\"x\" | 1}`"),
+        errorsOf("type G<K> = `get${K}`"),
+        errorsOf("type M<T> = { [K in keyof T as `get${Capitalize<K & string>}`]: T[K] }"),
+    ], [[placeholder("{ x: number }")], [placeholder("number[]")], [placeholder("T")], [], [], []])
+}
+
+// TypeScript's checks that tilua held back on, and the syntax it lacked.
+{
+    const errorsOf = (code: string): string[] => {
+        const result = parseWithRecovery(code)
+        const syntax = result.errors.map(e => e.message.replace(/ \(\d+:\d+\)$/, ""))
+        const scopes = analyzeScopes(result.program)
+        return [...syntax, ...scopes.diagnostics.map(d => d.message), ...analyzeTypes(result.program, scopes, {}).diagnostics.map(d => d.message)]
+    }
+
+    check("soundness: a parameter takes what its callers pass, not less", [
+        errorsOf("type A = { a: number }\ntype AB = { a: number, b: string }\nfunction take(f: (x: A) => nil) {}\ntake((x: AB) => nil)"),
+        errorsOf("const f: (x: number | string) => nil = (x: number) => nil"),
+        errorsOf("const f: (x: number) => nil = (x: number | string) => nil"),
+        errorsOf("const f: (x: number) => nil = (x: number, y: string) => nil"),
+        errorsOf("const f: (x: number, y: string) => nil = (x: number) => nil"),
+    ], [
+        ["Argument of type '(x: AB) => nil' is not assignable to parameter of type '(x: A) => nil'"],
+        ["Type '(x: number) => nil' is not assignable to '(x: number | string) => nil'"],
+        [],
+        ["Type '(x: number, y: string) => nil' is not assignable to '(x: number) => nil'"],
+        [],
+    ])
+    check("soundness: a method compares both ways, as TypeScript's do", [
+        errorsOf("class A { constructor() {} function eat(food: string | number): nil { return nil } }\nclass B extends A { constructor() { super() } override function eat(food: string): nil { return nil } }"),
+    ], [[]])
+    check("soundness: a let holds what it was first given", [
+        errorsOf("let n = 1\nn = \"a\""),
+        errorsOf("let n = 1\nn = 2"),
+        errorsOf("let x\nx = 1\nx = \"a\""),
+        errorsOf("let x = nil\nx = 1"),
+    ], [["Type 'string' is not assignable to 'number'"], [], [], []])
+    check("soundness: a compound assignment is the operator and the assignment", [
+        errorsOf("let s = \"a\"\ns += 1"),
+        errorsOf("let n = 1\nn ..= \"a\""),
+        errorsOf("let n = 1\nn += 1\nn -= 2\nn *= 3"),
+    ], [["Operator '+' cannot be applied to types 'string' and '1'"], ["Type 'string' is not assignable to 'number'"], []])
+    check("soundness: every way through a function that returns a value returns one", [
+        errorsOf("function f(x: \"a\" | \"b\" | \"c\"): number {\n    if (x == \"a\") return 1\n    elseif (x == \"b\") return 2\n}"),
+        errorsOf("function f(x: \"a\" | \"b\"): number {\n    if (x == \"a\") return 1\n    elseif (x == \"b\") return 2\n}"),
+        errorsOf("function f(): number {\n    while (true) { return 1 }\n}"),
+        errorsOf("function f(x: number): number {\n    if (x > 0) return 1\n    error(\"no\")\n}"),
+        errorsOf("function f(x: number): number | nil {\n    if (x > 0) return 1\n}"),
+    ], [["Not every path returns a value: the function returns 'number', which does not include 'nil'"], [], [], [], []])
+    check("soundness: an if chain that leaves no value is exhaustive", [
+        errorsOf("function f(x: \"a\" | \"b\"): number {\n    if (x == \"a\") return 1\n    elseif (x == \"b\") return 2\n    const n: never = x\n    return n\n}"),
+    ], [[]])
+    check("soundness: a name is read only once it has a value", [
+        errorsOf("let x: number\nprint(x)"),
+        errorsOf("function f(c: boolean) {\n    let x: number\n    if (c) { x = 1 }\n    print(x)\n}"),
+        errorsOf("function f(c: boolean) {\n    let x: number\n    if (c) { x = 1 } else { x = 2 }\n    print(x)\n}"),
+        errorsOf("let x: number\nconst read = () => x\nx = 1"),
+        errorsOf("let x: number | nil\nprint(x)"),
+    ], [["Variable 'x' is used before being assigned"], ["Variable 'x' is used before being assigned"], [], [], []])
+    check("soundness: nothing is a never, so nothing can be called", [
+        errorsOf("declare n: never\nn()"),
+    ], [["This expression is not callable: 'n' is of type 'never'"]])
+
+    check("??: nil gives way, false stays", [
+        errorsOf("const a: boolean | nil = nil\nconst b: boolean = a ?? true"),
+        errorsOf("const a: number | nil = nil\nconst b: string = a ?? 1"),
+        errorsOf("const a: number | nil = nil\nconst b = a ?? 1 or 2"),
+        errorsOf("const a: number | nil = nil\nconst b = (a ?? 1) or 2"),
+    ], [[], ["Type 'number' is not assignable to 'string'"], ["'??' cannot be mixed with 'and' or 'or' without parentheses"], []])
+    check("n++ and n-- are n += 1 and n -= 1", [
+        errorsOf("let n = 0\nn++\nn--\nconst t = { k: 1 }\nt.k++\nconst xs = [1]\nxs[1]--"),
+        errorsOf("let s = \"a\"\ns++"),
+        errorsOf("const n = 0\nn++"),
+        errorsOf("let n = 0\nn-- a comment, not a decrement"),
+        errorsOf("let n = 0\n++n"),
+    ], [[], ["Operator '+' cannot be applied to types 'string' and '1'"], ["Cannot assign to 'n' — it is a const"], [], ["tilua writes an increment after its target: 'n++'"]])
+    check("in: asks a table for a key, and narrows by it", [
+        errorsOf("type A = { kind: \"a\", a: number }\ntype B = { b: string }\nfunction f(x: A | B) {\n    if (\"a\" in x) { const n: number = x.a } else { const s: string = x.b }\n}"),
+        errorsOf("const n = 1\nconst r = \"a\" in n"),
+        errorsOf("const t = { a: 1 }\nconst r = {} in t"),
+    ], [[], ["The right side of 'in' must be a table, not '1'"], ["The left side of 'in' must be a string or a number, not '{}'"]])
+    check("instanceof: narrows to the class, and takes only a class written in tilua", [
+        errorsOf("class A { constructor() {} }\nclass D extends A { constructor() { super() } bark = 1 }\nclass C { constructor() {} meow = 1 }\nfunction f(x: D | C | string) {\n    if (x instanceof D) { const d: D = x } elseif (x instanceof C) { const c: C = x } else { const s: string = x }\n}"),
+        errorsOf("const r = 1 instanceof 2"),
+        errorsOf("declare class Part { Name: string }\ndeclare Part: { Name: string }\ndeclare p: unknown\nconst r = p instanceof Part"),
+    ], [[], ["The right side of 'instanceof' must be a class written in tilua, not '2'"], ["The right side of 'instanceof' must be a class written in tilua, not '{ Name: string }'"]])
+
+    check("interface: extends, merges, and checks what it extends", [
+        errorsOf("interface A { x: number }\ninterface B extends A { y: string }\nconst b: B = { x: 1, y: \"a\" }"),
+        errorsOf("interface A { x: number }\ninterface A { y: string }\nconst a: A = { x: 1, y: \"a\" }\nconst n: number = a.y"),
+        errorsOf("interface A { x: number }\ninterface B extends A { x: string }"),
+        errorsOf("interface P {\n    x: number\n    y: number\n    label?: string\n}\nconst p: P = { x: 1, y: 2 }"),
+        errorsOf("export interface E<T> { value: T }\nconst e: E<number> = { value: 1 }"),
+    ], [[], ["Type 'string' is not assignable to 'number'"], ["Interface 'B' incorrectly extends 'A': its 'x' is 'string', not 'number'"], [], []])
+    check("object types: methods, calls, constructors and accessors", [
+        errorsOf("interface G { greet(name: string): string }\ndeclare g: G\nconst r: string = g:greet(\"a\")\nconst n: number = g:greet(\"a\")"),
+        errorsOf("interface Named { name: string; greet(): string }\nclass P implements Named {\n    name = \"a\"\n    constructor() {}\n    function greet(): string { return this.name }\n}"),
+        errorsOf("type F = { (x: number): string, tag: string }\ndeclare f: F\nconst s: string = f(1)\nconst t: string = f.tag"),
+        errorsOf("type O = { (x: number): number; (x: string): string }\ndeclare o: O\nconst a: string = o(\"x\")\nconst b: number = o(1)"),
+        errorsOf("type T = { get x(): number; set y(v: string); get z(): boolean; set z(v: boolean) }\ndeclare t: T\nconst n: number = t.x\nt.y = \"a\"\nt.z = true\nt.x = 2"),
+        errorsOf("class Dog { constructor(n: string) {} }\ntype Ctor<T> = new (name: string) => T\nconst make: Ctor<Dog> = Dog\nconst d: Dog = make.new(\"x\")"),
+    ], [["Type 'string' is not assignable to 'number'"], [], [], [], ["Cannot assign to 'x' because it is a read-only property"], []])
+    check("this: the value a member is read from", [
+        errorsOf("class A {\n    constructor() {}\n    function me(): this { return this }\n}\nclass B extends A {\n    constructor() { super() }\n    function b(): number { return 1 }\n}\nconst n: number = B.new():me():b()"),
+        errorsOf("interface Chain { add(n: number): this; value: number }\ndeclare c: Chain\nconst v: number = c:add(1):add(2).value"),
+    ], [[], []])
+    check("utility types: InstanceType, ConstructorParameters and NoInfer", [
+        errorsOf("class Dog { constructor(n: string, age: number) {} }\nconst i: InstanceType<typeof Dog> = Dog.new(\"a\", 1)\nconst p: ConstructorParameters<typeof Dog> = [\"a\", 1]\nconst q: ConstructorParameters<typeof Dog> = [1, 1]"),
+        errorsOf("function pick<T>(a: T, b: NoInfer<T>): T { return a }\nconst v = pick(1, \"x\")"),
+    ], [["Type '[number, number]' is not assignable to '[n: string, age: number]'"], ["Argument of type '\"x\"' is not assignable to parameter of type '1'"]])
+    check("variance: in and out say how a type compares, and are checked", [
+        errorsOf("type Getter<out T> = { get: () => T }\ntype Setter<in T> = { set: (v: T) => nil }\ntype Both<in out T> = { get: () => T, set: (v: T) => nil }"),
+        errorsOf("type Getter<in T> = { get: () => T }"),
+        errorsOf("type Setter<out T> = { set: (v: T) => nil }"),
+        errorsOf("function f<out T>(x: T) {}"),
+    ], [
+        [],
+        ["'T' is marked 'in', but 'Getter' gives it out: a 'Getter' of something wider does not fit one of something narrower"],
+        ["'T' is marked 'out', but 'Setter' takes it in: a 'Setter' of something narrower does not fit one of something wider"],
+        ["'in' and 'out' can only be written on the type parameters of a type alias or an interface"],
+    ])
+    check("export type: types only", [
+        errorsOf("type A = number\nexport type { A }"),
+        errorsOf("const a = 1\nexport type { a }"),
+    ], [[], ["'a' is not a type: 'export type' exports types"]])
+    check("object literals: get and set", [
+        errorsOf("const o = {\n    first: \"a\",\n    get full(): string { return this.first .. \"!\" },\n    set name(v: string) { this.first = v },\n}\nconst f: string = o.full\no.name = \"x\"\no.full = \"no\""),
+        errorsOf("const o = { get x(a: number) { return 1 } }"),
+    ], [["Cannot assign to 'full' because it is a read-only property"], ["A 'get' accessor takes no parameters"]])
+    check("what TypeScript has and tilua does not says what to write", [
+        errorsOf("enum Color { Red, Green }"),
+        errorsOf("try { print(1) } catch (e) { print(e) }"),
+        errorsOf("namespace N { const x = 1 }"),
+        errorsOf("const x = 1\nswitch (x) { }"),
+        errorsOf("declare module \"m\" { }"),
+        errorsOf("declare global { }"),
+        errorsOf("const n = 10n"),
+    ], [
+        ["tilua has no 'enum': write a union of literals, 'type Color = \"Red\" | \"Green\"', or an object 'as const'"],
+        ["tilua has no 'try': call the function with 'pcall', which answers whether it ran"],
+        ["tilua has no 'namespace': a module is a file, 'import * as N from \"./n\"'"],
+        ["tilua has no 'switch': write an 'if' / 'elseif' chain — one that leaves no value for an 'else' is exhaustive"],
+        ["tilua has no 'declare module': a module is a file — point an import at a .d.tilua file with 'paths'"],
+        ["tilua has no 'declare global': a 'declare' at the top level of a definitions file is already global"],
+        ["'10n' is not a number"],
+    ])
+}
+
+// Member access: what is there, what is not, and what `:` and `.` hand over.
+{
+    const errorsOf = (code: string): string[] => {
+        const program = parse(code)
+        const scopes = analyzeScopes(program)
+        return [...scopes.diagnostics, ...analyzeTypes(program, scopes, {}).diagnostics].map(d => d.message)
+    }
+    check("members: a name nothing has is reported, wherever it is read from", [
+        errorsOf("declare i: { a: number } & { b: string }\nconst x = i.a\nconst y = i.c"),
+        errorsOf("function f<T extends { x: number }>(t: T): number { return t.y }"),
+        errorsOf("declare f: (x: number) => string\nconst n = f.name"),
+        errorsOf("declare r: { [number]: string }\nconst a = r[1]\nconst b = r.b"),
+        errorsOf("declare n: never\nconst x = n.x"),
+    ], [
+        ["Property 'c' does not exist on type '{ a: number } & { b: string }'"],
+        ["Property 'y' does not exist on type 'T'"],
+        ["Property 'name' does not exist on type '(x: number) => string'"],
+        ["Property 'b' does not exist on type '{ [number]: string }'"],
+        ["Property 'x' does not exist on type 'never'"],
+    ])
+    check("members: what is not there reads as any, and is reported once", [
+        errorsOf("const o = { a: 1 }\nconst n = o.nope + 1"),
+    ], [["Property 'nope' does not exist on type '{ a: number }'"]])
+    check("members: a tuple has the positions it says", [
+        errorsOf("declare t: [number, string]\nconst a = t[1]\nconst c = t[3]"),
+    ], [["Tuple type '[number, string]' of length '2' has no element at index '3'"]])
+    check("members: super reaches the base class's methods, not its fields", [
+        errorsOf("class A { x = 1 constructor() {} function m(): number { return 1 } }\nclass B extends A {\n    constructor() { super() }\n    function n(): number { return super.m() + super.x }\n}"),
+    ], [["Only methods of the base class can be reached through 'super': 'x' is not one — read it as 'this.x'"]])
+    check("members: ':' hands the receiver over, and '.' does not", [
+        errorsOf("const o = { f: (x: number) => x + 1 }\nconst r = o:f(1)"),
+        errorsOf("const o = { f: () => 1 }\nconst r = o:f()"),
+        errorsOf("const S = { items: [1] }\nfunction S:push(v: number) { self.items:push(v) }\nS.push(S, 1)\nS:push(2)"),
+    ], [["'f' does not take its receiver: ':' would pass 'o' as its first argument. Call it with '.', 'o.f(...)'"], [], []])
+    check("members: a read-only property is the one mistake in writing it", [
+        errorsOf("const C = { Red: \"red\" } as const\nC.Red = \"x\""),
+    ], [["Cannot assign to 'Red' because it is a read-only property"]])
+    check("members: a generic shape is shown by its name", [
+        (() => {
+            const program = parse("type Signal<T> = { Connect: (self: Signal<T>, f: (v: T) => nil) => nil }\ndeclare s: Signal<number>\nconst t = s")
+            const scopes = analyzeScopes(program)
+            const types = analyzeTypes(program, scopes, {})
+            const id = [...scopes.bindings.values()].find(b => b.name === "t")!.id
+            return formatType(types.bindingType.get(id)!)
+        })(),
+    ], ["Signal<number>"])
+}
+
+// Spreads: what each one copies, and what it cannot.
+{
+    const typeOfConst = (code: string, name: string): string => {
+        const program = parse(code)
+        const scopes = analyzeScopes(program)
+        const types = analyzeTypes(program, scopes, {})
+        const id = [...scopes.bindings.values()].find(b => b.name === name)!.id
+        return formatType(types.bindingType.get(id)!)
+    }
+    const errorsOf = (code: string): string[] => {
+        const program = parse(code)
+        const scopes = analyzeScopes(program)
+        return [...scopes.diagnostics, ...analyzeTypes(program, scopes, {}).diagnostics].map(d => d.message)
+    }
+    check("object spread: unions, nil, intersections, parameters and classes", [
+        typeOfConst("declare a: { x?: number, y: string }\nconst c = { x: \"s\", ...a }", "c"),
+        typeOfConst("declare a: { kind: \"a\", x: number } | { kind: \"b\", y: string }\nconst b = { ...a, extra: 1 }", "b"),
+        typeOfConst("declare a: { x: number } | nil\nconst b = { ...a }", "b"),
+        typeOfConst("declare a: { x: number } & { y: string }\nconst b = { ...a }", "b"),
+        typeOfConst("function merge<A, B>(a: A, b: B) { return { ...a, ...b } }\nconst m = merge({ x: 1 }, { y: \"s\" })", "m"),
+        typeOfConst("class C { f = 1 constructor() {} function m(): number { return 1 } }\nconst o = { ...C.new() }", "o"),
+        typeOfConst("const a = { x: 1 } as const\nconst b = { ...a }", "b"),
+    ], [
+        "{ x: string | number, y: string }",
+        "{ extra: number, kind: \"a\", x: number } | { extra: number, kind: \"b\", y: string }",
+        "{ x?: number }",
+        "{ x: number, y: string }",
+        "{ x: number } & { y: string }",
+        "{ f: number }",
+        "{ x: 1 }",
+    ])
+    check("spread: a list that may be nil cannot be spread", [
+        errorsOf("declare xs: number[] | nil\nconst a = [...xs]"),
+        errorsOf("declare xs: number[] | nil\nfunction g(...n: number[]): number { return n.length }\nconst r = g(...xs)"),
+        errorsOf("declare xs: number[] | nil\nconst a = [...(xs ?? [])]"),
+    ], [
+        ["'xs' is possibly nil, and nil cannot be spread: check it first, or spread 'xs ?? []'"],
+        ["'xs' is possibly nil, and nil cannot be spread: check it first, or spread 'xs ?? []'"],
+        [],
+    ])
+    check("spread: a tuple fills a variadic parameter place by place", [
+        typeOfConst("function wrap<A extends unknown[]>(...args: A): A { return args }\nconst t: [number, string] = [1, \"x\"]\nconst w = wrap(...t)", "w"),
+    ], ["[number, string]"])
+    check("rest: what a tuple leaves is a tuple", [
+        typeOfConst("const [x, ...more] = [1, \"a\", true] as const", "more"),
+        typeOfConst("declare t: [string, ...number[]]\nconst [s, ...ns] = t", "ns"),
+    ], ["[\"a\", true]", "number[]"])
+}
+
+// A spread of unknown length fills a rest parameter; a tuple fills its length.
+{
+    const errorsOf = (code: string): string[] => {
+        const program = parse(code)
+        const scopes = analyzeScopes(program)
+        return [...scopes.diagnostics, ...analyzeTypes(program, scopes, {}).diagnostics].map(d => d.message)
+    }
+    const unknownLength = (t: string): string =>
+        `A spread of '${t}' may hold any number of values, so it can only fill a rest parameter: spread a tuple of the right length to fill fixed parameters`
+    check("spread arguments: where an array may go", [
+        errorsOf("function g(...xs: number[]): number { return xs.length }\ndeclare ys: number[]\nconst a = g(...ys)\nconst b = g(1, ...ys, 2)"),
+        errorsOf("function h(a: number, ...xs: number[]): number { return a }\ndeclare ys: number[]\nconst r = h(1, ...ys)"),
+        errorsOf("function h(a: number, ...xs: number[]): number { return a }\ndeclare ys: number[]\nconst r = h(...ys)"),
+        errorsOf("function wrap<A extends unknown[]>(...args: A): A { return args }\ndeclare ys: number[]\nconst r = wrap(...ys)"),
+        errorsOf("function k(...args: [number, string]): string { return args[2] }\ndeclare ys: (number | string)[]\nconst r = k(...ys)"),
+        errorsOf("class P { constructor(x: number, y: number) {} }\ndeclare ys: number[]\nconst p = P.new(...ys)\nconst q = P.new(...([1, 2] as [number, number]))"),
+        errorsOf("declare xs: number[]\ndeclare ys: number[]\nconst n = xs:push(...ys)\nconst i = xs:indexOf(...ys)"),
+        errorsOf("function f(a: number, b: number): number { return a }\ndeclare t: [number, ...number[]]\nconst r = f(...t)"),
+    ], [
+        [],
+        [],
+        [unknownLength("number[]")],
+        [],
+        [unknownLength("(number | string)[]")],
+        [unknownLength("number[]")],
+        [unknownLength("number[]")],
+        [unknownLength("[number, ...number[]]")],
+    ])
+    check("spread arguments: tuples are counted, several of them too", [
+        errorsOf("function f(a: number, b: string, c: boolean): boolean { return c }\nconst p: [number] = [1]\nconst q: [string, boolean] = [\"a\", true]\nconst r = f(...p, ...q)\nconst s = f(...p, ...p)"),
+    ], [["Expected 3 arguments, got 2"]])
+}
+
+// Spreads of lists that generics and conditional types decide.
+{
+    const errorsOf = (code: string): string[] => {
+        const program = parse(code)
+        const scopes = analyzeScopes(program)
+        return [...scopes.diagnostics, ...analyzeTypes(program, scopes, {}).diagnostics].map(d => d.message)
+    }
+    const ARGS = "type Args<K> = K extends \"move\" ? [x: number, y: number] : K extends \"say\" ? [text: string] : []\n"
+        + "function emit<K extends \"move\" | \"say\" | \"stop\">(kind: K, ...args: Args<K>): nil { return nil }\n"
+    check("generic spreads: a conditional rest takes the tuple its branch is", [
+        errorsOf(ARGS + "emit(\"move\", 1, 2)\nemit(\"say\", \"hi\")\nemit(\"stop\")"),
+        errorsOf(ARGS + "const m: Args<\"move\"> = [1, 2]\nemit(\"move\", ...m)\nconst s: Args<\"say\"> = [\"hi\"]\nemit(\"say\", ...s)"),
+        errorsOf(ARGS + "const s: Args<\"say\"> = [\"hi\"]\nemit(\"move\", ...s)"),
+        errorsOf(ARGS + "function relay<K extends \"move\" | \"say\" | \"stop\">(kind: K, ...args: Args<K>): nil {\n    return emit(kind, ...args)\n}"),
+    ], [[], [], ["Expected 3 arguments, got 2"], []])
+    check("generic spreads: a parameter's list, through its constraint", [
+        errorsOf("function f<T extends [number, string]>(t: T): nil {\n    function g(a: number, b: string): nil { return nil }\n    return g(...t)\n}"),
+        errorsOf("function f<B extends boolean>(flag: B, t: B extends true ? [number] : [string]): nil {\n    function g(x: number | string): nil { return nil }\n    return g(...t)\n}"),
+        errorsOf("function f<B extends boolean>(flag: B, t: B extends true ? [number] : [string]): nil {\n    function g(x: number): nil { return nil }\n    return g(...t)\n}"),
+    ], [[], [], ["Argument of type 'number | string' is not assignable to parameter of type 'number'"]])
+    check("generic spreads: forwarding a function's arguments", [
+        errorsOf("function call<F extends (...a: any[]) => any>(f: F, ...args: Parameters<F>): ReturnType<F> { return f(...args) }\nfunction add(a: number, b: number): number { return a + b }\nconst r = call(add, 1, 2)\nconst bad = call(add, 1, \"x\")"),
+        errorsOf("function apply<T extends unknown[], R>(f: (...args: T) => R, args: T): R { return f(...args) }\nfunction add(a: number, b: number): number { return a + b }\nconst bad = apply(add, [1, \"x\"])"),
+        errorsOf("function fwd<T extends unknown[]>(f: (...a: T) => nil, ...args: T): nil { return f(...args) }\nfunction two(a: number, b: string): nil { return nil }\nfwd(two, 1, \"x\")\nfwd(two, 1, 2)"),
+    ], [
+        ["Argument of type '\"x\"' is not assignable to parameter of type 'number'"],
+        ["Argument of type '(a: number, b: number) => number' is not assignable to parameter of type '(...args: (number | string)[]) => number'"],
+        ["Argument of type '2' is not assignable to parameter of type 'string'"],
+    ])
+    check("generic spreads: a union of tuples is each of its calls", [
+        errorsOf("function g(a: number, b?: string): nil { return nil }\ndeclare t: [number] | [number, string]\ng(...t)"),
+        errorsOf("function g(a: number, b?: number): nil { return nil }\ndeclare t: [number] | [number, string]\ng(...t)"),
+        errorsOf("function g(a: number): nil { return nil }\ndeclare t: [number] | [number, number]\ng(...t)"),
+    ], [[], ["Argument of type 'string' is not assignable to parameter of type 'number | nil'"], ["Expected 1 argument, got 2"]])
+    check("functions: a rest tuple is the parameters it lays out", [
+        errorsOf("function add(a: number, b: number): number { return a + b }\nconst g: (...args: [number, string]) => number = add"),
+        errorsOf("function add(a: number, b: number): number { return a + b }\nconst g: (...args: [number, number]) => number = add"),
+        errorsOf("function add(a: number, b: number): number { return a + b }\nconst g: (...xs: string[]) => number = add"),
+    ], [
+        ["Type '(a: number, b: number) => number' is not assignable to '(number, string) => number'"],
+        [],
+        ["Type '(a: number, b: number) => number' is not assignable to '(...args: string[]) => number'"],
+    ])
+}
+
+// Type-level programs, checked against what TypeScript makes of them.
+{
+    const aliasOf = (code: string, name: string): string => {
+        const program = parse(code)
+        const types = analyzeTypes(program, analyzeScopes(program), {})
+        return formatType(withoutAliasName(types.aliases.get(name)!))
+    }
+    const bindingOf = (code: string, name: string): string => {
+        const program = parse(code)
+        const scopes = analyzeScopes(program)
+        const types = analyzeTypes(program, scopes, {})
+        const id = [...scopes.bindings.values()].find(b => b.name === name)!.id
+        return formatType(types.bindingType.get(id)!)
+    }
+    const errorsOf = (code: string): string[] => {
+        const program = parse(code)
+        const scopes = analyzeScopes(program)
+        return [...scopes.diagnostics, ...analyzeTypes(program, scopes, {}).diagnostics].map(d => d.message)
+    }
+    check("conditional types: never distributes to never, any goes both ways", [
+        aliasOf("type IsString<T> = T extends string ? true : false\ntype A = IsString<never>", "A"),
+        aliasOf("type IsString<T> = T extends string ? true : false\ntype A = IsString<any>", "A"),
+        aliasOf("type NoDist<T> = [T] extends [string] ? true : false\ntype A = NoDist<never>", "A"),
+    ], ["never", "boolean", "true"])
+    check("tuple patterns: a list of any length before what is written after it", [
+        aliasOf("type Last<T> = T extends [...unknown[], infer L] ? L : never\ntype A = Last<[1, 2, 3]>", "A"),
+        aliasOf("type Init<T> = T extends [...infer I, unknown] ? I : []\ntype A = Init<[1, 2, 3]>", "A"),
+        aliasOf("type E<T> = T extends readonly (infer U)[] ? U : never\ntype A = E<readonly [1, 2]>", "A"),
+    ], ["3", "[1, 2]", "1 | 2"])
+    check("tuples: a place that may be left out, and the names places have", [
+        aliasOf("type A = [number, string?]", "A"),
+        aliasOf("type A = [number, string?][\"length\"]", "A"),
+        aliasOf("type A = Parameters<(a: number, b?: string) => nil>", "A"),
+        errorsOf("const t: [number, string?] = [1]\nconst u: [number, string?] = [1, \"a\"]\nconst v: [number, string?] = []"),
+    ], ["[number, string?]", "1 | 2", "[a: number, b?: string]", ["Type '[]' is not assignable to '[number, string?]'"]])
+    check("mapped types: what an optional member held for missing goes with its ?", [
+        aliasOf("type A = Required<{ a?: number }>", "A"),
+        aliasOf("type Copy<T> = { [K in keyof T]: T[K] }\ntype A = Copy<{ readonly a?: number }>", "A"),
+    ], ["{ a: number }", "{ readonly a?: number }"])
+    check("overloads: ReturnType reads the last signature", [
+        aliasOf("declare function f(x: string): number\ndeclare function f(x: number): string\ntype A = ReturnType<typeof f>", "A"),
+    ], ["string"])
+    check("generic functions: T[K] in the body, keys kept as written, <const T> rests", [
+        errorsOf("function get<T, K extends keyof T>(o: T, k: K): T[K] { return o[k] }\nconst s: string = get({ a: 1, b: \"s\" }, \"b\")"),
+        bindingOf("function tuple<const T extends unknown[]>(...xs: T): T { return xs }\nconst t = tuple(1, \"a\")", "t"),
+        bindingOf("function first<T extends readonly unknown[]>(xs: T): T[1] { return xs[1] }\nconst f = first([1, 2] as const)", "f"),
+        bindingOf("function identity<T>(x: T): T { return x }\nconst i = identity(\"x\")", "i"),
+        bindingOf("function identity<T>(x: T): T { return x }\nlet i = identity(\"x\")", "i"),
+    ], [[], "[1, \"a\"]", "1", "\"x\"", "string"])
+    check("as const freezes its lists", [
+        bindingOf("const c = [1, [2]] as const", "c"),
+        errorsOf("const modes = [\"a\", \"b\"] as const\ndeclare s: string\nconst found = modes:includes(s)\nconst joined = modes:join(\",\")"),
+        errorsOf("const modes = [\"a\", \"b\"] as const\nmodes:push(\"c\")"),
+    ], ["readonly [1, readonly [2]]", [], ["Argument of type 'readonly [\"a\", \"b\"]' is not assignable to parameter of type '(\"a\" | \"b\")[]'"]])
+    check("shapes: a string or a list fits one naming what it answers to", [
+        errorsOf("function len<T extends { length: number }>(x: T): number { return x.length }\nlen(\"abc\")\nlen([1, 2])\nlen(5)"),
+    ], [["Argument of type '5' is not assignable to parameter of type '{ length: number }'"]])
+    check("index signatures: TypeScript's [key: K], and template literal keys", [
+        errorsOf("type H = { [key: `on${string}`]: () => nil }\nconst h: H = { onClick: () => nil, bad: 1 }"),
+    ], [["Object literal may only specify known properties, and 'bad' does not exist in type 'H'"]])
+    check("narrowing: generic assertions, and a discriminant tested down to never", [
+        bindingOf("function assertDefined<T>(v: T | nil): asserts v is T { if (v == nil) error(\"nil\") }\ndeclare x: number | nil\nassertDefined(x)\nconst y = x", "y"),
+        errorsOf("type Shape = { kind: \"c\", r: number } | { kind: \"s\", s: number }\nfunction area(sh: Shape): number {\n    if (sh.kind == \"c\") return sh.r\n    elseif (sh.kind == \"s\") return sh.s\n    const n: never = sh\n    return n\n}"),
+        errorsOf("declare function on<E extends \"click\" | \"key\">(e: E, f: (ev: E extends \"click\" ? { x: number } : { code: string }) => nil): nil\non(\"click\", ev => { const x: number = ev.x })\non(\"key\", ev => { const c: string = ev.code })"),
+    ], ["number", [], []])
+}
+
+// `keyof` a list: its positions and its `length`.
+{
+    const aliasOf = (code: string, name: string): string => {
+        const program = parse(code)
+        const types = analyzeTypes(program, analyzeScopes(program), {})
+        return formatType(withoutAliasName(types.aliases.get(name)!))
+    }
+    check("keyof: a list's keys are its positions and its length", [
+        aliasOf("type A = keyof []", "A"),
+        aliasOf("type A = keyof string[]", "A"),
+        aliasOf("type A = keyof [1, 2]", "A"),
+        aliasOf("type T = [1, 2]\ntype A = T[keyof T]", "A"),
+        aliasOf("type A = (keyof { a: 1 })[]", "A"),
+        aliasOf("type A = keyof { a: { b: 1 } }[\"a\"]", "A"),
+    ], ["number | \"length\"", "number | \"length\"", "number | \"length\"", "1 | 2", "\"a\"[]", "\"b\""])
 }
 
 for (const failure of failures) console.log(`FAIL ${failure}`)

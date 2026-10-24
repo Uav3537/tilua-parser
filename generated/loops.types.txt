@@ -1,5 +1,5 @@
 counter: (limit: number) => () => number | nil
-deep: number
+deep: 1
 entry: (string | number)[]
 i: number
 i: number

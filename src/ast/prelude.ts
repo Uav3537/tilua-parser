@@ -6,8 +6,8 @@ import type { Program } from "./nodes"
  * or without a type library — as TypeScript's `Partial` and `ReturnType` are.
  *
  * They are written in tilua on top of `keyof`, `T[K]`, conditional types with
- * `infer`, mapped types and set difference; the analyzer knows none of these
- * names. A type library or the file itself may declare one of them again, and
+ * `infer`, mapped types and `Exclude`; the analyzer knows none of these
+ * names but `Exclude`. A type library or the file itself may declare one of them again, and
  * that declaration wins.
  *
  * What a runtime provides — `print`, `string`, `game` — is not here: that is a
@@ -29,14 +29,14 @@ export const PRELUDE_SOURCE = `
 -- In Luau only \`nil\` and \`false\` are falsy: \`0\` and \`""\` are truthy.
 -- These are what truthiness narrowing computes, made available to write down.
 type Falsy = nil | false
-type Truthy<T> = T - Falsy
+type Truthy<T> = Exclude<T, Falsy>
 
--- \`-\` is set difference. Over a union it drops members; over a concrete type
--- it simplifies away; over an opaque type (\`unknown\`, an unresolved parameter)
--- it is kept, so \`Exclude<unknown, 1>\` stays \`unknown - 1\`.
-type Exclude<T, U> = T - U
+-- \`Exclude<T, U>\` is the analyzer's own: what of \`T\` is not a \`U\`. Over a
+-- union it drops the members it takes whole; over \`unknown\`, \`any\`, a
+-- primitive or an unresolved parameter it is kept — \`Exclude<string, "a">\` is
+-- a string that is not \`"a"\` — unlike TypeScript's.
 type Extract<T, U> = T extends U ? T : never
-type NonNullable<T> = T - nil
+type NonNullable<T> = Exclude<T, nil>
 
 type ReturnType<T> = T extends (...args: unknown[]) => infer R ? R : never
 type Parameters<T> = T extends (...args: infer P) => unknown ? P : never
@@ -45,6 +45,10 @@ type Partial<T> = { [K in keyof T]?: T[K] }
 type Required<T> = { [K in keyof T]-?: T[K] }
 type Readonly<T> = { readonly [K in keyof T]: T[K] }
 type Mutable<T> = { -readonly [K in keyof T]: T[K] }
+
+-- A class table builds with \`new\`: \`InstanceType<typeof Dog>\` is a \`Dog\`.
+type InstanceType<T> = T extends { new: (...args: any[]) => infer R } ? R : never
+type ConstructorParameters<T> = T extends { new: (...args: infer P) => any } ? P : never
 
 type Pick<T, K> = { [P in K]: T[P] }
 type Omit<T, K> = Pick<T, Exclude<keyof T, K>>
@@ -99,25 +103,29 @@ declare metatable string: {
 -- answer \`nil\` rather than JavaScript's -1. \`sort\` takes Lua's comparator
 -- (true when \`a\` comes first). \`push\`, \`pop\`, \`shift\`, \`unshift\`,
 -- \`sort\` and \`reverse\` change the array; everything else returns a new one.
+-- The ones that only read take a \`readonly T[]\` too — \`as const\` lists, and
+-- what a function promised not to change — as TypeScript's \`ReadonlyArray\`.
 -- A \`filter\` whose test is a guard — \`v is S\`, or \`v => v ~= nil\` —
 -- answers an array of what it let through.
 declare metatable<T> T[]: {
     __index: {
-        find: (self: T[], test: (value: T, index: number) => boolean) => T | nil,
-        findIndex: (self: T[], test: (value: T, index: number) => boolean) => number | nil,
-        filter: (<S extends T>(self: T[], test: (value: T, index: number) => value is S) => S[])
-            & ((self: T[], test: (value: T, index: number) => boolean) => T[]),
-        map: <U>(self: T[], transform: (value: T, index: number) => U) => U[],
-        forEach: (self: T[], visit: (value: T, index: number) => nil) => nil,
-        some: (self: T[], test: (value: T, index: number) => boolean) => boolean,
-        every: (self: T[], test: (value: T, index: number) => boolean) => boolean,
-        reduce: <U>(self: T[], step: (total: U, value: T, index: number) => U, initial: U) => U,
-        includes: (self: T[], value: T) => boolean,
-        indexOf: (self: T[], value: T, start?: number) => number | nil,
-        join: (self: T[], separator?: string) => string,
-        concat: (self: T[], ...others: T[][]) => T[],
-        slice: (self: T[], start?: number, stop?: number) => T[],
-        flat: (self: T[]) => T[],
+        find: (self: readonly T[], test: (value: T, index: number) => boolean) => T | nil,
+        findIndex: (self: readonly T[], test: (value: T, index: number) => boolean) => number | nil,
+        filter: (<S extends T>(self: readonly T[], test: (value: T, index: number) => value is S) => S[])
+            & ((self: readonly T[], test: (value: T, index: number) => boolean) => T[]),
+        map: <U>(self: readonly T[], transform: (value: T, index: number) => U) => U[],
+        forEach: (self: readonly T[], visit: (value: T, index: number) => nil) => nil,
+        some: (self: readonly T[], test: (value: T, index: number) => boolean) => boolean,
+        every: (self: readonly T[], test: (value: T, index: number) => boolean) => boolean,
+        reduce: <U>(self: readonly T[], step: (total: U, value: T, index: number) => U, initial: U) => U,
+        -- Asking is not adding: any value may be looked for, and finding it
+        -- says it is one of the array's — \`if (names:includes(s))\` narrows \`s\`.
+        includes: (self: readonly T[], value: unknown) => value is T,
+        indexOf: (self: readonly T[], value: unknown, start?: number) => number | nil,
+        join: (self: readonly T[], separator?: string) => string,
+        concat: <U>(self: readonly T[], ...others: (readonly U[])[]) => (T | U)[],
+        slice: (self: readonly T[], start?: number, stop?: number) => T[],
+        flat: (self: readonly T[]) => T[],
         reverse: (self: T[]) => T[],
         sort: (self: T[], compare?: (a: T, b: T) => boolean) => T[],
         push: (self: T[], ...args: T[]) => number,

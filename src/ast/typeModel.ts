@@ -30,6 +30,7 @@ export type Type =
     | MappedType
     | TemplateLiteralType
     | DifferenceType
+    | SpreadType
 
 /** `any` — opts out of checking. Assignable to and from everything. */
 export interface AnyType { kind: "any"; alias?: string }
@@ -46,7 +47,9 @@ export interface UnknownType {
 /** `never` — bottom type. Assignable to everything; nothing (but never) is assignable to it. */
 export interface NeverType { kind: "never"; alias?: string }
 
-export type PrimitiveName = "nil" | "boolean" | "number" | "string" | "thread" | "buffer"
+/** `object` is TypeScript's: any value that is not one of the others — a
+ *  table, a list, a function, a class instance. */
+export type PrimitiveName = "nil" | "boolean" | "number" | "string" | "thread" | "buffer" | "object"
 export interface PrimitiveType { kind: "primitive"; name: PrimitiveName; alias?: string }
 
 /** `"foo"`, `42`, `true` — a single-valued type. `base` is the primitive it widens to. */
@@ -63,7 +66,53 @@ export interface ArrayType { kind: "array"; element: Type; alias?: string; reado
 /** `[A, B, C]` — fixed length; `[A, ...B[]]` — at least that, then any
  *  number of `B`. `rest` is the element type of that tail. A tuple is an
  *  array, a table like any other: several results are one of these. */
-export interface TupleType { kind: "tuple"; elements: Type[]; rest?: Type; alias?: string; readonly?: boolean }
+export interface TupleType {
+    kind: "tuple"; elements: Type[]; rest?: Type; alias?: string; readonly?: boolean
+    /** `[number, string?]`: how many of the elements have to be there — the
+     *  ones from here on may be left out, and hold `nil` when they are. All
+     *  of them when absent. */
+    minLength?: number
+    /** `[x: number, y?: number]`: the name each element was written with,
+     *  where it was. Display only. */
+    names?: readonly (string | undefined)[]
+}
+
+/** `made`, rebuilt from `from`, keeping what `tuple` does not carry: that
+ *  it is read-only, which of its places may be left out, and their names —
+ *  so long as it has as many places as `from` had. */
+export function tupleMeta(made: TupleType, from: TupleType): TupleType {
+    const same = made.elements.length === from.elements.length
+    return {
+        ...made,
+        ...(from.readonly ? { readonly: true } : {}),
+        ...(same && from.minLength !== undefined ? { minLength: from.minLength } : {}),
+        ...(same && from.names ? { names: from.names } : {}),
+    }
+}
+
+/** How many places a tuple has to have. */
+export function minLengthOf(t: TupleType): number {
+    return t.minLength ?? t.elements.length
+}
+
+/** What a tuple's `length` is: one number, or each it may be. */
+export function tupleLength(t: TupleType): Type {
+    if (t.rest || hasSpread(t)) return numberType
+    const lengths: Type[] = []
+    for (let n = minLengthOf(t); n <= t.elements.length; n++) lengths.push(literal(n))
+    return union(lengths)
+}
+
+/** `...T` among a tuple's elements, where `T` is not known yet — a type
+ *  parameter, an `infer`, a type-level operator still waiting on one. It only
+ *  ever stands inside a `TupleType`'s `elements`: `tuple` lays out a spread of
+ *  anything known (a tuple's elements in its place, an array's as the rest),
+ *  so once its type parameters are filled in none is left. */
+export interface SpreadType { kind: "spread"; type: Type }
+
+export function spread(type: Type): SpreadType {
+    return { kind: "spread", type }
+}
 
 export interface ObjectProperty {
     type: Type
@@ -113,6 +162,10 @@ export interface ClassInfo {
      *  `Box<string>`. A class with no type parameters anywhere carries
      *  nothing, and costs nothing. */
     typeArguments?: ReadonlyMap<string, readonly Type[]>
+    /** A `class` the program writes, whose instances are Lua tables — as
+     *  opposed to a `declare class`, a value the host made (a Roblox
+     *  `Instance`, a `Vector3`), which knows how to print itself. */
+    runtime?: boolean
 }
 
 export function isClassType(t: Type): t is ObjectType & { class: ClassInfo } {
@@ -181,6 +234,9 @@ export interface TypeParamType {
     /** Declared `<const T>`: the call site infers the argument at its
      *  narrowest rather than widening it. */
     isConst?: boolean
+    /** Written inside `NoInfer<...>`: an argument there is checked against
+     *  the parameter, never read to work out what it is. */
+    noInfer?: boolean
 }
 export function typeParam(name: string, constraint?: Type, isConst?: boolean): TypeParamType {
     return { kind: "typeParam", name, constraint, isConst }
@@ -212,6 +268,9 @@ export interface GenericRefType {
 /** A module's own alias resolution, handed out on the refs it creates. */
 export interface TypeOrigin {
     expand(t: GenericRefType): Type
+    /** How the alias `name` compares by each of its parameters, where it
+     *  says (`<out T>`, `<in T>`, `<in out T>`). */
+    variances?(name: string): readonly (string | undefined)[] | undefined
 }
 
 // ------------------------------------------------------------
@@ -226,7 +285,7 @@ export interface TypeOrigin {
 export interface KeyofType { kind: "keyof"; target: Type }
 
 /** `T[K]`. */
-export interface IndexedAccessType { kind: "indexedAccess"; objectType: Type; indexType: Type }
+export interface IndexedAccessType { kind: "indexedAccess"; objectType: Type; indexType: Type; alias?: string }
 
 /** `C extends E ? A : B`. */
 export interface ConditionalType {
@@ -242,25 +301,31 @@ export interface ConditionalType {
      *  branch the parameter denotes the single member being tested — the
      *  property `Exclude<T, U>` relies on. */
     distributeParam?: string
+    alias?: string
 }
 
 /** `infer U`, valid only inside a conditional's `extends` clause. */
-export interface InferType { kind: "infer"; name: string }
+export interface InferType {
+    kind: "infer"
+    name: string
+    /** `infer N extends number` — see `InferTypeNode.constraint`. */
+    constraint?: Type
+}
 
-/** `A - B` — every value of `A` that is not a `B`.
+/** `Exclude<A, B>` — every value of `A` that is not a `B`.
  *
- *  Only kept when `A` is *opaque*: `unknown`, or a type parameter or nominal
- *  reference not yet resolved. For a union the subtraction is performed by
- *  dropping members, and for a concrete type such as `string` it is discarded
- *  (`string - "a"` supports exactly the same operations as `string`, and
- *  TypeScript likewise does not track it). For `unknown`, though, the
- *  subtraction is the *only* thing known about the value, so throwing it away
- *  loses the whole result of the test:
+ *  Only kept when `A` is *opaque*: `unknown`, `any`, or a type parameter or
+ *  nominal reference not yet resolved. For a union the subtraction is
+ *  performed by dropping members, and for a concrete type such as `string` it
+ *  is discarded (`Exclude<string, "a">` supports exactly the same operations
+ *  as `string`). For `unknown`, though, the subtraction is the *only* thing
+ *  known about the value, so throwing it away — as TypeScript's `Exclude`
+ *  does — loses the whole result of the test:
  *
  *      let a: unknown
- *      if a == 1 then  -- a: 1
- *      else            -- a: unknown - 1
- *      end
+ *      if (a == 1) {   -- a: 1
+ *      } else {        -- a: Exclude<unknown, 1>
+ *      }
  */
 export interface DifferenceType { kind: "difference"; base: Type; excluded: Type }
 
@@ -288,12 +353,15 @@ export interface TemplateLiteralType {
 // this and carries class information alongside; everything else uses `alias`.
 // `aliasNameOf` is the one place that knows which is which.
 
-/** Kinds that can carry an alias name. The type-level operators are left out:
- *  each is gone as soon as its inputs are known, so a name on one would never
- *  be read. */
+/** Kinds that can carry an alias name. Of the type-level operators, only
+ *  the ones a generic alias is written as: still waiting on a type parameter
+ *  they are read in signatures, where `Reverse<T>` says what the expansion
+ *  does not. Filling the parameter in (`substitute`) drops the name, which
+ *  then no longer says what the type is. */
 const ALIASABLE: ReadonlySet<Type["kind"]> = new Set<Type["kind"]>([
     "any", "unknown", "never", "primitive", "literal",
     "array", "tuple", "function", "union", "templateLiteral",
+    "conditional", "mapped", "indexedAccess",
 ])
 
 /** The alias `type` is printed as instead of its structure, if it has one. */
@@ -342,6 +410,7 @@ export interface MappedType {
     /** The `T` of `[K in keyof T]`, kept so a homomorphic mapped type can carry
      *  each source property's own `?` / `readonly` across. */
     source?: Type
+    alias?: string
 }
 
 // ============================================================
@@ -358,6 +427,7 @@ export const numberType: PrimitiveType = { kind: "primitive", name: "number" }
 export const stringType: PrimitiveType = { kind: "primitive", name: "string" }
 export const threadType: PrimitiveType = { kind: "primitive", name: "thread" }
 export const bufferType: PrimitiveType = { kind: "primitive", name: "buffer" }
+export const objectKeywordType: PrimitiveType = { kind: "primitive", name: "object" }
 
 export function primitive(name: PrimitiveName): PrimitiveType {
     return { kind: "primitive", name }
@@ -373,7 +443,70 @@ export function arrayOf(element: Type): ArrayType {
 }
 
 export function tuple(elements: Type[], rest?: Type): TupleType {
+    if (elements.some(e => e.kind === "spread")) return layOutTuple(elements, rest)
     return rest ? { kind: "tuple", elements, rest } : { kind: "tuple", elements }
+}
+
+/** `[A, ...S, B]` with each spread laid out as far as it is known: a tuple's
+ *  elements take its place, and an array — or a tuple's own rest — makes
+ *  everything from there on the rest, since how many come before what was
+ *  written after it is no longer fixed. A spread of something not known yet
+ *  stays where it is. */
+function layOutTuple(written: readonly Type[], writtenRest: Type | undefined): TupleType {
+    const elements: Type[] = []
+    let rest: Type[] | undefined
+    const place = (t: Type): void => {
+        if (rest) rest.push(t)
+        else elements.push(t)
+    }
+    /** Does a fixed element follow position `i`? Then a list of any length
+     *  spread at `i` stays where it is — `[...number[], string]` ends in a
+     *  string — rather than making the rest of the tuple its own. */
+    const fixedAfter = (i: number): boolean => written.slice(i + 1).some(x =>
+        x.kind !== "spread" || (x.type.kind === "tuple" && x.type.elements.length > 0))
+    for (const [i, e] of written.entries()) {
+        if (e.kind !== "spread") { place(e); continue }
+        const inner = e.type
+        if (inner.kind === "array" && !rest && fixedAfter(i)) {
+            elements.push(e)
+            continue
+        }
+        if (inner.kind === "tuple") {
+            for (const x of inner.elements) place(x)
+            if (inner.rest) (rest ??= []).push(inner.rest)
+        } else if (inner.kind === "array") {
+            (rest ??= []).push(inner.element)
+        } else if (inner.kind === "never") {
+            // `...never` spreads nothing.
+        } else if (inner.kind === "any" || inner.kind === "unknown") {
+            (rest ??= []).push(inner)
+        } else if (inner.kind === "union" && inner.types.every(m => m.kind === "tuple" || m.kind === "array")) {
+            // A spread of one of several lists: what it holds, as a rest.
+            (rest ??= []).push(union(inner.types.flatMap(m => m.kind === "tuple" ? tupleMembers(m) : [(m as ArrayType).element])))
+        } else if (rest) {
+            rest.push(e)
+        } else {
+            elements.push(e)
+        }
+    }
+    if (writtenRest) (rest ??= []).push(writtenRest)
+    // A spread still waiting inside the rest is only ever read as what it
+    // holds: its elements' union is the most that can be said.
+    const restType = rest && union(rest.map(r => r.kind === "spread" ? spreadMembers(r.type) : r))
+    return restType ? { kind: "tuple", elements, rest: restType } : { kind: "tuple", elements }
+}
+
+/** What a spread of `t` puts in a list, as one type. */
+function spreadMembers(t: Type): Type {
+    if (t.kind === "tuple") return union(tupleMembers(t))
+    if (t.kind === "array") return t.element
+    if (t.kind === "typeParam" && t.constraint) return spreadMembers(t.constraint)
+    return unknownType
+}
+
+/** Does this tuple still have a spread to lay out? */
+export function hasSpread(t: TupleType): boolean {
+    return t.elements.some(e => e.kind === "spread")
 }
 
 /** Every element type a tuple can hold, the rest's included. */
@@ -412,7 +545,7 @@ export function substitute(t: Type, subst: Map<string, Type>): Type {
     // Nothing to replace: return the type as it stands rather than deep-copying
     // it. Without this, instantiating a generic over a large type (a class map,
     // say) rebuilds that whole type at every mention.
-    if (!containsTypeParam(t)) return t
+    if (!containsTypeParam(t) && !(subst.has(THIS_TYPE) && mentionsThis(t))) return t
     switch (t.kind) {
         case "typeParam": {
             const bound = subst.get(t.name)
@@ -427,8 +560,10 @@ export function substitute(t: Type, subst: Map<string, Type>): Type {
         }
         case "array":
             return { ...arrayOf(substitute(t.element, subst)), readonly: t.readonly }
+        case "spread":
+            return spread(substitute(t.type, subst))
         case "tuple":
-            return { ...tuple(t.elements.map(e => substitute(e, subst)), t.rest && substitute(t.rest, subst)), readonly: t.readonly } as Type
+            return tupleMeta(tuple(t.elements.map(e => substitute(e, subst)), t.rest && substitute(t.rest, subst)), t)
         case "object": {
             const entries: [string, ObjectProperty][] = []
             for (const [k, v] of t.properties) entries.push([k, { ...v, type: substitute(v.type, subst) }])
@@ -462,7 +597,7 @@ export function substitute(t: Type, subst: Map<string, Type>): Type {
             // the parameters, and its rest (or an array's element) is what
             // the rest parameter still collects.
             if (restIsWhole && varargs?.kind === "tuple") {
-                params = [...params, ...varargs.elements.map(type => ({ type }))]
+                params = [...params, ...tupleParams(varargs)]
                 varargs = varargs.rest
                 restIsWhole = undefined
             } else if (restIsWhole && varargs?.kind === "array") {
@@ -518,6 +653,7 @@ export function substitute(t: Type, subst: Map<string, Type>): Type {
                 : subst
             return {
                 ...t,
+                alias: undefined,
                 checkType: substitute(t.checkType, subst),
                 extendsType: substitute(t.extendsType, subst),
                 trueType: substitute(t.trueType, branch),
@@ -540,6 +676,7 @@ export function substitute(t: Type, subst: Map<string, Type>): Type {
             }
             return {
                 ...t,
+                alias: undefined,
                 constraint: substitute(t.constraint, subst),
                 nameType: t.nameType && substitute(t.nameType, inner),
                 template: substitute(t.template, inner),
@@ -572,6 +709,7 @@ function classArguments(t: Type, name: string): readonly Type[] | undefined {
 export type Unification = "union" | "first"
 
 export function unify(param: Type, arg: Type, vars: Set<string>, out: Map<string, Type>, how: Unification = "union"): void {
+    if (param.kind === "typeParam" && param.noInfer) return
     if (param.kind === "typeParam" && param.constraint && !vars.has(param.name)) {
         unify(param.constraint, arg, vars, out, how)
         return
@@ -581,7 +719,7 @@ export function unify(param: Type, arg: Type, vars: Set<string>, out: Map<string
         if (!prev) out.set(param.name, arg)
         else if (isAssignable(arg, prev)) { /* what it already is covers this one */ }
         else if (isAssignable(prev, arg)) out.set(param.name, arg)
-        else if (how === "union") out.set(param.name, union([prev, arg]))
+        else if (how === "union" || sameLiteralBase(prev, arg)) out.set(param.name, union([prev, arg]))
         return
     }
     if (arg.kind === "any" || arg.kind === "never") return
@@ -591,6 +729,10 @@ export function unify(param: Type, arg: Type, vars: Set<string>, out: Map<string
             else if (arg.kind === "tuple") for (const e of tupleMembers(arg)) unify(param.element, e, vars, out)
             return
         case "tuple":
+            if (hasSpread(param)) {
+                unifyVariadic(param, arg, vars, out, how)
+                return
+            }
             if (arg.kind === "tuple") {
                 param.elements.forEach((p, i) => {
                     const a = arg.elements[i] ?? arg.rest
@@ -605,6 +747,15 @@ export function unify(param: Type, arg: Type, vars: Set<string>, out: Map<string
         case "function":
             if (arg.kind === "function") {
                 param.params.forEach((p, i) => arg.params[i] && unify(p.type, arg.params[i].type, vars, out))
+                // `(...args: [...A, ...B]) => R` given `(a: number, b: string)
+                // => R`: the parameters from there on are the list.
+                if (param.restIsWhole && param.varargs) {
+                    const rest = arg.restIsWhole && arg.varargs && !arg.params.length
+                        ? arg.varargs
+                        : paramsAsTuple(arg.params.slice(param.params.length),
+                            arg.varargs && !arg.restIsWhole ? arg.varargs : undefined)
+                    unify(param.varargs, rest, vars, out)
+                }
                 unify(param.returns, arg.returns, vars, out)
                 // `(v: T) => v is S` given `v => v ~= nil`: what the guard
                 // narrows to is `S`.
@@ -641,11 +792,83 @@ export function unify(param: Type, arg: Type, vars: Set<string>, out: Map<string
             if (given) param.typeArguments.forEach((p, i) => given[i] && unify(p, given[i], vars, out))
             return
         }
-        case "union":
-            // Best effort: match against the first member that carries a var.
+        case "union": {
+            // \`T | nil\` given \`number | nil\`: what the written members already
+            // take is theirs, and \`T\` is the rest — \`number\`, as TypeScript
+            // reads it.
+            const bare = param.types.filter(m => m.kind === "typeParam" && vars.has(m.name))
+            const fixed = param.types.filter(m => !containsTypeParam(m))
+            if (bare.length === 1 && fixed.length + 1 === param.types.length) {
+                const given = arg.kind === "union" ? arg.types : [arg]
+                const left = given.filter(m => !fixed.some(f => isAssignable(m, f)))
+                if (left.length) unify(bare[0], union(left), vars, out, how)
+                return
+            }
+            // Best effort: match against each member that carries a var.
             for (const m of param.types) unify(m, arg, vars, out)
             return
+        }
     }
+}
+
+/** A parameter written as a tuple with a spread — `[...T]`, `[A, ...T, Z]`,
+ *  `[...A, ...B]` — against the list it is given. The places written around
+ *  the spreads take the elements at the same places, from the front and from
+ *  the back; what is left between them goes to the spreads in order. A spread
+ *  whose parameter is already known to be a tuple takes that many; the first
+ *  one not known takes whatever the known ones leave, and any later one
+ *  nothing — `[...A, ...B]` given a list it cannot otherwise split. */
+function unifyVariadic(param: TupleType, arg: Type, vars: Set<string>, out: Map<string, Type>, how: Unification): void {
+    const first = param.elements.findIndex(e => e.kind === "spread")
+    let last = first
+    param.elements.forEach((e, i) => { if (e.kind === "spread") last = i })
+    const head = param.elements.slice(0, first)
+    const tail = param.elements.slice(last + 1)
+    const between = param.elements.slice(first, last + 1)
+    if (arg.kind === "array") {
+        for (const p of [...head, ...tail]) unify(p, arg.element, vars, out)
+        for (const s of between) unify(s.kind === "spread" ? s.type : s, s.kind === "spread" ? arg : arg.element, vars, out, how)
+        return
+    }
+    if (arg.kind !== "tuple") return
+    head.forEach((p, i) => {
+        const a = arg.elements[i] ?? arg.rest
+        if (a) unify(p, a, vars, out)
+    })
+    const end = Math.max(head.length, arg.elements.length - (arg.rest ? 0 : tail.length))
+    tail.forEach((p, i) => {
+        const a = arg.rest ? arg.rest : arg.elements[end + i]
+        if (a) unify(p, a, vars, out)
+    })
+    const middle = arg.elements.slice(head.length, end)
+    // How many each spread is already known to take.
+    const known = between.map(s => {
+        if (s.kind !== "spread") return 1
+        const bound = s.type.kind === "typeParam" && vars.has(s.type.name) ? out.get(s.type.name) : undefined
+        return bound?.kind === "tuple" && !bound.rest && !hasSpread(bound) ? bound.elements.length : undefined
+    })
+    let free = Math.max(0, middle.length - known.reduce<number>((n, k) => n + (k ?? 0), 0))
+    let at = 0
+    between.forEach((s, i) => {
+        const count = known[i] ?? free
+        if (known[i] === undefined) free = 0
+        const from = head.length + at
+        const taken = middle.slice(at, at + count)
+        at += count
+        if (s.kind !== "spread") {
+            if (taken[0]) unify(s, taken[0], vars, out)
+            return
+        }
+        // The places keep their names, and whether they may be left out.
+        const made = tuple(taken, at >= middle.length ? arg.rest : undefined)
+        const names = arg.names?.slice(from, from + taken.length)
+        const required = Math.max(0, minLengthOf(arg) - from)
+        unify(s.type, {
+            ...made,
+            ...(names?.some(n => n) ? { names } : {}),
+            ...(required < taken.length ? { minLength: required } : {}),
+        }, vars, out, how)
+    })
 }
 
 // ============================================================
@@ -720,25 +943,70 @@ export function intersection(types: Type[]): Type {
         if (t.kind === "intersection" && !t.name) flat.push(...t.types)
         else flat.push(t)
     }
+    // `any` takes everything in, as in a union — but nothing is still nothing.
+    if (flat.some(t => t.kind === "never")) return neverType
+    if (flat.some(t => t.kind === "any")) return anyType
+    // `("a" | "b" | 1) & string` is `"a" | "b"`: a union of plain values meets
+    // the rest one member at a time. Only plain values — distributing a union
+    // of objects would multiply it out for nothing.
+    const scalar = (m: Type): boolean => m.kind === "literal" || (m.kind === "primitive" && m.name !== "object")
+    const at = flat.findIndex(m => m.kind === "union" && m.types.every(scalar))
+    if (at >= 0 && flat.some((m, i) => i !== at && scalar(m))) {
+        const others = flat.filter((_, i) => i !== at)
+        return union((flat[at] as UnionType).types.map(m => intersection([m, ...others])))
+    }
     const seen = new Map<string, Type>()
     for (const t of flat) {
         if (t.kind === "unknown") continue
         seen.set(memberKey(t), t)
     }
-    const members = [...seen.values()]
+    const members = simplifyIntersection([...seen.values()])
     if (members.length === 0) return unknownType
     if (members.length === 1) return members[0]
     return { kind: "intersection", types: members }
 }
 
-/** `base - excluded`, simplified as far as the base allows. */
+/** What an intersection of plain values comes to: `"a" & string` is `"a"`,
+ *  and `"a" & "b"` or `string & number` is nothing at all — the step that
+ *  makes `K & string` usable as a key. Objects and everything else are left
+ *  to intersect as they are. */
+function simplifyIntersection(members: Type[]): Type[] {
+    const scalars = members.filter((m): m is PrimitiveType | LiteralType =>
+        (m.kind === "primitive" && m.name !== "object") || m.kind === "literal")
+    if (scalars.length < 2 && !members.some(m => m.kind === "never")) return members
+    if (members.some(m => m.kind === "never")) return [neverType]
+    // A literal says the most; every other scalar must agree with it.
+    const lit = scalars.find((m): m is LiteralType => m.kind === "literal")
+    const baseOf = (m: PrimitiveType | LiteralType): string => m.kind === "literal" ? m.base : m.name
+    if (lit) {
+        const agrees = scalars.every(m => m.kind === "literal" ? m.value === lit.value : m.name === lit.base)
+        if (!agrees) return [neverType]
+    } else if (new Set(scalars.map(baseOf)).size > 1) {
+        return [neverType]
+    }
+    const keep = lit ?? scalars[0]
+    return members.filter(m => !scalars.includes(m as PrimitiveType) || m === keep)
+}
+
+/** `Exclude<base, excluded>`, simplified as far as the base allows. */
 export function difference(base: Type, excluded: Type): Type {
-    if (excluded.kind === "never" || base.kind === "never" || base.kind === "any") return base
-    // A union subtracts exactly, member by member.
-    if (base.kind === "union") return union(base.types.filter(m => !isAssignable(m, excluded)))
+    if (excluded.kind === "never" || base.kind === "never") return base
+    // A union subtracts exactly, member by member — and a member the
+    // subtraction only takes some of keeps it: `Exclude<string | number, "a">`
+    // is `Exclude<string, "a"> | number`.
+    if (base.kind === "union") {
+        return union(base.types.filter(m => !isAssignable(m, excluded)).map(m => difference(m, excluded)))
+    }
+    // `boolean` is `true | false`, and subtracts as that union does.
+    if (base.kind === "primitive" && base.name === "boolean" && overlaps(base, excluded)) {
+        return difference({ kind: "union", types: [literal(true), literal(false)] }, excluded)
+    }
     if (base.kind === "difference") {
         return difference(base.base, union([base.excluded, excluded]))
     }
+    // `any` fits anything, and is anything: what was taken out of it is all
+    // that is known, and stays.
+    if (base.kind === "any") return { kind: "difference", base, excluded }
     if (isAssignable(base, excluded)) return neverType
     // Only an opaque base carries the subtraction; anything concrete would
     // gain nothing from remembering it. "Opaque" includes a type-level
@@ -749,7 +1017,28 @@ export function difference(base: Type, excluded: Type): Type {
         base.kind === "conditional" || base.kind === "mapped" || base.kind === "templateLiteral"
     const opaque = base.kind === "unknown" || base.kind === "typeParam" ||
         base.kind === "genericRef" || deferred || containsTypeParam(base)
+    // `Exclude<string, "a">` is a string that is not `"a"`: what lets
+    // `if (s == "a")` be reported as a test that can never pass. Only the
+    // literals it does take out are remembered.
+    const literals = (excluded.kind === "union" ? excluded.types : [excluded])
+        .filter(m => m.kind === "literal" && isAssignable(m, base))
+    if (!opaque && base.kind === "primitive" && literals.length) {
+        return { kind: "difference", base, excluded: union(literals) }
+    }
     return opaque ? { kind: "difference", base, excluded } : base
+}
+
+/** A method's type with its receiver left out: what it takes after `this`
+ *  (or a definitions file's `self`) — what `text.upper` is, the receiver
+ *  being `text`. A guard on a later parameter moves with it. Anything else is
+ *  returned as it is. */
+export function withoutReceiver(t: Type): Type {
+    if (t.kind === "intersection") return intersection(t.types.map(withoutReceiver))
+    if (t.kind !== "function") return t
+    const first = t.params[0]?.name
+    if (first !== "this" && first !== "self") return t
+    const predicate = t.predicate && t.predicate.param > 0 ? { ...t.predicate, param: t.predicate.param - 1 } : undefined
+    return { ...t, params: t.params.slice(1), predicate }
 }
 
 /** `T | nil` — the type of an optional property or parameter. */
@@ -772,10 +1061,14 @@ export function widen(t: Type): Type {
     switch (t.kind) {
         case "literal":
             return primitive(t.base)
+        // A read-only list was frozen on purpose (`as const`), as a frozen
+        // object was: what it holds stays as narrow as it was written.
         case "array":
-            return { ...arrayOf(widen(t.element)), readonly: t.readonly }
+            if (t.readonly) return t
+            return arrayOf(widen(t.element))
         case "tuple":
-            return { ...tuple(t.elements.map(widen), t.rest && widen(t.rest)), readonly: t.readonly } as Type
+            if (t.readonly) return t
+            return tupleMeta(tuple(t.elements.map(widen), t.rest && widen(t.rest)), t)
         case "object": {
             if (t.frozen || t.class) return t
             const entries: [string, ObjectProperty][] = []
@@ -822,6 +1115,31 @@ let deferredBound: ((t: Type) => Type | undefined) | undefined
 
 export function setDeferredBound(fn: ((t: Type) => Type | undefined) | undefined): void {
     deferredBound = fn
+}
+
+/** What a string or a list has under a name — its `length`, and the methods
+ *  its metatable gives it — which only the analyzer knows; installed for
+ *  the duration of a run, as `expandAlias` is. */
+let builtinMember: ((t: Type, name: string) => Type | undefined) | undefined
+
+export function setBuiltinMember(fn: ((t: Type, name: string) => Type | undefined) | undefined): void {
+    builtinMember = fn
+}
+
+/** Is a string or a list one of a shape — `"abc"` a `{ length: number }`, as
+ *  TypeScript has it? Each member the shape names has to be one the value
+ *  answers to, of a type that fits. */
+function builtinFitsShape(a: Type, b: ObjectType): boolean {
+    if (!builtinMember || b.indexer || b.class) return false
+    for (const [name, bp] of b.properties) {
+        const held = builtinMember(a, name)
+        if (!held) {
+            if (bp.optional) continue
+            return false
+        }
+        if (!isAssignable(held, withThis(bp.type, a))) return false
+    }
+    return true
 }
 
 /** Pairs currently being compared. Recursive types make `isAssignable` re-enter
@@ -873,12 +1191,12 @@ function isAssignableInner(a: Type, b: Type): boolean {
     if (a.kind === "unknown") return false
 
     // One subtraction fits another when its base does and it already excludes
-    // everything the target excludes — `unknown - nil` is itself, which the
+    // everything the target excludes — `Exclude<unknown, nil>` is itself, which the
     // rules below would deny (`unknown` overlaps `nil`).
     if (a.kind === "difference" && b.kind === "difference") {
         return isAssignable(a.base, b.base) && isAssignable(b.excluded, a.excluded)
     }
-    // `x` fits `B - E` when it fits `B` and cannot be an `E` at all.
+    // `x` fits `Exclude<B, E>` when it fits `B` and cannot be an `E` at all.
     if (b.kind === "difference") {
         return isAssignable(a, b.base) && !overlaps(a, b.excluded)
     }
@@ -886,6 +1204,9 @@ function isAssignableInner(a: Type, b: Type): boolean {
     // but first see whether one member of a union target takes it as it is,
     // since `B` alone rarely fits anything the subtraction does.
     if (a.kind === "difference") {
+        // Nothing left of it is a `B` when `B` is all it took out —
+        // `Exclude<any, nil>` is never `nil`.
+        if (isAssignable(b, a.excluded)) return false
         if (b.kind === "union" && b.types.some(m => isAssignable(a, m))) return true
         return isAssignable(a.base, b)
     }
@@ -931,6 +1252,15 @@ function isAssignableInner(a: Type, b: Type): boolean {
         return merged !== undefined && isAssignable(merged, b)
     }
 
+    if (b.kind === "primitive" && b.name === "object") {
+        return a.kind === "array" || a.kind === "tuple" || a.kind === "object" || a.kind === "function" ||
+            (a.kind === "primitive" && a.name === "object")
+    }
+    if (b.kind === "object" && !b.class && b.properties.size > 0 &&
+        (a.kind === "literal" || a.kind === "templateLiteral" || a.kind === "array" || a.kind === "tuple" ||
+            (a.kind === "primitive" && a.name === "string"))) {
+        if (builtinFitsShape(a, b)) return true
+    }
     if (a.kind === "literal") {
         if (b.kind === "literal") return a.value === b.value
         if (b.kind === "primitive") return b.name === a.base
@@ -956,11 +1286,43 @@ function isAssignableInner(a: Type, b: Type): boolean {
         return false
     }
     if (a.kind === "tuple") {
+        // `[1, 2, "a"]` is a `[...number[], string]`: the places written
+        // around the one list of any length, and every place between them one
+        // of what that list holds.
+        if (b.kind === "tuple" && !hasSpread(a) && !b.rest) {
+            const at = b.elements.findIndex(e => e.kind === "spread")
+            const inner = at >= 0 ? (b.elements[at] as SpreadType).type : undefined
+            if (inner?.kind === "array" && b.elements.filter(e => e.kind === "spread").length === 1) {
+                const head = b.elements.slice(0, at), tail = b.elements.slice(at + 1)
+                if (a.elements.length < head.length + tail.length || (a.rest && tail.length)) return false
+                if (!head.every((t, i) => isAssignable(a.elements[i], t))) return false
+                const from = a.elements.length - tail.length
+                if (!tail.every((t, i) => isAssignable(a.elements[from + i], t))) return false
+                const middle = [...a.elements.slice(head.length, from), ...(a.rest ? [a.rest] : [])]
+                return middle.every(t => isAssignable(t, inner.element))
+            }
+        }
+        // A list still waiting on what it spreads fits one written the same
+        // way, place by place: `[...xs, v]` is a `[...T, V]`.
+        if (b.kind === "tuple" && (hasSpread(a) || hasSpread(b))) {
+            if (a.elements.length !== b.elements.length || !!a.rest !== !!b.rest) return false
+            if (a.rest && !isAssignable(a.rest, b.rest!)) return false
+            return a.elements.every((x, i) => {
+                const y = b.elements[i]
+                if ((x.kind === "spread") !== (y.kind === "spread")) return false
+                return x.kind === "spread" ? isAssignable(x.type, (y as SpreadType).type) : isAssignable(x, y)
+            })
+        }
+        if (b.kind === "array" && hasSpread(a)) {
+            return tupleMembers(a).every(t => isAssignable(t.kind === "spread" ? spreadMembers(t.type) : t, b.element))
+        }
         if (b.kind === "tuple") {
-            // Each of `b`'s fixed places has to be filled by one of `a`'s;
-            // what `a` has beyond them goes in `b`'s rest, if it has one.
-            if (a.elements.length < b.elements.length) return false
-            if (!b.elements.every((t, i) => isAssignable(a.elements[i], t))) return false
+            // Each of `b`'s places that has to be there has to be filled by
+            // one of `a`'s that is; a place `b` may leave out takes one `a`
+            // has or not. What `a` has beyond them goes in `b`'s rest.
+            if (minLengthOf(a) < minLengthOf(b)) return false
+            if (a.rest && !b.rest) return false
+            if (!b.elements.every((t, i) => i >= a.elements.length ? i >= minLengthOf(b) : isAssignable(a.elements[i], t))) return false
             const extra = [...a.elements.slice(b.elements.length), ...(a.rest ? [a.rest] : [])]
             if (!b.rest) return extra.length === 0
             return extra.every(t => isAssignable(t, b.rest!))
@@ -983,8 +1345,10 @@ function isAssignableInner(a: Type, b: Type): boolean {
                 return false
             }
             // An optional property may be written as nil: in Lua a field that
-            // is nil is a field that is not there.
-            if (!isAssignable(ap.type, bp.optional ? optional(bp.type) : bp.type)) return false
+            // is nil is a field that is not there. A member that names
+            // `this` names the value being compared.
+            const want = withThis(bp.type, a), have = withThis(ap.type, a)
+            if (!isAssignable(have, bp.optional ? optional(want) : want)) return false
         }
         if (b.indexer) {
             // `{ [string]: V }` promises that every key it covers holds a `V`:
@@ -1002,28 +1366,144 @@ function isAssignableInner(a: Type, b: Type): boolean {
     }
     if (a.kind === "function") {
         if (b.kind !== "function") return false
-        // bivariant params (pragmatic, matches Luau's default posture)
-        const n = Math.min(a.params.length, b.params.length)
-        for (let i = 0; i < n; i++) {
-            if (!isAssignable(a.params[i].type, b.params[i].type) &&
-                !isAssignable(b.params[i].type, a.params[i].type)) return false
-        }
-        // Where a guard is wanted, a plain `boolean` says nothing about the
-        // value: only a guard on the same parameter, narrowing no wider, is one.
-        const wanted = b.predicate
-        if (wanted?.type && !wanted.asserts) {
-            const given = a.predicate
-            if (!given?.type || given.asserts || given.param !== wanted.param || !isAssignable(given.type, wanted.type)) return false
-        }
-        return isAssignable(a.returns, b.returns)
+        return isFunctionAssignable(laidOut(a), laidOut(b))
     }
     if (b.kind === "typeParam") return false
     if (a.kind === "genericRef" || b.kind === "genericRef") {
-        return a.kind === "genericRef" && b.kind === "genericRef" && sameRefTarget(a, b) &&
-            a.typeArguments.length === b.typeArguments.length &&
-            a.typeArguments.every((x, i) => equalTypes(x, b.typeArguments[i]))
+        if (!(a.kind === "genericRef" && b.kind === "genericRef" && sameRefTarget(a, b) &&
+            a.typeArguments.length === b.typeArguments.length)) return false
+        // Where the alias says how it compares by a parameter, the arguments
+        // compare that way; otherwise only the same argument is the same type.
+        const variances = (a.origin ?? b.origin)?.variances?.(a.name)
+        return a.typeArguments.every((x, i) => {
+            const y = b.typeArguments[i]
+            switch (variances?.[i]) {
+                case "out": return isAssignable(x, y)
+                case "in": return isAssignable(y, x)
+                default: return equalTypes(x, y)
+            }
+        })
     }
     return false
+}
+
+/** Are `a` and `b` literals of one primitive — `1` and `2`? Then a type
+ *  parameter both are read for is either, `1 | 2`, as TypeScript reads it;
+ *  `1` and `"a"` leave the first one standing. */
+function sameLiteralBase(a: Type, b: Type): boolean {
+    const bases = (t: Type): Set<string> | undefined => {
+        const members = t.kind === "union" ? t.types : [t]
+        if (!members.every(m => m.kind === "literal")) return undefined
+        return new Set(members.map(m => (m as LiteralType).base))
+    }
+    const x = bases(a), y = bases(b)
+    return !!x && !!y && x.size === 1 && y.size === 1 && [...x][0] === [...y][0]
+}
+
+/** `(...args: [number, string]) => R` is `(a: number, b: string) => R`: a rest
+ *  parameter that is a tuple of known places is those parameters. */
+function laidOut(f: FunctionType): FunctionType {
+    if (!f.restIsWhole || !f.varargs) return f
+    const rest = f.varargs
+    if (rest.kind !== "tuple" || hasSpread(rest)) return f
+    return {
+        ...f,
+        params: [...f.params, ...tupleParams(rest)],
+        varargs: rest.rest,
+        restIsWhole: undefined,
+    }
+}
+
+/** A tuple's places as the parameters they are, with their names, and the
+ *  ones that may be left out optional: `[a: number, b?: string]` is
+ *  `(a: number, b?: string)`. */
+export function tupleParams(t: TupleType): FunctionParam[] {
+    const required = minLengthOf(t)
+    return t.elements.map((type, i): FunctionParam => ({
+        type,
+        ...(t.names?.[i] ? { name: t.names[i] } : {}),
+        ...(i >= required ? { optional: true } : {}),
+    }))
+}
+
+/** Parameters as the tuple they are: `(a: number, b?: string)` is
+ *  `[a: number, b?: string]`. */
+export function paramsAsTuple(params: readonly FunctionParam[], rest?: Type): TupleType {
+    const made = tuple(params.map(p => p.type), rest)
+    let required = 0
+    params.forEach((p, i) => { if (!p.optional) required = i + 1 })
+    return {
+        ...made,
+        ...(required < params.length ? { minLength: required } : {}),
+        ...(params.some(p => p.name) ? { names: params.map(p => p.name) } : {}),
+    }
+}
+
+function isFunctionAssignable(a: FunctionType, b: FunctionType): boolean {
+    // A function that needs more arguments than a caller of `b` hands it
+    // would run with some of them missing.
+    if (!b.varargs && requiredParams(a) > b.params.length) return false
+    // Parameters are contravariant, as under TypeScript's
+    // `strictFunctionTypes`: whatever a caller of `b` passes has to be
+    // something `a` accepts. A method — a function taking its receiver
+    // first, `self` or `this` — is compared both ways, as TypeScript
+    // compares methods: an override narrows what its class is.
+    const method = isMethodLike(a) || isMethodLike(b)
+    const n = Math.min(a.params.length, b.params.length)
+    for (let i = 0; i < n; i++) {
+        const given = b.params[i].type, taken = a.params[i].type
+        if (isAssignable(given, taken)) continue
+        if (method && isAssignable(taken, given)) continue
+        return false
+    }
+    // And the other way: what `b`'s callers pass through its rest fills
+    // `a`'s parameters past `b`'s named ones — `(a: number, b: number) =>`
+    // is no `(...xs: string[]) =>`.
+    const restOfB = !b.varargs ? undefined
+        : !b.restIsWhole ? b.varargs
+        : b.varargs.kind === "array" ? b.varargs.element : undefined
+    // A rest of `unknown` is what a list still to be worked out is at most
+    // (`A extends unknown[]`): it says what may come, not what will, and is
+    // read as TypeScript reads `any[]` there.
+    if (restOfB && restOfB.kind !== "unknown") {
+        for (let i = b.params.length; i < a.params.length; i++) {
+            const taken = a.params[i].type
+            if (isAssignable(restOfB, taken)) continue
+            if (method && isAssignable(taken, restOfB)) continue
+            return false
+        }
+    }
+    // What `b`'s callers pass beyond `a`'s named parameters lands in its
+    // rest.
+    if (a.varargs && !a.restIsWhole) {
+        for (let i = a.params.length; i < b.params.length; i++) {
+            const given = b.params[i].type
+            if (isAssignable(given, a.varargs)) continue
+            if (method && isAssignable(a.varargs, given)) continue
+            return false
+        }
+    }
+    // Where a guard is wanted, a plain `boolean` says nothing about the
+    // value: only a guard on the same parameter, narrowing no wider, is one.
+    const wanted = b.predicate
+    if (wanted?.type && !wanted.asserts) {
+        const given = a.predicate
+        if (!given?.type || given.asserts || given.param !== wanted.param || !isAssignable(given.type, wanted.type)) return false
+    }
+    return isAssignable(a.returns, b.returns)
+}
+
+/** How many arguments a call of `f` has to pass. */
+function requiredParams(f: FunctionType): number {
+    let n = 0
+    f.params.forEach((p, i) => { if (!p.optional) n = i + 1 })
+    return n
+}
+
+/** Does `f` take its receiver first — `(self: T, ...)`, `(this: T, ...)`? */
+function isMethodLike(f: FunctionType): boolean {
+    const first = f.params[0]?.name
+    return first === "self" || first === "this"
 }
 
 function isAliasNamed(t: Type): boolean {
@@ -1059,7 +1539,8 @@ export function equalTypes(a: Type, b: Type): boolean {
 export function narrowTo(t: Type, filter: Type): Type {
     if (filter.kind === "any") return t
     // Narrowing a subtraction narrows its base, then re-applies what was
-    // already ruled out: `(unknown - 1)` narrowed by `number` is `number - 1`.
+    // already ruled out: `Exclude<unknown, 1>` narrowed by `number` is
+    // `Exclude<number, 1>`.
     if (t.kind === "difference") return difference(narrowTo(t.base, filter), t.excluded)
     if (t.kind === "any" || t.kind === "unknown") return filter
     const members = t.kind === "union" ? t.types : [t]
@@ -1183,7 +1664,7 @@ export function containsTypeParam(
 ): boolean {
     // Outermost call on a closed question: cacheable, and worth caching —
     // the reducer asks this of the same large types over and over.
-    const cacheable = seen.size === 0 && bound.size === 0
+    const cacheable = seen.size === 0 && bound.size === 0 && !seekingThis
     if (cacheable) {
         const hit = freeParamCache.get(t)
         if (hit !== undefined) return hit
@@ -1193,13 +1674,47 @@ export function containsTypeParam(
     return result
 }
 
+/** The name of TypeScript's polymorphic `this` type: the value a member is
+ *  read from. It is a type parameter filled in where a member is read (see
+ *  `withThis`), so it never keeps a type waiting the way a generic's own
+ *  parameters do — `keyof` an interface whose methods take `self: this` is
+ *  as known as any other. */
+export const THIS_TYPE = "this"
+
+/** Set while `mentionsThis` walks a type: then `this` is the one parameter
+ *  that counts. */
+let seekingThis = false
+const thisCache = new WeakMap<object, boolean>()
+
+/** Does `t` mention the polymorphic `this` — outside a class, whose members
+ *  are read one at a time? */
+export function mentionsThis(t: Type): boolean {
+    const hit = thisCache.get(t)
+    if (hit !== undefined) return hit
+    const was = seekingThis
+    seekingThis = true
+    try {
+        const result = containsFreeTypeParam(t, new Set(), new Set())
+        thisCache.set(t, result)
+        return result
+    } finally {
+        seekingThis = was
+    }
+}
+
+/** `t` with `this` standing for `receiver`. */
+export function withThis(t: Type, receiver: Type): Type {
+    return mentionsThis(t) ? substitute(t, new Map([[THIS_TYPE, receiver]])) : t
+}
+
 function containsFreeTypeParam(t: Type, seen: Set<Type>, bound: Set<string>): boolean {
     if (seen.has(t)) return false
     seen.add(t)
     switch (t.kind) {
-        case "typeParam": return !bound.has(t.name)
-        case "infer": return !bound.has(t.name)
+        case "typeParam": return seekingThis ? t.name === THIS_TYPE : !bound.has(t.name) && t.name !== THIS_TYPE
+        case "infer": return !bound.has(t.name) || (!!t.constraint && containsTypeParam(t.constraint, seen, bound))
         case "array": return containsTypeParam(t.element, seen, bound)
+        case "spread": return containsTypeParam(t.type, seen, bound)
         case "tuple": return tupleMembers(t).some(e => containsTypeParam(e, seen, bound))
         case "union":
         case "intersection": return t.types.some(m => containsTypeParam(m, seen, bound))
@@ -1259,55 +1774,198 @@ function containsFreeTypeParam(t: Type, seen: Set<Type>, bound: Set<string>): bo
 /** Structurally match `arg` against `pattern`, binding every `infer` name it
  *  contains into `out`. This is what turns `T extends (...unknown) -> infer R`
  *  into `R = <the return type>`. Returns false when the shapes cannot match at
- *  all; a `true` result still needs the usual assignability check. */
-export function matchInfer(arg: Type, pattern: Type, out: Map<string, Type>): boolean {
+ *  all; a `true` result still needs the usual assignability check.
+ *
+ *  `contra` is set below a function's parameter: a name inferred from several
+ *  places there is what all of them take — their intersection, which is how
+ *  `UnionToIntersection` works — where anywhere else it is their union. */
+export function matchInfer(arg: Type, pattern: Type, out: Map<string, Type>, contra = false): boolean {
     if (pattern.kind === "infer") {
+        if (pattern.constraint && !isAssignable(arg, pattern.constraint)) return false
         const prev = out.get(pattern.name)
-        out.set(pattern.name, prev ? union([prev, arg]) : arg)
+        out.set(pattern.name, !prev ? arg : contra ? intersection([prev, arg]) : union([prev, arg]))
         return true
     }
     if (!containsTypeParam(pattern)) return true // nothing to bind; assignability decides
+    if (arg.kind === "genericRef" && pattern.kind !== "genericRef" && expandAlias) {
+        const expanded = expandAlias(arg)
+        if (expanded !== arg) return matchInfer(expanded, pattern, out, contra)
+    }
+    // Several possibilities matched against one shape: each of them has to
+    // fit it, and each says something about the names.
+    if (arg.kind === "union" && pattern.kind !== "union") {
+        return arg.types.every(m => matchInfer(m, pattern, out, contra))
+    }
+    // An overload set is matched by its last signature, as TypeScript reads
+    // `ReturnType<typeof overloaded>`.
+    if (pattern.kind === "function" && arg.kind === "intersection") {
+        const signatures = arg.types.filter((m): m is FunctionType => m.kind === "function")
+        if (signatures.length) return matchInfer(signatures[signatures.length - 1], pattern, out, contra)
+    }
     switch (pattern.kind) {
         case "array":
-            if (arg.kind === "array") return matchInfer(arg.element, pattern.element, out)
-            if (arg.kind === "tuple") return matchInfer(union(tupleMembers(arg)), pattern.element, out)
+            if (arg.kind === "array") return matchInfer(arg.element, pattern.element, out, contra)
+            if (arg.kind === "tuple") return matchInfer(union(tupleMembers(arg)), pattern.element, out, contra)
             return false
         case "tuple":
-            if (arg.kind !== "tuple" || arg.elements.length !== pattern.elements.length) return false
-            if (pattern.rest && !matchInfer(arg.rest ?? neverType, pattern.rest, out)) return false
-            return pattern.elements.every((pt, i) => matchInfer(arg.elements[i], pt, out))
+            return matchTuple(arg, pattern, out, contra)
         case "function": {
             if (arg.kind !== "function") return false
             // `(...args: infer P) => R` collects the whole parameter list as a
-            // tuple — this is how `Parameters<T>` is expressed.
-            if (pattern.varargs?.kind === "infer" && !pattern.params.length) {
-                out.set(pattern.varargs.name, tuple(arg.params.map(p => p.type),
-                    arg.varargs && !arg.restIsWhole ? arg.varargs : undefined))
-            } else {
-                for (let i = 0; i < pattern.params.length; i++) {
-                    if (!arg.params[i]) return false
-                    if (!matchInfer(arg.params[i].type, pattern.params[i].type, out)) return false
-                }
+            // tuple — this is how `Parameters<T>` is expressed. So does a rest
+            // that is a tuple pattern of its own: `(...args: [infer A, ...infer R])`.
+            const whole = pattern.varargs && (pattern.restIsWhole || pattern.varargs.kind === "infer")
+            for (let i = 0; i < pattern.params.length; i++) {
+                const given = arg.params[i]?.type ?? (arg.varargs && !arg.restIsWhole ? arg.varargs : undefined)
+                // A function taking fewer parameters still fits: what the
+                // missing one would have been is not known.
+                if (!given) continue
+                if (!matchInfer(given, pattern.params[i].type, out, !contra)) return false
             }
-            return matchInfer(arg.returns, pattern.returns, out)
+            if (whole) {
+                const wholeArg = arg.restIsWhole && arg.varargs && !arg.params.length
+                    ? arg.varargs
+                    : paramsAsTuple(arg.params.slice(pattern.params.length),
+                        arg.varargs && !arg.restIsWhole ? arg.varargs : undefined)
+                if (!matchInfer(wholeArg, pattern.varargs!, out, !contra)) return false
+            } else if (pattern.varargs && arg.varargs && !arg.restIsWhole) {
+                if (!matchInfer(arg.varargs, pattern.varargs, out, !contra)) return false
+            }
+            return matchInfer(arg.returns, pattern.returns, out, contra)
         }
         case "object": {
-            if (arg.kind !== "object") return false
+            let given: Type = arg
+            if (given.kind === "intersection") given = mergeObjectMembers(given.types) ?? given
+            if (given.kind !== "object") return false
             for (const [k, pv] of pattern.properties) {
-                const av = arg.properties.get(k)
-                if (!av || !matchInfer(av.type, pv.type, out)) return false
+                const av = given.properties.get(k)
+                if (!av) {
+                    if (pv.optional) continue
+                    if (given.indexer && matchInfer(given.indexer.value, pv.type, out, contra)) continue
+                    return false
+                }
+                if (!matchInfer(pv.optional ? withoutNilMember(av.type) : av.type, pv.type, out, contra)) return false
+            }
+            if (pattern.indexer) {
+                if (given.indexer) return matchInfer(given.indexer.value, pattern.indexer.value, out, contra)
+                // `{ [string]: infer V }` against a record: every member's value.
+                const values = [...given.properties.values()].map(p => p.type)
+                if (values.length) return matchInfer(union(values), pattern.indexer.value, out, contra)
             }
             return true
         }
+        case "templateLiteral":
+            if (arg.kind === "literal" && arg.base === "string") return matchTemplate(String(arg.value), pattern, out)
+            return arg.kind === "templateLiteral"
         case "union":
-            return pattern.types.some(m => matchInfer(arg, m, out))
+            return pattern.types.some(m => matchInfer(arg, m, out, contra))
+        case "intersection":
+            return pattern.types.every(m => matchInfer(arg, m, out, contra))
         case "genericRef":
             if (arg.kind !== "genericRef" || arg.name !== pattern.name) return false
             return pattern.typeArguments.every((a, i) =>
-                arg.typeArguments[i] !== undefined && matchInfer(arg.typeArguments[i], a, out))
+                arg.typeArguments[i] !== undefined && matchInfer(arg.typeArguments[i], a, out, contra))
         default:
             return true
     }
+}
+
+function withoutNilMember(t: Type): Type {
+    return t.kind === "union" ? union(t.types.filter(m => !(m.kind === "primitive" && m.name === "nil"))) : t
+}
+
+/** A tuple pattern: `[A, B]`, `[A, ...B[]]`, or one with a spread anywhere —
+ *  `[infer H, ...infer R]`, `[...infer Init, infer L]`. What a spread stands
+ *  for is the elements between the ones written around it, as a tuple. */
+function matchTuple(arg: Type, pattern: TupleType, out: Map<string, Type>, contra: boolean): boolean {
+    const at = pattern.elements.findIndex(e => e.kind === "spread")
+    if (arg.kind === "array") {
+        // A list of any length fits only a pattern of any length.
+        if (at < 0) return pattern.elements.length === 0 && !!pattern.rest && matchInfer(arg.element, pattern.rest, out, contra)
+        if (pattern.elements.length !== 1 || pattern.rest) return false
+        return matchInfer(arg, (pattern.elements[0] as SpreadType).type, out, contra)
+    }
+    if (arg.kind !== "tuple") return false
+    if (at < 0) {
+        if (arg.elements.length < pattern.elements.length) return false
+        if (!pattern.rest && (arg.elements.length !== pattern.elements.length || arg.rest)) return false
+        if (!pattern.elements.every((pt, i) => matchInfer(arg.elements[i], pt, out, contra))) return false
+        if (!pattern.rest) return true
+        const extra = [...arg.elements.slice(pattern.elements.length), ...(arg.rest ? [arg.rest] : [])]
+        return matchInfer(extra.length ? union(extra) : neverType, pattern.rest, out, contra)
+    }
+    const head = pattern.elements.slice(0, at)
+    const tail = pattern.elements.slice(at + 1)
+    // Two spreads, or a spread and a rest, leave where one ends unknowable.
+    if (pattern.rest || tail.some(e => e.kind === "spread")) return false
+    if (arg.elements.length < head.length + tail.length) return false
+    // A rest of any length puts the elements written after it out of reach.
+    if (arg.rest && tail.length) return false
+    if (!head.every((pt, i) => matchInfer(arg.elements[i], pt, out, contra))) return false
+    const from = arg.elements.length - tail.length
+    if (!tail.every((pt, i) => matchInfer(arg.elements[from + i], pt, out, contra))) return false
+    const middle = tuple(arg.elements.slice(head.length, from), arg.rest)
+    return matchInfer(middle, (pattern.elements[at] as SpreadType).type, out, contra)
+}
+
+/** A string literal against a template pattern with `infer` in it:
+ *  `` `${infer A}.${infer B}` `` against `"a.b.c"` binds `A = "a"` and
+ *  `B = "b.c"`. Read left to right as TypeScript does: each placeholder takes
+ *  up to the first place the text after it appears, one directly followed by
+ *  another takes a single character, and the last takes what is left. */
+function matchTemplate(value: string, pattern: TemplateLiteralType, out: Map<string, Type>): boolean {
+    // A placeholder that is one known string is text like any other.
+    const quasis = [pattern.quasis[0]]
+    const types: Type[] = []
+    pattern.types.forEach((t, i) => {
+        if (t.kind === "literal") quasis[quasis.length - 1] += String(t.value) + pattern.quasis[i + 1]
+        else { types.push(t); quasis.push(pattern.quasis[i + 1]) }
+    })
+    if (!types.length) return value === quasis[0]
+    const last = quasis[quasis.length - 1]
+    if (!value.startsWith(quasis[0]) || !value.endsWith(last) || value.length - last.length < quasis[0].length) return false
+    const end = value.length - last.length
+    let pos = quasis[0].length
+    const pieces: string[] = []
+    for (let i = 0; i < types.length; i++) {
+        if (i === types.length - 1) {
+            pieces.push(value.slice(pos, end))
+            break
+        }
+        const after = quasis[i + 1]
+        if (!after) {
+            if (pos >= end) return false
+            pieces.push(value.charAt(pos))
+            pos += 1
+            continue
+        }
+        const found = value.indexOf(after, pos)
+        if (found < 0 || found + after.length > end) return false
+        pieces.push(value.slice(pos, found))
+        pos = found + after.length
+    }
+    return types.every((t, i) => bindTemplatePiece(pieces[i], t, out))
+}
+
+/** One piece a template placeholder took, checked against what it was
+ *  written as — and bound, if that was an `infer`. */
+function bindTemplatePiece(piece: string, placeholder: Type, out: Map<string, Type>): boolean {
+    if (placeholder.kind !== "infer") return pieceAs(piece, placeholder) !== undefined
+    const read = placeholder.constraint ? pieceAs(piece, placeholder.constraint) : literal(piece)
+    if (!read) return false
+    const prev = out.get(placeholder.name)
+    out.set(placeholder.name, prev ? union([prev, read]) : read)
+    return true
+}
+
+/** The text a template placeholder took, read as a value of `t`: `"42"` is
+ *  the number `42`, `"true"` the boolean. */
+function pieceAs(piece: string, t: Type): Type | undefined {
+    const candidates: Type[] = [literal(piece)]
+    const n = Number(piece)
+    if (piece.trim() !== "" && Number.isFinite(n) && String(n) === piece) candidates.push(literal(n))
+    if (piece === "true" || piece === "false") candidates.push(literal(piece === "true"))
+    return candidates.find(c => isAssignable(c, t))
 }
 
 /** Does a concrete string match a template literal *pattern*? Each
@@ -1414,7 +2072,18 @@ function formatTypeUncached(t: Type): string {
         case "literal": return t.base === "string" ? JSON.stringify(t.value) : String(t.value)
         case "array": return `${t.readonly ? "readonly " : ""}${formatAtom(t.element)}[]`
         case "tuple": {
-            const inner = [...t.elements.map(formatType), ...(t.rest ? [`...${formatAtom(t.rest)}[]`] : [])]
+            // Nothing but a rest is a list of any length: `number[]`.
+            if (!t.elements.length && t.rest) return `${t.readonly ? "readonly " : ""}${formatAtom(t.rest)}[]`
+            const required = minLengthOf(t)
+            const inner = [
+                ...t.elements.map((e, i) => {
+                    const optional = i >= required
+                    const shown = formatType(optional ? withoutNilMember(e) : e)
+                    const name = t.names?.[i]
+                    return name ? `${name}${optional ? "?" : ""}: ${shown}` : `${shown}${optional ? "?" : ""}`
+                }),
+                ...(t.rest ? [`...${formatAtom(t.rest)}[]`] : []),
+            ]
             return `${t.readonly ? "readonly " : ""}[${inner.join(", ")}]`
         }
         case "object": {
@@ -1447,7 +2116,11 @@ function formatTypeUncached(t: Type): string {
                     return `${consts.has(n) ? "const " : ""}${n}${constraint ? ` extends ${briefConstraint(constraint)}` : ""}`
                 }).join(", ")}>`
                 : ""
-            const ps = t.params.map(p => `${p.name ? p.name + ": " : ""}${formatType(p.type)}`)
+            // `separator?: string`, as it was written — not `separator: string
+            // | nil`, which would have to be passed.
+            const ps = t.params.map(p => p.name && p.optional
+                ? `${p.name}?: ${formatType(withoutNilMember(p.type))}`
+                : `${p.name ? p.name + ": " : ""}${formatType(p.type)}`)
             // Written the one way a rest parameter is: as the array it collects.
             if (t.varargs) ps.push(t.restIsWhole ? `...args: ${formatType(t.varargs)}` : `...args: ${formatAtom(t.varargs)}[]`)
             return `${gen}(${ps.join(", ")}) => ${formatPredicate(t) ?? formatType(t.returns)}`
@@ -1460,14 +2133,15 @@ function formatTypeUncached(t: Type): string {
                 ? `${t.name}<${t.typeArguments.map(formatType).join(", ")}>`
                 : t.name
         case "keyof": return `keyof ${formatAtom(t.target)}`
-        case "difference": return `${formatAtom(t.base)} - ${formatAtom(t.excluded)}`
+        case "difference": return `Exclude<${formatType(t.base)}, ${formatType(t.excluded)}>`
         case "templateLiteral": {
             let out = "`" + t.quasis[0]
             t.types.forEach((x, i) => { out += "${" + formatType(x) + "}" + t.quasis[i + 1] })
             return out + "`"
         }
         case "indexedAccess": return `${formatAtom(t.objectType)}[${formatType(t.indexType)}]`
-        case "infer": return `infer ${t.name}`
+        case "infer": return t.constraint ? `infer ${t.name} extends ${formatType(t.constraint)}` : `infer ${t.name}`
+        case "spread": return `...${formatAtom(t.type)}`
         case "conditional":
             return `${formatAtom(t.checkType)} extends ${formatAtom(t.extendsType)} ? ${formatType(t.trueType)} : ${formatType(t.falseType)}`
         case "mapped": {
@@ -1492,7 +2166,7 @@ function formatAtom(t: Type): string {
     // A named intersection prints as a bare alias name, so it needs no parens.
     if (t.kind === "intersection" && t.name) return t.name
     if (t.kind === "union" || t.kind === "intersection" || t.kind === "function" ||
-        t.kind === "difference" || t.kind === "conditional") {
+        t.kind === "conditional") {
         return `(${formatType(t)})`
     }
     return formatType(t)

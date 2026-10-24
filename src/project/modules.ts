@@ -8,6 +8,7 @@
  * left off, and a folder means its `index.tilua`.
  */
 import { dirname, join, resolve } from "node:path"
+import type { ImportExpression, Program } from "@ast/nodes"
 import type { TiluaConfig } from "./config"
 import { nodeHost, type ProjectHost } from "./host"
 
@@ -57,4 +58,22 @@ function aliasTargets(config: TiluaConfig, specifier: string): string[] {
     if (!match) return []
     const { pattern, wildcard } = match
     return config.paths[pattern].map(target => resolve(config.baseUrl, target.replace("*", wildcard)))
+}
+
+/** Every `import("...")` in `program`, wherever it is written — in the order
+ *  they are written. A module they name belongs to the project as much as one
+ *  an `import` statement names, though nothing says so at the top of the file. */
+export function importExpressions(program: Program): ImportExpression[] {
+    const out: ImportExpression[] = []
+    const visit = (value: unknown): void => {
+        if (!value || typeof value !== "object") return
+        if (Array.isArray(value)) return void value.forEach(visit)
+        const record = value as Record<string, unknown>
+        if (record.type === "ImportExpression") out.push(value as ImportExpression)
+        for (const [key, child] of Object.entries(record)) {
+            if (key !== "line" && key !== "column") visit(child)
+        }
+    }
+    visit(program.body)
+    return out
 }

@@ -34,7 +34,7 @@ function lengths(items: (string | nil)[]): number {
     for (const item in items) {
         if (item == nil) { continue }
         const present: string = item
-        total = total + #present
+        total = total + present.length
     }
     return total
 }
@@ -45,7 +45,7 @@ function firstNil(items: (string | nil)[]): number {
     for (const item in items) {
         if (item == nil) { break }
         const present: string = item
-        seen = seen + #present
+        seen = seen + present.length
     }
     return seen
 }
@@ -91,7 +91,7 @@ function bareContinue(items: (string | nil)[]): number {
     for (const item in items) {
         if (item == nil) continue
         const present: string = item
-        total = total + #present
+        total = total + present.length
     }
     return total
 }

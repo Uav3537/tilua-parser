@@ -234,7 +234,7 @@
               },
               "column": {
                 "start": 23,
-                "end": 33
+                "end": 25
               }
             }
           ],
@@ -883,12 +883,12 @@
                 "base": "string",
                 "typeArguments": [],
                 "line": {
-                  "start": 1,
-                  "end": 1
+                  "start": 44,
+                  "end": 44
                 },
                 "column": {
-                  "start": 1,
-                  "end": 7
+                  "start": 19,
+                  "end": 25
                 }
               }
             ],
@@ -950,12 +950,12 @@
                 "base": "Event",
                 "typeArguments": [],
                 "line": {
-                  "start": 1,
-                  "end": 1
+                  "start": 47,
+                  "end": 47
                 },
                 "column": {
-                  "start": 1,
-                  "end": 6
+                  "start": 21,
+                  "end": 26
                 }
               }
             ],
@@ -1020,34 +1020,34 @@
                     "type": "TypeLiteralString",
                     "value": "a",
                     "line": {
-                      "start": 1,
-                      "end": 1
+                      "start": 48,
+                      "end": 48
                     },
                     "column": {
-                      "start": 1,
-                      "end": 4
+                      "start": 16,
+                      "end": 19
                     }
                   },
                   {
                     "type": "TypeLiteralString",
                     "value": "b",
                     "line": {
-                      "start": 1,
-                      "end": 1
+                      "start": 48,
+                      "end": 48
                     },
                     "column": {
-                      "start": 7,
-                      "end": 10
+                      "start": 22,
+                      "end": 25
                     }
                   }
                 ],
                 "line": {
-                  "start": 1,
-                  "end": 1
+                  "start": 48,
+                  "end": 48
                 },
                 "column": {
-                  "start": 1,
-                  "end": 10
+                  "start": 16,
+                  "end": 25
                 }
               },
               {
@@ -1057,34 +1057,34 @@
                     "type": "TypeLiteralString",
                     "value": "x",
                     "line": {
-                      "start": 1,
-                      "end": 1
+                      "start": 48,
+                      "end": 48
                     },
                     "column": {
-                      "start": 1,
-                      "end": 4
+                      "start": 29,
+                      "end": 32
                     }
                   },
                   {
                     "type": "TypeLiteralString",
                     "value": "y",
                     "line": {
-                      "start": 1,
-                      "end": 1
+                      "start": 48,
+                      "end": 48
                     },
                     "column": {
-                      "start": 7,
-                      "end": 10
+                      "start": 35,
+                      "end": 38
                     }
                   }
                 ],
                 "line": {
-                  "start": 1,
-                  "end": 1
+                  "start": 48,
+                  "end": 48
                 },
                 "column": {
-                  "start": 1,
-                  "end": 10
+                  "start": 29,
+                  "end": 38
                 }
               }
             ],
@@ -1468,22 +1468,22 @@
                     "base": "K",
                     "typeArguments": [],
                     "line": {
-                      "start": 1,
-                      "end": 1
+                      "start": 57,
+                      "end": 57
                     },
                     "column": {
-                      "start": 12,
-                      "end": 13
+                      "start": 55,
+                      "end": 56
                     }
                   }
                 ],
                 "line": {
-                  "start": 1,
-                  "end": 1
+                  "start": 57,
+                  "end": 57
                 },
                 "column": {
-                  "start": 1,
-                  "end": 14
+                  "start": 44,
+                  "end": 57
                 }
               }
             ],
@@ -1765,7 +1765,7 @@
                       },
                       "column": {
                         "start": 23,
-                        "end": 36
+                        "end": 28
                       }
                     }
                   ],
@@ -1843,7 +1843,7 @@
                       },
                       "column": {
                         "start": 23,
-                        "end": 36
+                        "end": 28
                       }
                     }
                   ],

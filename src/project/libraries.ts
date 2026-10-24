@@ -1,7 +1,9 @@
 /**
  * `types` in a config: which `.d.tilua` files to load, in order.
  *
- * Nothing is loaded by default. An entry names a type library:
+ * Lua's standard library is always there, without being listed (see
+ * `standardLibrary`; `"noLib": true` leaves it out). An entry names a type
+ * library to load on top of it:
  *
  *   "roblox"               `@tilua-types/roblox`, or failing that a package
  *                          called `roblox` — a library of your own, published
@@ -14,8 +16,10 @@
  *
  * A package is looked for in `node_modules` from the config's folder upward.
  * Its definitions file is `tilua.types` in its `package.json`, or
- * `index.d.tilua`. Any of its dependencies that are type libraries load first,
- * so `["roblox"]` brings `@tilua-types/lua` along, first.
+ * `index.d.tilua`. Any of its dependencies that are type libraries load first.
+ * `@tilua-types/lua` is the one exception: what it declared is the standard
+ * library now, so naming it — or depending on it, as `@tilua-types/roblox`
+ * does — loads nothing a second time. With `noLib` it loads as it always did.
  * A later file adds to the names an earlier one declared rather than
  * replacing them, which is what makes those layers layers.
  */
@@ -71,7 +75,11 @@ export function resolveTypeLibraries(config: TiluaConfig, host: ProjectHost = no
         const key = pathKey(directory)
         if (visiting.has(key)) return
         visiting.add(key)
+        // However it was reached — by name, by `@tilua-types/*`, by a path.
+        const name = readJson(join(directory, "package.json"), host)?.name
+        if (typeof name === "string" && builtIn(name)) return
         for (const dependency of dependencyNames(directory, host)) {
+            if (builtIn(dependency)) continue
             const found = findPackage(dependency, directory, host)
             if (found) addPackage(found.directory, found.file, visiting)
         }
@@ -80,6 +88,9 @@ export function resolveTypeLibraries(config: TiluaConfig, host: ProjectHost = no
         const library = files.findIndex(file => pathKey(file) === pathKey(entryFile))
         if (lowering) lowerings.push({ ...lowering, library })
     }
+
+    /** The standard library's old package, which is built in unless `noLib`. */
+    const builtIn = (name: string): boolean => !config.noLib && name === STANDARD_PACKAGE
 
     for (const entry of config.types) {
         const relative = entry.startsWith("./") || entry.startsWith("../") || entry.startsWith("/") || /^[A-Za-z]:[\\/]/.test(entry)
@@ -119,6 +130,8 @@ export function resolveTypeLibraries(config: TiluaConfig, host: ProjectHost = no
         // name — which is how a library someone else published is loaded. A
         // scoped name says where it is already.
         const names = entry.startsWith("@") ? [entry] : [`@tilua-types/${entry}`, entry]
+        // `"lua"`: already there.
+        if (builtIn(names[0])) continue
         const found = names.map(name => findPackage(name, config.directory, host)).find(Boolean)
         if (found) addPackage(found.directory, found.file, new Set())
         else {
@@ -155,6 +168,9 @@ function loweringModule(
 }
 
 const ENTRY_FILE = "index.d.tilua"
+
+/** Where Lua's standard library was a package of its own. */
+const STANDARD_PACKAGE = "@tilua-types/lua"
 
 /** The definitions file of the package in `directory`, if it is a type library. */
 function packageEntry(directory: string, host: ProjectHost): string | undefined {

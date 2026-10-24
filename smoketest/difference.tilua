@@ -1,14 +1,16 @@
--- Set difference: `A - B`.
+-- Set difference: `Exclude<A, B>`.
 --
 -- Narrowing an `unknown` by equality used to lose the negative half — the
--- `else` of `if a == 1` was still just `unknown`. It is now `unknown - 1`,
--- which is both what the test proved and enough to keep narrowing further.
+-- `else` of `if a == 1` was still just `unknown`. It is now
+-- `Exclude<unknown, 1>`, which is both what the test proved and enough to
+-- keep narrowing further.
 --
--- The rule is that the subtraction is kept only when the base is *opaque*:
+-- The rule is that the subtraction is kept only when the base is *opaque* —
+-- which, unlike TypeScript's `Exclude`, includes `unknown` and `any`:
 --
---   union     subtract exactly, by dropping members   ("a"|"b") - "b"  =  "a"
---   concrete  discard, it buys nothing                 string - "a"    =  string
---   opaque    keep                                     unknown - 1
+--   union     subtract exactly, by dropping members   Exclude<"a" | "b", "b">  =  "a"
+--   concrete  discard, it buys nothing                 Exclude<string, "a">    =  string
+--   opaque    keep                                     Exclude<unknown, 1>
 
 -- The motivating case ---------------------------------------------------------
 function classify(a: unknown) {
@@ -17,14 +19,14 @@ function classify(a: unknown) {
         return one
     }
     -- everything except 1
-    const notOne: unknown - 1 = a
+    const notOne: Exclude<unknown, 1> = a
 
     -- and the subtraction accumulates
     if (a == 2) {
         const two = a
         return two
     }
-    const neither: unknown - (1 | 2) = a
+    const neither: Exclude<unknown, 1 | 2> = a
     return 0
 }
 
@@ -32,7 +34,7 @@ function classify(a: unknown) {
 -- that is not falsy. (In Luau only `nil` and `false` are falsy.)
 function truthiness(b: unknown) {
     if (b) {
-        const kept: unknown - (nil | false) = b
+        const kept: Exclude<unknown, nil | false> = b
         return kept
     }
     const gone: nil | false = b
@@ -42,7 +44,7 @@ function truthiness(b: unknown) {
 -- Narrowing continues through a subtraction --------------------------------
 function refine(v: unknown) {
     if (v ~= nil) {
-        const present: unknown - nil = v
+        const present: Exclude<unknown, nil> = v
         return present
     }
     return 0
@@ -50,13 +52,14 @@ function refine(v: unknown) {
 
 -- Simplification ------------------------------------------------------------
 -- A union subtracts member by member…
-const fromUnion: "a" | "c" = "a" as (("a" | "b" | "c") - "b")
+const fromUnion: "a" | "c" = "a" as Exclude<"a" | "b" | "c", "b">
 
--- …a concrete base keeps nothing, since `string - "a"` admits exactly the
--- operations `string` does…
-const stillString: string = "b" as (string - "a")
+-- …a concrete base keeps nothing, since `Exclude<string, "a">` admits exactly
+-- the operations `string` does…
+const stillString: string = "b" as Exclude<string, "a">
 
--- …and an opaque base keeps it.
-const stillOpaque: unknown - 1 = 2 as (unknown - 1)
+-- …and an opaque base keeps it, `any` as much as `unknown`.
+const stillOpaque: Exclude<unknown, 1> = 2 as Exclude<unknown, 1>
+const anyButNil: Exclude<any, nil> = 2 as Exclude<any, nil>
 
-print(classify(1), truthiness(nil), refine(2), fromUnion, stillString, stillOpaque)
+print(classify(1), truthiness(nil), refine(2), fromUnion, stillString, stillOpaque, anyButNil)

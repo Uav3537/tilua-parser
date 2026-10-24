@@ -3,13 +3,13 @@ b: B
 first: <T>(xs: T[]) => T
 head: 10 | 20 | 30
 identity: <T>(x: T) => T
-intBox: { value: number }
-n: number
-p: { first: string, second: boolean }
-pair: <A, B>(a: A, b: B) => { first: A, second: B }
+intBox: Box<number>
+n: 5
+p: Pair<A, B>
+pair: <A, B>(a: A, b: B) => Pair<A, B>
 r: { ok: true, value: number } | { error: string, ok: false }
-s: string
-scores: { [string]: number }
-strPair: { first: string, second: string }
+s: "hello"
+scores: Dict<number>
+strPair: Pair<string, string>
 x: T
 xs: T[]

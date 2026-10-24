@@ -22,8 +22,8 @@ const smokeDir = join(root, "smoketest");
 const outDir = join(root, "generated");
 
 // The smoketests' own tilua.config.json, for resolving imports. They load no
-// type libraries: the parser is tested on its own, so a name such as `print`
-// is simply an undeclared global here.
+// type library beyond the standard one every file has: the parser is tested
+// on its own, so a Roblox name such as `game` is simply an undeclared global.
 const lookup = findConfig(join(smokeDir, "smoketest.tilua"));
 if (!lookup.config || lookup.problems.length) {
     throw new Error(`smoketest config: ${lookup.problems.map((p) => p.message).join("; ") || "not found"}`);
