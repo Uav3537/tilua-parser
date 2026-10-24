@@ -119,6 +119,17 @@ function isAlphaNumeric(ch: string): boolean {
 
 const KeywordSet: ReadonlySet<string> = new Set(Keywords)
 
+/** What TypeScript writes where Lua writes something else, longest first:
+ *  `!==` before `!=` before `!`, `===` before `==`. */
+const TS_SPELLINGS: readonly [written: string, meant: string, kind: "Keyword" | "Operator"][] = [
+    ["!==", "~=", "Operator"],
+    ["===", "==", "Operator"],
+    ["!=", "~=", "Operator"],
+    ["&&", "and", "Keyword"],
+    ["||", "or", "Keyword"],
+    ["!", "not", "Keyword"],
+]
+
 const OperatorSet: ReadonlySet<string> = new Set(Operators)
 const SortedSymbols = [...Operators, ...Punctuators].sort((a, b) => b.length - a.length)
 
@@ -653,6 +664,20 @@ export function tokenize(source: string, options: TokenizeOptions = {}): Token[]
 
         if (isAlpha(ch)) {
             tokens.push(readIdentifierOrKeyword())
+            continue
+        }
+
+        // TypeScript's spellings of operators Lua spells otherwise: said, and
+        // read as what they meant, so the rest of the line still analyses.
+        const spelled = TS_SPELLINGS.find(([written]) => source.startsWith(written, cursor))
+        if (spelled) {
+            const [written, meant, kind] = spelled
+            const startLine = line, startColumn = column
+            fail(`tilua writes '${meant}', not '${written}'`, startLine, startColumn)
+            for (let k = 0; k < written.length; k++) advance()
+            tokens.push(kind === "Keyword"
+                ? { type: "Keyword", value: meant as typeof Keywords[number], ...makeBase(startLine, startColumn) }
+                : { type: "Operator", value: meant as typeof Operators[number], ...makeBase(startLine, startColumn) })
             continue
         }
 

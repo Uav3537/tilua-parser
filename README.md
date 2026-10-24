@@ -353,7 +353,9 @@ than -1 — and `push`, `pop`, `shift`, `unshift`, `sort` and `reverse` change
 the array. Looking for a value is not adding one, so `includes` and `indexOf`
 take any value, not only one the array's type already holds — and `includes`
 is a guard: `if (modes:includes(s))` narrows `s` to a mode. `concat` may join
-arrays of other types (`(T | U)[]`). The ones that only read take a read-only
+arrays of other types (`(T | U)[]`). `keys`, `values` and `entries` answer
+arrays rather than JavaScript's iterators — `for (const [i, v] in
+xs:entries())` — counting from 1. The ones that only read take a read-only
 list too (`readonly T[]`, what `as const` makes), as TypeScript's
 `ReadonlyArray` does; the ones that change it do not. A table's are `keys`, `values` and `entries`, which answer a tuple
 in the order the table's type wrote its members, not `string[]` as
@@ -693,7 +695,11 @@ Dog.ParentClass == Animal       -- a class names the one it extends
 Animal.ParentClass == nil       -- and a root class extends nothing
 ```
 
-Both live on the class table, so an instance carries neither.
+Both live on the class table, so an instance carries neither. So does its
+name, as a JavaScript class's `name`: `Dog.name` is `"Dog"`, and a class
+written as a value takes the name of what holds it (`const Counter = class
+{ ... }` is `"Counter"`). A static, a method or an accessor cannot be called
+`name`; an instance field can, and lives on the instance.
 
 **Generic classes** — `class Box<T> { ... }`. The name is then a generic type,
 and `Box<number>` and `Box<string>` are both `Box` but neither is the other:

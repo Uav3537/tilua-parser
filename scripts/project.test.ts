@@ -4806,7 +4806,55 @@ function g() {
         aliasOf("type T = [1, 2]\ntype A = T[keyof T]", "A"),
         aliasOf("type A = (keyof { a: 1 })[]", "A"),
         aliasOf("type A = keyof { a: { b: 1 } }[\"a\"]", "A"),
-    ], ["number | \"length\"", "number | \"length\"", "number | \"length\"", "1 | 2", "\"a\"[]", "\"b\""])
+        aliasOf("type A = keyof string", "A"),
+        aliasOf("type A = keyof number", "A"),
+    ], ["number | \"length\"", "number | \"length\"", "number | \"length\"", "1 | 2", "\"a\"[]", "\"b\"", "\"length\"", "never"])
+}
+
+// What only reads a list takes a read-only one: ipairs, pairs, unpack, ...
+{
+    const errorsOf = (code: string): string[] => {
+        const program = parse(code)
+        const scopes = analyzeScopes(program)
+        return [...scopes.diagnostics, ...analyzeTypes(program, scopes, {}).diagnostics].map(d => d.message)
+    }
+    check("read-only lists: walked and read by the standard library, not changed by it", [
+        errorsOf("const xs = [1, 2] as const\ndeclare ys: readonly string[]\nfor (const [i, v] in ipairs(xs)) { const n: 1 | 2 = v }\nfor (const [i, v] in pairs(ys)) { const s: string = v }\nconst u: string[] = unpack(ys)\nconst c = table.concat(ys, \",\")\nconst n = table.getn(ys)"),
+        errorsOf("declare ys: readonly string[]\ntable.insert(ys, \"a\")"),
+        errorsOf("const xs = [1, 2] as const\nfor (const x in xs) { const s: string = x }"),
+    ], [[], ["No overload matches this call"], ["Type '1 | 2' is not assignable to 'string'"]])
+}
+
+// TypeScript's spellings of `~=`, `==`, `and`, `or` and `not`: said, and read as meant.
+{
+    const result = parseWithRecovery("declare a: number | nil\nconst b = a != nil && a === 1 || !a\nconst c = a !== 2")
+    check("operators: TypeScript's spellings say what tilua writes", result.errors.map(e => e.message.replace(/ \(\d+:\d+\)$/, "")), [
+        "tilua writes '~=', not '!='",
+        "tilua writes 'and', not '&&'",
+        "tilua writes '==', not '==='",
+        "tilua writes 'or', not '||'",
+        "tilua writes 'not', not '!'",
+        "tilua writes '~=', not '!=='",
+    ])
+}
+
+// A class's own name, and an array's keys, values and entries.
+{
+    const errorsOf = (code: string): string[] => {
+        const program = parse(code)
+        const scopes = analyzeScopes(program)
+        return [...scopes.diagnostics, ...analyzeTypes(program, scopes, {}).diagnostics].map(d => d.message)
+    }
+    const reserved = "'name' is the class's own name, `Dog.name`: a static, a method or an accessor cannot be called that — an instance field can"
+    check("classes: name is the class's own", [
+        errorsOf("class Dog { constructor() {} }\nconst n: \"Dog\" = Dog.name\nconst m: string = Dog.new().ClassObject.name"),
+        errorsOf("class A { static name = 1 constructor() {} }"),
+        errorsOf("class B { constructor() {} function name(): string { return \"b\" } }"),
+        errorsOf("class C { name = \"c\" constructor() {} }\nconst s: string = C.new().name"),
+    ], [[], [reserved], [reserved], []])
+    check("arrays: keys, values and entries, as arrays", [
+        errorsOf("const xs = [\"a\", \"b\"]\nconst k: number[] = xs:keys()\nconst v: string[] = xs:values()\nconst e: [number, string][] = xs:entries()\nfor (const [i, s] in xs:entries()) { const n: number = i\n const t: string = s }"),
+    ], [[]])
 }
 
 for (const failure of failures) console.log(`FAIL ${failure}`)

@@ -126,6 +126,11 @@ declare metatable<T> T[]: {
         concat: <U>(self: readonly T[], ...others: (readonly U[])[]) => (T | U)[],
         slice: (self: readonly T[], start?: number, stop?: number) => T[],
         flat: (self: readonly T[]) => T[],
+        -- JavaScript's, as arrays rather than iterators: \`for (const [i, v] in
+        -- xs:entries())\` walks positions and values, counting from 1.
+        keys: (self: readonly T[]) => number[],
+        values: (self: readonly T[]) => T[],
+        entries: (self: readonly T[]) => [number, T][],
         reverse: (self: T[]) => T[],
         sort: (self: T[], compare?: (a: T, b: T) => boolean) => T[],
         push: (self: T[], ...args: T[]) => number,

@@ -601,7 +601,7 @@ function keepsLiterals(paramType: Type): boolean {
 /** The links the class table carries: an instance reaches its class through
  *  `ClassObject`, and a class reaches the one it extends through
  *  `ParentClass`. They are each class's own, never inherited. */
-const CLASS_LINKS = new Set(["new", "ClassObject", "ParentClass"])
+const CLASS_LINKS = new Set(["new", "ClassObject", "ParentClass", "name"])
 
 /** Where a call stops having one argument per parameter. See `spreadOf`. */
 interface SpreadInfo {
@@ -1547,6 +1547,11 @@ class TypeAnalyzer {
         })
         type.properties.set("new", construct)
         type.properties.set("ParentClass", { type: parent ?? nilType, optional: false, readonly: true })
+        // What the class is called, as a JavaScript class's `name` is: the
+        // name it was declared with, as written. One written as a value with
+        // no name of its own is known by what holds it, which only the
+        // program says, so it is a string.
+        type.properties.set("name", { type: stmt.name ? literal(stmt.name.name) : stringType, optional: false, readonly: true })
         return type
     }
 
@@ -1842,6 +1847,12 @@ class TypeAnalyzer {
             if (CLASS_RESERVED.has(member.name.name)) {
                 report(member.name, `'${member.name.name}' is what the compiler calls part of a class; `
                     + "a member cannot be named that")
+            }
+            // The class table holds its `name`. An instance's own field of
+            // that name lives on the instance, and is free to have it; what
+            // the class table holds — a static, a method, an accessor — is not.
+            if (member.name.name === "name" && !(member.type === "ClassField" && !member.isStatic)) {
+                report(member.name, "'name' is the class's own name, `Dog.name`: a static, a method or an accessor cannot be called that — an instance field can")
             }
         }
 
@@ -2827,6 +2838,13 @@ class TypeAnalyzer {
             case "array":
             case "tuple":
                 return union([numberType, literal("length")])
+            // A string is not indexed by position in Lua (`s[1]` is nil), so
+            // of its keys only `length` is there.
+            case "primitive":
+                return t.name === "string" ? literal("length") : neverType
+            case "literal":
+            case "templateLiteral":
+                return t.kind === "templateLiteral" || t.base === "string" ? literal("length") : neverType
             case "union": {
                 // `keyof (A | B)` is the keys they share: a value that is one
                 // or the other certainly has only those. Work the set out here
@@ -3418,7 +3436,10 @@ class TypeAnalyzer {
                     this.loops.set(stmt, { walks: "iteration", viaIter: false })
                 } else {
                     const [item, form] = this.iterationOf(stmt.iterator, sourceType)
-                    this.bindPattern(stmt.variable, item, bodyEnv, "widen")
+                    // A `const` item is what the source holds, as narrow as it
+                    // is — `as const` names stay names, as in TypeScript's
+                    // `for (const x of xs)`; a `let` one may be assigned, and widens.
+                    this.bindPattern(stmt.variable, item, bodyEnv, stmt.kind === "const" ? "keep" : "widen")
                     this.loops.set(stmt, form)
                 }
                 this.visitBlock(stmt.body, bodyEnv)
@@ -5299,13 +5320,18 @@ class TypeAnalyzer {
             const name = source.callee.name
             const src = this.expand(this.typeOf.get(source.arguments[0]) ?? unknownType)
             const iteration = { walks: "iteration", viaIter: false } as const
-            if (name === "ipairs") return [tuple([numberType, this.elementType(src, 0)]), iteration]
+            // A list's item holds any of its elements: every place of a
+            // tuple, not just its first.
+            const element = src.kind === "array" ? src.element
+                : src.kind === "tuple" ? union(tupleMembers(src).map(m => (m.kind === "spread" ? this.spreadElement(m.type) ?? unknownType : m)))
+                : undefined
+            if (name === "ipairs") return [tuple([numberType, element ?? this.elementType(src, 0)]), iteration]
             if (name === "pairs") {
                 if (src.kind === "object") {
                     return [tuple([src.indexer?.key ?? stringType,
                         src.indexer?.value ?? union([...src.properties.values()].map(p => p.type))]), iteration]
                 }
-                if (src.kind === "array") return [tuple([numberType, src.element]), iteration]
+                if (element) return [tuple([numberType, element]), iteration]
             }
         }
         // An iterator function, called until it answers nil — or the

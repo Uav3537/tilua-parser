@@ -78,7 +78,7 @@ declare function xpcall<A extends unknown[], T>(fn: (...args: A) => T, handler: 
 declare function select(n: "#", ...args: unknown[]): number
 declare function select<T>(n: number, ...args: T[]): T[]
 -- A copy of the list, or of part of it.
-declare function unpack<V>(list: V[], i?: number, j?: number): V[]
+declare function unpack<V>(list: readonly V[], i?: number, j?: number): V[]
 declare function rawget(t: unknown, key: unknown): unknown
 declare function rawset<T>(t: T, key: unknown, value: unknown): T
 declare function rawequal(a: unknown, b: unknown): boolean
@@ -97,10 +97,11 @@ type Iteration<S, T> = [(state: S, previous: T | nil) => T | nil, S, T | nil]
 -- \`for (const [k, v] in pairs(t))\` / \`ipairs(t)\`: each item is one \`[key,
 -- value]\` — a table, as every array is. The analyzer types it from \`t\` itself
 -- (a record's keys as literals, an array's elements); these declare the
--- names, and their shape for any other use.
-declare function pairs<V>(t: V[]): Iteration<V[], [number, V]>
+-- names, and their shape for any other use. Walking a list only reads it, so
+-- a read-only one (\`as const\`, \`readonly T[]\`) is walked as well.
+declare function pairs<V>(t: readonly V[]): Iteration<readonly V[], [number, V]>
 declare function pairs<K, V>(t: { [K]: V }): Iteration<{ [K]: V }, [K, V]>
-declare function ipairs<V>(t: V[]): Iteration<V[], [number, V]>
+declare function ipairs<V>(t: readonly V[]): Iteration<readonly V[], [number, V]>
 
 declare function collectgarbage(option: "count"): number
 declare function gcinfo(): number
@@ -174,14 +175,14 @@ declare table: {
     -- \`insert(t, v)\` appends; \`insert(t, pos, v)\` puts it there.
     insert: (<T>(t: T[], value: T) => nil) & (<T>(t: T[], pos: number, value: T) => nil),
     remove: <T>(t: T[], pos?: number) => T | nil,
-    concat: (t: (string | number)[], sep?: string, i?: number, j?: number) => string,
+    concat: (t: readonly (string | number)[], sep?: string, i?: number, j?: number) => string,
     sort: <T>(t: T[], compare?: (a: T, b: T) => boolean) => nil,
     -- Lua 5.1's originals. Deprecated there and gone from 5.2 on, but Luau
     -- still answers to them, so code being ported still type-checks.
-    getn: <T>(t: T[]) => number,
-    maxn: <T>(t: T[]) => number,
+    getn: <T>(t: readonly T[]) => number,
+    maxn: <T>(t: readonly T[]) => number,
     foreach: <K, V, R>(t: { [K]: V }, f: (key: K, value: V) => R) => R | nil,
-    foreachi: <V, R>(t: V[], f: (index: number, value: V) => R) => R | nil,
+    foreachi: <V, R>(t: readonly V[], f: (index: number, value: V) => R) => R | nil,
 }
 
 declare os: {
