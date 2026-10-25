@@ -114,6 +114,8 @@ export type Statement =
     | ReturnStatement
     | BreakStatement
     | ContinueStatement
+    | ThrowStatement
+    | TryStatement
     | TypeAliasStatement
     | ExportTypeAliasStatement
     | ImportStatement
@@ -428,7 +430,8 @@ export interface AssignmentStatement extends BaseNode {
 
 export interface CompoundAssignmentStatement extends BaseNode {
     type: "CompoundAssignmentStatement"
-    operator: "+=" | "-=" | "*=" | "/=" | "//=" | "%=" | "^=" | "..="
+    /** `??=` assigns only where the target is nil: `t[k] ??= {}`. */
+    operator: "+=" | "-=" | "*=" | "/=" | "//=" | "%=" | "^=" | "??="
     target: Expression
     value: Expression
     /** Written `n++` / `n--`: the same statement as `n += 1` / `n -= 1`,
@@ -459,14 +462,46 @@ export interface DoStatement extends BaseNode {
     body: Block
 }
 
+/** `throw value`: Luau's `error(value, 0)`. Any value may be thrown, as in
+ *  JavaScript and as `error` takes; a string most often, which is what every
+ *  error the engine raises is. Level 0, so that a `catch` is handed exactly
+ *  what was thrown: `throw "NotFound"` is caught as `"NotFound"`. */
+export interface ThrowStatement extends BaseNode {
+    type: "ThrowStatement"
+    argument: Expression
+}
+
+/** `try { } catch (e) { } finally { }` — at least one of `catch` and
+ *  `finally`. The block runs in a `pcall`; see the compiler. */
+export interface TryStatement extends BaseNode {
+    type: "TryStatement"
+    block: Block
+    handler?: CatchClause
+    finalizer?: Block
+}
+
+/** `catch (e) { }`, or `catch { }` when what was thrown is not wanted. `e` is
+ *  `unknown`: anything may have thrown anything. */
+export interface CatchClause extends BaseNode {
+    type: "CatchClause"
+    param?: IdentifierPattern
+    body: Block
+}
+
 export interface WhileStatement extends BaseNode {
     type: "WhileStatement"
+    /** `outer: for (...)` — what a `break outer` or `continue outer` in a
+     *  loop inside it names. */
+    label?: Identifier
     condition: Expression
     body: Block
 }
 
 export interface RepeatStatement extends BaseNode {
     type: "RepeatStatement"
+    /** `outer: for (...)` — what a `break outer` or `continue outer` in a
+     *  loop inside it names. */
+    label?: Identifier
     body: Block
     condition: Expression
 }
@@ -485,6 +520,9 @@ export interface IfStatement extends BaseNode {
 
 export interface NumericForStatement extends BaseNode {
     type: "NumericForStatement"
+    /** `outer: for (...)` — what a `break outer` or `continue outer` in a
+     *  loop inside it names. */
+    label?: Identifier
     variable: TypedIdentifier
     start: Expression
     end: Expression
@@ -497,6 +535,9 @@ export interface NumericForStatement extends BaseNode {
  *  `let` instead of `const` when the body assigns to the name. */
 export interface GenericForStatement extends BaseNode {
     type: "GenericForStatement"
+    /** `outer: for (...)` — what a `break outer` or `continue outer` in a
+     *  loop inside it names. */
+    label?: Identifier
     kind: "const" | "let"
     variable: BindingTarget
     iterator: Expression
@@ -510,12 +551,17 @@ export interface ReturnStatement extends BaseNode {
     argument?: Expression
 }
 
+/** `break`, or `break outer`: the loop of that label, from inside a loop
+ *  written in it. */
 export interface BreakStatement extends BaseNode {
     type: "BreakStatement"
+    label?: Identifier
 }
 
+/** `continue`, or `continue outer`. */
 export interface ContinueStatement extends BaseNode {
     type: "ContinueStatement"
+    label?: Identifier
 }
 
 export interface TypeAliasStatement extends BaseNode {
@@ -693,7 +739,10 @@ export interface FunctionExpression extends BaseNode {
 // destructuring (`local {a} = t` vs `local [a] = t`) undecidable in Luau.
 export type TableField =
     /** `a: v` or `"a": v` — JS colon syntax (NOT Luau `a = v`). */
-    | { type: "TableFieldNamed"; key: Identifier | StringLiteral; value: Expression }
+    /** `method` for `{ m() { ... } }`: `value` is then a `FunctionExpression`
+     *  taking the object as `this`, an implicit first parameter — a method,
+     *  called with `:`, as `m(): R` in an object type is. */
+    | { type: "TableFieldNamed"; key: Identifier | StringLiteral; value: Expression; method?: true }
     /** `[expr]: v` — computed key. */
     | { type: "TableFieldComputed"; key: Expression; value: Expression }
     /** `{ a }` shorthand — sugar for `{ a: a }`. */
@@ -730,7 +779,8 @@ export interface SpreadElement extends BaseNode {
 }
 
 export const BinaryOperators = [
-    "+", "-", "*", "/", "//", "%", "^", "..",
+    // `+` adds numbers and joins strings, as in TypeScript.
+    "+", "-", "*", "/", "//", "%", "^",
     "==", "~=", "<", ">", "<=", ">=",
     "and", "or",
     // `a ?? b` is `b` only where `a` is nil — unlike `or`, a `false` stays.

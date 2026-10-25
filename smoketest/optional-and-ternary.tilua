@@ -48,7 +48,7 @@ function describe(n: number, flag: boolean) {
     const t1: string = flag ? "on" : "off"
     -- right-associative, so this chains like an if/elseif ladder
     const t2: string = n == 0 ? "zero" : n == 1 ? "one" : "many"
-    return t1 .. t2
+    return t1 + t2
 }
 
 -- The condition narrows the branches, just as the statement form does.

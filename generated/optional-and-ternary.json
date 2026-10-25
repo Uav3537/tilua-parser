@@ -1602,7 +1602,7 @@
                 "type": "ReturnStatement",
                 "argument": {
                   "type": "BinaryExpression",
-                  "operator": "..",
+                  "operator": "+",
                   "left": {
                     "type": "Identifier",
                     "name": "t1",
@@ -1623,8 +1623,8 @@
                       "end": 51
                     },
                     "column": {
-                      "start": 18,
-                      "end": 20
+                      "start": 17,
+                      "end": 19
                     }
                   },
                   "line": {
@@ -1633,7 +1633,7 @@
                   },
                   "column": {
                     "start": 12,
-                    "end": 20
+                    "end": 19
                   }
                 },
                 "line": {
@@ -1642,7 +1642,7 @@
                 },
                 "column": {
                   "start": 5,
-                  "end": 20
+                  "end": 19
                 }
               }
             ],
@@ -1652,7 +1652,7 @@
             },
             "column": {
               "start": 5,
-              "end": 20
+              "end": 19
             }
           },
           "line": {

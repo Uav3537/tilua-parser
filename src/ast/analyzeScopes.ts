@@ -71,7 +71,7 @@ export interface ScopeDiagnostic {
     /** the offending node (redeclaration site, or assignment target) */
     node: { line: { start: number; end: number }; column: { start: number; end: number } }
     message: string
-    kind: "redeclare" | "const-assign" | "type-only" | "undeclared" | "use-before-define" | "outside-loop"
+    kind: "redeclare" | "const-assign" | "type-only" | "undeclared" | "use-before-define" | "outside-loop" | "label"
 }
 
 export interface ScopeAnalysis {
@@ -200,6 +200,9 @@ class Analyzer {
      *  function starts again at 0: `continue` in `xs:map(x => ...)` has no
      *  loop to go on with, whatever loop the call is written in. */
     private loopDepth = 0
+    /** The label of each of those loops, outermost first; `undefined` for one
+     *  that has none. */
+    private loopLabels: (string | undefined)[] = []
     /** Function declarations already declared by their block's hoisting, with
      *  the function depth of that block. */
     private readonly hoisted = new Map<Identifier, number>()
@@ -621,14 +624,14 @@ class Analyzer {
 
             case "WhileStatement":
                 this.visitExpression(stmt.condition, scope)
-                this.inLoop(() => this.visitBlockInNewScope(stmt.body, scope))
+                this.inLoop(() => this.visitBlockInNewScope(stmt.body, scope), stmt.label)
                 return
 
             case "RepeatStatement": {
                 // Luau/Lua quirk: `until` can see locals declared in the
                 // body, unlike `while` — so body + condition share one scope.
                 const bodyScope = childScope(scope)
-                this.inLoop(() => this.visitBlock(stmt.body, bodyScope))
+                this.inLoop(() => this.visitBlock(stmt.body, bodyScope), stmt.label)
                 this.visitExpression(stmt.condition, bodyScope)
                 return
             }
@@ -648,7 +651,7 @@ class Analyzer {
                 if (stmt.step) this.visitExpression(stmt.step, scope)
                 const bodyScope = childScope(scope)
                 this.declare(bodyScope, stmt.variable.name, "for-numeric", stmt.variable)
-                this.inLoop(() => this.visitBlock(stmt.body, bodyScope))
+                this.inLoop(() => this.visitBlock(stmt.body, bodyScope), stmt.label)
                 return
             }
 
@@ -656,7 +659,7 @@ class Analyzer {
                 this.visitExpression(stmt.iterator, scope)
                 const bodyScope = childScope(scope)
                 this.declarePattern(bodyScope, stmt.variable, "for-generic", scope, stmt.kind === "const")
-                this.inLoop(() => this.visitBlock(stmt.body, bodyScope))
+                this.inLoop(() => this.visitBlock(stmt.body, bodyScope), stmt.label)
                 return
             }
 
@@ -664,11 +667,39 @@ class Analyzer {
                 if (stmt.argument) this.visitExpression(stmt.argument, scope)
                 return
 
+            case "ThrowStatement":
+                this.visitExpression(stmt.argument, scope)
+                return
+
+            case "TryStatement": {
+                this.visitBlockInNewScope(stmt.block, scope)
+                if (stmt.handler) {
+                    // `catch (e)` names what was thrown for the clause alone,
+                    // and may be assigned to, as in JavaScript.
+                    const handlerScope = childScope(scope)
+                    const param = stmt.handler.param
+                    if (param) {
+                        if (param.typeAnnotation) this.visitType(param.typeAnnotation, scope)
+                        this.declare(handlerScope, param.name, "local", param)
+                    }
+                    this.visitBlock(stmt.handler.body, handlerScope)
+                }
+                if (stmt.finalizer) this.visitBlockInNewScope(stmt.finalizer, scope)
+                return
+            }
+
             case "BreakStatement":
             case "ContinueStatement":
                 // A function's body is a loop's no longer: `continue` inside
                 // `xs:map(x => ...)` would leave the callback, not go on with
                 // a loop, and Luau rejects it.
+                if (stmt.label && this.loopDepth > 0 && !this.loopLabels.includes(stmt.label.name)) {
+                    this.diagnostics.push({
+                        node: stmt.label,
+                        message: `No loop this '${stmt.type === "BreakStatement" ? "break" : "continue"}' is in is labelled '${stmt.label.name}'`,
+                        kind: "label",
+                    })
+                }
                 if (this.loopDepth === 0) {
                     const word = stmt.type === "BreakStatement" ? "break" : "continue"
                     this.diagnostics.push({
@@ -760,12 +791,17 @@ class Analyzer {
     }
 
     /** Visit a loop's body, where `break` and `continue` have a loop. */
-    private inLoop(visit: () => void): void {
+    private inLoop(visit: () => void, label?: Identifier): void {
+        if (label && this.loopLabels.includes(label.name)) {
+            this.diagnostics.push({ node: label, message: `A loop inside this one is already labelled '${label.name}'`, kind: "label" })
+        }
         this.loopDepth++
+        this.loopLabels.push(label?.name)
         try {
             visit()
         } finally {
             this.loopDepth--
+            this.loopLabels.pop()
         }
     }
 
@@ -795,13 +831,16 @@ class Analyzer {
         })
         this.visitType(func.returnType, fnScope)
         const loops = this.loopDepth
+        const labels = this.loopLabels
         this.functionDepth++
         this.loopDepth = 0
+        this.loopLabels = []
         try {
             this.visitBlock(func.body, fnScope)
         } finally {
             this.functionDepth--
             this.loopDepth = loops
+            this.loopLabels = labels
         }
     }
 

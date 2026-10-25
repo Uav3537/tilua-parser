@@ -10,6 +10,7 @@ import {
     parse, parseWithRecovery, analyzeScopes, analyzeTypes, moduleExports, formatType, withoutAliasName, applyDirectives,
     type ProjectHost, type ModuleExports, type GenericForStatement,
     luauString, escapeLuauString, isLuauName, isIdentifier, withoutNil, isFunctionType, isInstanceOf, returnsTuple,
+    union, difference, literal, unknownType, numberType, nilType,
 } from "../src/index.js"
 
 const ROOT = resolve("/tilua-project")
@@ -481,6 +482,253 @@ const rel = (path: string | undefined): string | undefined =>
     ].join("\n")).errors, [])
     check("arrays: and still checks what it holds", analyze(`const wrong: number[] = ["a"]`).errors, ["Type 'string[]' is not assignable to 'number[]'"])
 
+    // Code after a `return`, `break` or `continue` is no syntax error, as in
+    // JavaScript: it is read, typed, and reported as unreachable.
+    {
+        const code = [
+            "function f(x: number): number {",
+            "    if (x > 1) {",
+            "        return 1",
+            "        print(\"dead\")",
+            "    }",
+            "    return x",
+            "    const later = 2",
+            "    print(later)",
+            "}",
+            "function g() {",
+            "    error(\"no\")",
+            "    print(\"dead too\")",
+            "}",
+            "for (i = 1, 3) {",
+            "    break",
+            "    print(i)",
+            "}",
+        ].join("\n")
+        const program = parse(code)
+        const scopes = analyzeScopes(program)
+        const types = analyzeTypes(program, scopes)
+        check("unreachable: code after an exit parses, and is said to be unreachable", [
+            types.diagnostics.map(d => d.message),
+            types.unreachable.map(u => [u.from.line.start, u.to.line.end]),
+        ], [[], [[4, 4], [7, 8], [12, 12], [16, 16]]])
+        const closure = analyzeTypes(...((p) => [p, analyzeScopes(p)] as const)(parse([
+            "type Binding = { name: string }",
+            "const Bindings: { [string]: Binding } = {}",
+            "const obj: { a: Binding | nil } = { a: nil }",
+            "function f(Key: string) {",
+            "    if (not Bindings[Key]) {",
+            "        const later = () => Bindings[Key]",
+            "    }",
+            "    if (obj.a == nil) {",
+            "        const later2 = () => obj.a",
+            "    }",
+            "}",
+        ].join("\n"))))
+        check("narrowing: a callback does not keep what a table's entry or field was narrowed to where it is written",
+            [...closure.typeOf].filter(([e]) => e.type === "FunctionExpression").map(([, t]) => formatType(t)),
+            ["() => Binding", "() => Binding | nil"])
+        {
+            const typed = (code: string) => {
+                const { program, errors } = parseWithRecovery(code)
+                const scopes = analyzeScopes(program)
+                const types = analyzeTypes(program, scopes)
+                const bindings: Record<string, string> = {}
+                for (const [id, type] of types.bindingType) { const b = scopes.bindings.get(id)!; if (!b.isBuiltin) bindings[b.name] = formatType(type) }
+                return {
+                    errors: [...errors, ...scopes.diagnostics, ...types.diagnostics].map(e => e.message.replace(/ \(\d+:\d+\)$/, "")),
+                    statements: program.body.statements.map(st => st.type),
+                    unreachable: types.unreachable.map(u => u.from.line.start),
+                    bindings,
+                }
+            }
+            const r = typed([
+                "function parse(s: string): number {",
+                "    const n = tonumber(s)",
+                "    if (n == nil) { throw `not a number: ${s}` }",
+                "    return n",
+                "}",
+                "try {",
+                "    const a = parse(\"1\")",
+                "} catch (e) {",
+                "    const caught = e",
+                "} finally {",
+                "    print(\"done\")",
+                "}",
+                "function f(): number {",
+                "    try { return 1 } catch { return 2 }",
+                "}",
+                "function g(): number {",
+                "    try {",
+                "        throw \"x\"",
+                "        print(\"never\")",
+                "    } finally { }",
+                "}",
+            ].join("\n"))
+            check("try: a throw narrows what follows it, a catch is handed unknown, and every way out counts as returning", [
+                r.errors, r.statements, r.unreachable, r.bindings.caught,
+            ], [[], ["FunctionDeclaration", "TryStatement", "FunctionDeclaration", "FunctionDeclaration"], [19], "unknown"])
+            check("try: catch, finally and throw stay names elsewhere", typed([
+                "const p = { catch: 1, finally: 2 }",
+                "const q = p.catch + p.finally",
+                "const throw = 3",
+                "const t = throw + 1",
+            ].join("\n")).errors, [])
+            check("try: what is wrong with one says so", [
+                typed("try { print(1) }").errors,
+                typed("try { } catch (e: string) { }").errors,
+            ], [
+                ["A 'try' needs a 'catch' or a 'finally'"],
+                ["What a 'catch' is handed may be anything: its type can only be 'unknown' or 'any'"],
+            ])
+        }
+        {
+            const typed = (code: string) => {
+                const { program, errors } = parseWithRecovery(code)
+                const scopes = analyzeScopes(program)
+                const types = analyzeTypes(program, scopes)
+                const bindings: Record<string, string> = {}
+                for (const [id, type] of types.bindingType) { const b = scopes.bindings.get(id)!; if (!b.isBuiltin) bindings[b.name] = formatType(type) }
+                return {
+                    errors: [...errors, ...scopes.diagnostics, ...types.diagnostics].map(e => e.message.replace(/ \(\d+:\d+\)$/, "")),
+                    bindings,
+                }
+            }
+            const nullish = typed("let n: number | nil = nil\nn ??= 5\nconst after = n\nlet s: string = \"x\"\ns ??= \"y\"")
+            check("??=: what is assigned where the target is nil, and the target is no longer nil after it",
+                [nullish.errors, nullish.bindings.after], [[], "number"])
+
+            const methods = typed([
+                "const Counter = {",
+                "    count: 0,",
+                "    increment(by: number): number {",
+                "        this.count += by",
+                "        return this:current()",
+                "    },",
+                "    current(): number { return this.count },",
+                "    \"odd key\"() { return 1 },",
+                "}",
+                "const a = Counter:increment(2)",
+                "const b = Counter.current()",
+                "interface Greeter { greet(name: string): string }",
+                "const g: Greeter = { greet(name) { return \"hi \" + name } }",
+            ].join("\n"))
+            check("object methods: `this` is the object, they are called with ':', and fit a method of an interface", [
+                methods.errors, methods.bindings.a, methods.bindings.name,
+            ], [["'current' is a method, and takes 'Counter' first: call it with ':', 'Counter:current(...)'"], "number", "string"])
+
+            const labels = typed([
+                "let found: number | nil = nil",
+                "outer: while (true) {",
+                "    for (i = 1, 3) {",
+                "        if (i == 2) { found = i; break outer }",
+                "    }",
+                "}",
+                "const after = found",
+                "rows: for (i = 1, 2) {",
+                "    for (j = 1, 2) { if (j == 2) continue rows }",
+                "}",
+            ].join("\n"))
+            check("labels: break and continue name a loop around them, and `while (true)` is left by a `break` that names it",
+                [labels.errors, labels.bindings.after], [[], "2"])
+            check("labels: what is wrong with one says so", [
+                typed("for (i = 1, 2) { break nowhere }").errors,
+                typed("a: for (i = 1, 2) {\n    a: for (j = 1, 2) { }\n}").errors,
+                typed("a: for (i = 1, 2) {\n    const f = () => { for (j = 1, 2) { break a } }\n}").errors,
+                typed("const o = { a: 1 }\no:a()").errors.filter(e => e.includes("label")),
+            ], [
+                ["No loop this 'break' is in is labelled 'nowhere'"],
+                ["A loop inside this one is already labelled 'a'"],
+                ["No loop this 'break' is in is labelled 'a'"],
+                [],
+            ])
+        }
+        {
+            // `Exclude<unknown, 1>`: kept where TypeScript's `unknown` forgets,
+            // folded back as the branches meet, and a test it already
+            // answers is a warning, not an error.
+            const code = [
+                "function f(a: unknown) {",
+                "    if (a ~= 1) {",
+                "        const inside = a",
+                "        if (a == 2) { print(a) }",
+                "        const afterTwo = a",
+                "        if (typeof a == \"number\") { const num = a }",
+                "        const afterNumber = a",
+                "        if (a == 1) { print(a) }",
+                "    }",
+                "    const outside = a",
+                "}",
+                "function g(b: 1 | 2 | 3) {",
+                "    if (b ~= 1) { if (b == 1) { print(b) } }",
+                "}",
+            ].join("\n")
+            const program = parse(code)
+            const scopes = analyzeScopes(program)
+            const types = analyzeTypes(program, scopes)
+            const typeOf = (name: string): string => {
+                for (const [id, type] of types.bindingType) if (scopes.bindings.get(id)!.name === name) return formatType(type)
+                return "?"
+            }
+            check("difference: what a test took out stays out, and comes back together where the branches meet", [
+                typeOf("inside"), typeOf("afterTwo"), typeOf("num"), typeOf("afterNumber"), typeOf("outside"),
+            ], ["Exclude<unknown, 1>", "Exclude<unknown, 1>", "Exclude<number, 1>", "Exclude<unknown, 1>", "unknown"])
+            check("difference: a test the type already answers is a warning",
+                types.diagnostics.map(d => [d.node.line.start, d.severity, d.message]), [
+                    [8, "warning", "This comparison is always false: 'Exclude<unknown, 1>' and '1' have no value in common"],
+                    [13, "warning", "This comparison is always false: '2 | 3' and '1' have no value in common"],
+                ])
+            {
+                const matrix = [
+                    "type P = { x: number }",
+                    "type Q = { y: string }",
+                    "function cases<T, N extends number>(n: number, s: string, b: boolean, u: unknown, a: any, t: T, k: N, p: P, q: Q, f: () => nil, lit: \"a\" | \"b\", opt: number | nil, mix: number | string) {",
+                    "    if (n == \"1\") { }",
+                    "    if (s == 1) { }",
+                    "    if (lit == \"c\") { }",
+                    "    if (p == \"x\") { }",
+                    "    if (f == 1) { }",
+                    "    if (k == \"x\") { }",
+                    "    if (b == 1) { }",
+                    "    if (mix == true) { }",
+                    "    if (n ~= \"1\") { }",
+                    "    if (s == \"\") return",
+                    "    if (s == \"\") { }",
+                    "    const notEmpty = s",
+                    "    if (n == 1) { }",
+                    "    if (lit == \"a\") { }",
+                    "    if (u == 1) { }",
+                    "    if (a == \"x\") { }",
+                    "    if (t == 1) { }",
+                    "    if (k == 1) { }",
+                    "    if (p == q) { }",
+                    "    if (opt == nil) { }",
+                    "    if (n == nil) { }",
+                    "    if (mix == 1 or mix == \"x\") { }",
+                    "    if (b == true) { }",
+                    "}",
+                ].join("\n")
+                const program = parse(matrix)
+                const scopes = analyzeScopes(program)
+                const types = analyzeTypes(program, scopes)
+                check("comparisons: any two sides that share no value, whatever their types, are a warning",
+                    types.diagnostics.map(d => `${d.severity} ${d.node.line.start}`),
+                    [4, 5, 6, 7, 8, 9, 10, 11, 12, 14].map(line => `warning ${line}`))
+                let notEmpty = ""
+                for (const [id, type] of types.bindingType) if (scopes.bindings.get(id)!.name === "notEmpty") notEmpty = formatType(type)
+                check("difference: a string tested against a literal stays one that is not it", notEmpty, "Exclude<string, \"\">")
+            }
+            check("difference: unions put back what was taken out", [
+                formatType(union([difference(unknownType, union([literal(1), literal(2)])), literal(2)])),
+                formatType(union([difference(unknownType, numberType), difference(numberType, literal(1))])),
+                formatType(union([difference(unknownType, union([nilType, literal(false)])), nilType, literal(false)])),
+            ], ["Exclude<unknown, 1>", "Exclude<unknown, 1>", "unknown"])
+        }
+        const bare = parse("function f() {\n    return\n    const x = 1\n}")
+        const body = (bare.body.statements[0] as any).func.body.statements
+        check("unreachable: a bare `return` before a statement returns nothing",
+            [body.map((st: any) => st.type), body[0].argument], [["ReturnStatement", "VariableDeclaration"], undefined])
+    }
+
     // Recovery: a syntax error costs as little of the tree as it can.
     const recovered = (code: string) => {
         const { program, errors } = parseWithRecovery(code)
@@ -539,6 +787,90 @@ const rel = (path: string | undefined): string | undefined =>
     }
     {
         const r = recovered([
+            "function",
+            "",
+            "const a = 1",
+            "print(a)",
+            "function g(): { n: number } { return { n: 1 } }",
+            "const after = g().n",
+        ].join("\n"))
+        check("recovery: a half-written `function` costs its own line, not what follows it",
+            [r.errors, r.statements, r.bindings.a, r.bindings.after],
+            [["Expected the rest of 'function' before the end of the line"], ["ErrorStatement", "VariableDeclaration", "CallStatement", "FunctionDeclaration", "VariableDeclaration"], "1", "number"])
+    }
+    {
+        const r = recovered([
+            "function g() {",
+            "    if (x ==",
+            "    foo = 1",
+            "    print(foo)",
+            "}",
+            "const after = 2",
+        ].join("\n"))
+        check("recovery: a broken statement ends with its line",
+            [r.errors, r.statements, r.bindings.after],
+            [["Unexpected token in expression", "Expected ')' to close the '(' on line 2"], ["FunctionDeclaration", "VariableDeclaration"], "2"])
+    }
+    {
+        // Each half-written line is followed by the same code, which must
+        // come through whole.
+        const after = ["function g(): number {", "    return 1", "}", "const after = g()"]
+        const cases: [string, string[]][] = [
+            ["print(area({ kind: ", ["Unexpected token in expression", "Expected '}))' to close the brackets opened on line 1"]],
+            ["const t = [1, ", ["Expected ']' to close the '[' on line 1"]],
+            ["const x = a +", ["Expected a value before the end of the line"]],
+            ["const x =", ["Expected a value before the end of the line"]],
+            ["return x +", ["Expected a value before the end of the line"]],
+            ["type T = { a: ", ["Unexpected token in type annotation", "Expected '}' to close the '{' on line 1"]],
+            ["class A extends", ["Expected the class it extends before the end of the line"]],
+            ["`oops ${", ["Expected identifier or '('", "Unterminated interpolation expression"]],
+            ["`oops", ["Expected identifier or '('", "Unterminated interpolated string"]],
+        ]
+        check("recovery: a half-written line costs that line, not the code below it",
+            cases.map(([line]) => {
+                const r = recovered([line, ...after].join("\n"))
+                return [r.errors.map(e => e.replace(/ \(\d+:\d+\)$/, "")), r.bindings.after, r.statements.slice(-2)]
+            }),
+            cases.map(([, errors]) => [errors, "number", ["FunctionDeclaration", "VariableDeclaration"]]))
+    }
+    {
+        const r = recovered([
+            "type Shape =",
+            "    | { kind",
+            "    | { kind: \"rect\", w: number }",
+            "const s: Shape = { kind: \"rect\", w: 1 }",
+        ].join("\n"))
+        check("recovery: a broken member of an object type keeps the type and what follows",
+            [r.statements, r.bindings.s], [["TypeAliasStatement", "VariableDeclaration"], "Shape"])
+    }
+    {
+        const r = recovered([
+            "class A {",
+            "    m(a: number): number",
+            "        const b = a",
+            "        return b",
+            "    }",
+            "    n(): number { return 2 }",
+            "}",
+            "const after = 1",
+        ].join("\n"))
+        check("recovery: a body without its `{` is read by its indentation",
+            [r.errors, r.statements, Object.keys(r.bindings)],
+            [["Expected '{' to open the body of 'function'"], ["ClassDeclaration", "VariableDeclaration"], ["this", "a", "b", "A", "after"]])
+    }
+    {
+        const r = recovered([
+            "function f(",
+            "    print(1)",
+            "    return 2",
+            "}",
+            "const after = f()",
+        ].join("\n"))
+        check("recovery: a parameter list without its `)` ends where the body begins",
+            [r.statements, r.bindings.after], [["FunctionDeclaration", "VariableDeclaration"], "2"])
+    }
+    {
+        const r = recovered([
             "function a() {",
             "    if (true) {",
             "        print(1)",
@@ -573,7 +905,7 @@ const rel = (path: string | undefined): string | undefined =>
             "Unexpected token in type annotation",
             "In '${1 +}': Unexpected token in expression",
             "Unexpected token in expression",
-            "Expected ')'",
+            "Expected ')' to close the '(' on line 8",
             "Unexpected token in expression",
         ], ["a", "b", "part", "n", "c", "s", "d"]])
     }
@@ -676,14 +1008,14 @@ const rel = (path: string | undefined): string | undefined =>
     ])
 
     // What Luau raises on, said before it runs. An operator no metamethod
-    // answers takes numbers (`..` a string or a number, `#` a string or a
-    // table), and `any` passes because nothing is known about it.
+    // answers takes numbers (`+` a string and a string or a number, `#` a
+    // string or a table), and `any` passes because nothing is known about it.
     check("operators: the operands are checked where no metamethod answers", [
         analyze("function f(n: number | nil) { return n * 2 }").errors,
         analyze("function f(s: string) { return s * 2 }").errors,
         analyze("function f(a: any) { return a * 2 }").errors,
-        analyze("function f(s: string | nil) { return s .. \"x\" }").errors,
-        analyze("function f(n: number) { return n .. \"x\" }").errors,
+        analyze("function f(s: string | nil) { return s + \"x\" }").errors,
+        analyze("function f(n: number) { return n + \"x\" }").errors,
         analyze("function f(n: number) { return n.length }").errors,
         analyze("function f(a: number, b: string) { return a < b }").errors,
         analyze("function f(a: string, b: string) { return a < b }").errors,
@@ -691,7 +1023,7 @@ const rel = (path: string | undefined): string | undefined =>
         ["Operator '*' cannot be applied to types 'number | nil' and '2'"],
         ["Operator '*' cannot be applied to types 'string' and '2'"],
         [],
-        ["Operator '..' cannot be applied to types 'string | nil' and '\"x\"'"],
+        ["'+' joins a string with a string or a number, not 'string | nil': write it in a template string, `${x}`, or call 'tostring(x)'"],
         [],
         ["Property 'length' does not exist on type 'number'"],
         ["Operator '<' cannot be applied to types 'number' and 'string'"],
@@ -780,7 +1112,7 @@ const rel = (path: string | undefined): string | undefined =>
         parseWithRecovery("for (k, v in pairs(t)) { }").errors.map(e => e.message),
         parseWithRecovery("for (item in items) { }").errors.map(e => e.message),
         parseWithRecovery("for (const i = 1, 10) { }").errors.map(e => e.message),
-        analyze("declare names: string[]\nfor (let name in names) { name = name .. \"!\" }\nfor (const other in names) { other = \"x\" }").errors,
+        analyze("declare names: string[]\nfor (let name in names) { name = name + \"!\" }\nfor (const other in names) { other = \"x\" }").errors,
         parseWithRecovery("for (const x in f, s, v) { }").errors.map(e => e.message),
         analyze("declare n: number\nfor (const x in n) { }").errors,
     ], [
@@ -2172,7 +2504,7 @@ function g() {
         [emptyBranch.bindings.active, emptyBranch.bindings.picked, emptyBranch.bindings.shape, emptyBranch.bindings.mixed,
             emptyBranch.bindings.maybe, emptyBranch.bindings.names, emptyBranch.bindings.keyed],
         ["string[]", "string[]", "{ x: number } | {}", "1 | unknown[]",
-            "readonly [\"KJ\"] | []", "[\"Sans\", \"Asgore\", \"KJ\"] | [\"Sans\", \"Asgore\"]", "(\"Sans\" | \"Asgore\" | \"KJ\")[]"])
+            "readonly [\"KJ\"] | []", "[\"Sans\", \"Asgore\", \"KJ\"] | [\"Sans\", \"Asgore\"]", "[\"Sans\" | \"Asgore\" | \"KJ\", \"Sans\" | \"Asgore\" | \"KJ\", \"Sans\" | \"Asgore\" | \"KJ\"] | [\"Sans\" | \"Asgore\" | \"KJ\", \"Sans\" | \"Asgore\" | \"KJ\"]"])
     // A literal written into a table or array widens; a value read into one
     // keeps its type, as in TypeScript.
     const kept = analyze([
@@ -2185,7 +2517,7 @@ function g() {
     check("literals: a value read into a table keeps its type, a written one widens",
         [kept.bindings.row, kept.bindings.pair, kept.bindings.rows],
         ["{ key: \"Sans\", list: string[], n: number, nested: { k: \"Sans\" }, s: string }",
-            "\"Sans\"[]", "{ Img: string, Key: \"Sans\" | \"Asgore\" }[]"])
+            "\"Sans\"[]", "[{ Img: string, Key: \"Sans\" | \"Asgore\" }, { Img: string, Key: \"Sans\" | \"Asgore\" }]"])
     check("spread: tuples make a tuple, one per way a union goes",
         [emptyBranch.bindings.copy, emptyBranch.bindings.around, emptyBranch.bindings.loose],
         ["[\"Sans\", \"Asgore\"]", "[number, \"Sans\", \"Asgore\", string]", "string[]"])
@@ -2209,14 +2541,15 @@ function g() {
         "const named = maybe:filter(isText)",
         "const kept = maybe:filter(v => v ~= nil)",
         "const ids = items:map(item => { if (item.Name == \"\") { return nil }\n return item.Id }):filter(id => id ~= nil)",
-        // False must mean exactly what the guard excludes, or it is no guard.
+        // False must mean exactly what the guard excludes, or it is no guard:
+        // here it does, since what is kept is a string that is not "x".
         "const some = maybe:filter(v => v ~= nil and v ~= \"x\")",
         "const long = maybe:filter((v, i) => i > 2)",
         "const guard = (v: string | nil) => v ~= nil",
     ].join("\n"))
     check("filter: a guard narrows what it keeps",
         [guards.bindings.named, guards.bindings.kept, guards.bindings.ids, guards.bindings.some, guards.bindings.long, guards.bindings.guard],
-        ["string[]", "string[]", "string[]", "(string | nil)[]", "(string | nil)[]", "(v: string | nil) => v is string"])
+        ["string[]", "string[]", "string[]", "Exclude<string, \"x\">[]", "(string | nil)[]", "(v: string | nil) => v is string"])
     check("filter: guards raise no errors", guards.errors, [])
     // A generic function of one's own: the callback reads `T` from the list
     // before it is asked whether it guards.
@@ -2506,7 +2839,7 @@ function g() {
         "        return this.name",
         "    }",
         "    get label(): string {",
-        `        return "<" .. this.name .. ">"`,
+        `        return "<" + this.name + ">"`,
         "    }",
         "}",
         "class Box<T> {",
@@ -2727,8 +3060,8 @@ function g() {
     check("branded: an operation on one gives back the plain type", analyze([
         BRANDS,
         "declare id: UserId",
-        `findUser(id .. "x")`,
-        `take(id .. "x")`,
+        `findUser(id + "x")`,
+        `take(id + "x")`,
     ].join("\n")).errors,
         ["Argument of type 'string' is not assignable to parameter of type 'UserId'"])
 
@@ -2902,7 +3235,7 @@ function g() {
         "        this.breed = breed",
         "    }",
         "    function speak(): string {",
-        "        return super.speak() .. this.breed",
+        "        return super.speak() + this.breed",
         "    }",
         "}",
         "",
@@ -3336,7 +3669,7 @@ function g() {
             [["x", "m"], ["VariableDeclaration"], ["Unexpected token in type annotation, got ')' (2:12)"]],
             [["x", "m"], ["VariableDeclaration"], ["Expected a class member: a field, a method, 'constructor', 'get' or 'set', got '+' (3:5)"]],
             [["constructor", "m"], ["VariableDeclaration"], ["Expected ')', got '{' (2:27)"]],
-            [["m"], ["VariableDeclaration"], ["Expected identifier, got 'return' (2:20)"]],
+            [["m"], ["VariableDeclaration"], ["Expected identifier, got 'return' (2:20)", "Expected ')' to close the '(' on line 2, got 'm' (3:5)"]],
         ])
     }
 
@@ -4439,11 +4772,43 @@ function g() {
         errorsOf("let x\nx = 1\nx = \"a\""),
         errorsOf("let x = nil\nx = 1"),
     ], [["Type 'string' is not assignable to 'number'"], [], [], []])
+    {
+        // `+` joins strings, as in TypeScript, and `..` is gone.
+        const joins = (code: string) => {
+            const { program, errors } = parseWithRecovery(code)
+            const scopes = analyzeScopes(program)
+            const types = analyzeTypes(program, scopes)
+            const bindings: Record<string, string> = {}
+            for (const [id, type] of types.bindingType) { const b = scopes.bindings.get(id)!; if (!b.isBuiltin) bindings[b.name] = formatType(type) }
+            return { errors: [...errors.map(e => e.message), ...types.diagnostics.map(d => d.message)], bindings, joins: [...types.joins.values()] }
+        }
+        const typed = joins([
+            "function f(n: number, s: string, a: any, e: string | number) {",
+            "    const both = \"a\" + \"b\"",
+            "    const left = s + n",
+            "    const right = n + s",
+            "    const sum = n + n",
+            "    const loose = a + 1",
+            "    const either = e + 1",
+            "    const first = 1 + 2 + \"a\"",
+            "}",
+        ].join("\n"))
+        check("+: a string on either side joins, two numbers add, and what only the values can say is asked of them", [
+            typed.errors, typed.bindings.both, typed.bindings.left, typed.bindings.right, typed.bindings.sum,
+            typed.bindings.loose, typed.bindings.either, typed.bindings.first, typed.joins,
+        ], [[], "string", "string", "string", "number", "any", "string | number", "string",
+            ["concat", "concat", "concat", "dynamic", "dynamic", "concat"]])
+        check("+: '..' is not tilua's, and reads as the '+' it meant", [
+            joins("const s = \"a\" .. \"b\"\nlet t = \"\"\nt ..= s\nconst xs = [1, 2]\nconst ys = [...xs]").errors,
+            joins("const s = \"a\" .. \"b\"").bindings.s,
+        ], [["tilua writes '+', not '..' (1:15)", "tilua writes '+=', not '..=' (3:3)"], "string"])
+    }
     check("soundness: a compound assignment is the operator and the assignment", [
         errorsOf("let s = \"a\"\ns += 1"),
-        errorsOf("let n = 1\nn ..= \"a\""),
+        errorsOf("let n = 1\nn += \"a\""),
         errorsOf("let n = 1\nn += 1\nn -= 2\nn *= 3"),
-    ], [["Operator '+' cannot be applied to types 'string' and '1'"], ["Type 'string' is not assignable to 'number'"], []])
+        errorsOf("let b = true\nb += \"a\""),
+    ], [[], ["Type 'string' is not assignable to 'number'"], [], ["'+' joins a string with a string or a number, not 'boolean': write it in a template string, `${x}`, or call 'tostring(x)'"]])
     check("soundness: every way through a function that returns a value returns one", [
         errorsOf("function f(x: \"a\" | \"b\" | \"c\"): number {\n    if (x == \"a\") return 1\n    elseif (x == \"b\") return 2\n}"),
         errorsOf("function f(x: \"a\" | \"b\"): number {\n    if (x == \"a\") return 1\n    elseif (x == \"b\") return 2\n}"),
@@ -4528,12 +4893,11 @@ function g() {
         errorsOf("const a = 1\nexport type { a }"),
     ], [[], ["'a' is not a type: 'export type' exports types"]])
     check("object literals: get and set", [
-        errorsOf("const o = {\n    first: \"a\",\n    get full(): string { return this.first .. \"!\" },\n    set name(v: string) { this.first = v },\n}\nconst f: string = o.full\no.name = \"x\"\no.full = \"no\""),
+        errorsOf("const o = {\n    first: \"a\",\n    get full(): string { return this.first + \"!\" },\n    set name(v: string) { this.first = v },\n}\nconst f: string = o.full\no.name = \"x\"\no.full = \"no\""),
         errorsOf("const o = { get x(a: number) { return 1 } }"),
     ], [["Cannot assign to 'full' because it is a read-only property"], ["A 'get' accessor takes no parameters"]])
     check("what TypeScript has and tilua does not says what to write", [
         errorsOf("enum Color { Red, Green }"),
-        errorsOf("try { print(1) } catch (e) { print(e) }"),
         errorsOf("namespace N { const x = 1 }"),
         errorsOf("const x = 1\nswitch (x) { }"),
         errorsOf("declare module \"m\" { }"),
@@ -4541,7 +4905,6 @@ function g() {
         errorsOf("const n = 10n"),
     ], [
         ["tilua has no 'enum': write a union of literals, 'type Color = \"Red\" | \"Green\"', or an object 'as const'"],
-        ["tilua has no 'try': call the function with 'pcall', which answers whether it ran"],
         ["tilua has no 'namespace': a module is a file, 'import * as N from \"./n\"'"],
         ["tilua has no 'switch': write an 'if' / 'elseif' chain — one that leaves no value for an 'else' is exhaustive"],
         ["tilua has no 'declare module': a module is a file — point an import at a .d.tilua file with 'paths'"],
@@ -4855,6 +5218,94 @@ function g() {
     check("arrays: keys, values and entries, as arrays", [
         errorsOf("const xs = [\"a\", \"b\"]\nconst k: number[] = xs:keys()\nconst v: string[] = xs:values()\nconst e: [number, string][] = xs:entries()\nfor (const [i, s] in xs:entries()) { const n: number = i\n const t: string = s }"),
     ], [[]])
+}
+
+// A map keyed by a class answers the table methods; a generic function's
+// ReturnType is read at its constraints, and is the type its calls fit.
+{
+    const errorsOf = (code: string): string[] => {
+        const program = parse(code)
+        const scopes = analyzeScopes(program)
+        return [...scopes.diagnostics, ...analyzeTypes(program, scopes, {}).diagnostics].map(d => d.message)
+    }
+    const aliasOf = (code: string, name: string): string => {
+        const program = parse(code)
+        const types = analyzeTypes(program, analyzeScopes(program), {})
+        return formatType(withoutAliasName(types.aliases.get(name)!))
+    }
+    check("maps: a class-keyed or number-keyed map has keys, values and entries", [
+        errorsOf("declare class P { Name: string }\ndeclare b: { [P]: number }\nconst v: number[] = b:values()\nconst k: P[] = b:keys()\nconst e: [P, number][] = b:entries()\ndeclare c: { [number]: string }\nconst s: string[] = c:values()"),
+    ], [[]])
+    check("generic functions: ReturnType and Parameters read them at their constraints", [
+        aliasOf("function find<T extends string>(x: T): T | nil { return x }\ntype R = ReturnType<typeof find>", "R"),
+        aliasOf("function find<T extends string>(x: T): T | nil { return x }\ntype R = Parameters<typeof find>", "R"),
+        aliasOf("function id<T>(x: T): T { return x }\ntype R = ReturnType<typeof id>", "R"),
+        errorsOf("declare class Inst { Name: string }\ndeclare class Fold extends Inst { }\ndeclare function pick<T extends Inst>(name: string): T | nil\nfunction find<T extends Inst>(name: string) { return pick<T>(name) }\ntype Found = ReturnType<typeof find>\nconst f: Found = find<Fold>(\"x\")"),
+    ], ["string | nil", "[x: string]", "unknown", []])
+    check("generic functions: one fits a plain function type as it would be called there", [
+        errorsOf("function id<T>(x: T): T { return x }\nconst a: (x: number) => number = id\nconst b: (x: number) => string = id"),
+    ], [["Type '<T>(x: T) => T' is not assignable to '(x: number) => string'"]])
+}
+
+// keys, values and entries say all that is known: a tuple's place by place.
+{
+    const bindingOf = (code: string, name: string): string => {
+        const program = parse(code)
+        const scopes = analyzeScopes(program)
+        const types = analyzeTypes(program, scopes, {})
+        const id = [...scopes.bindings.values()].find(b => b.name === name)!.id
+        return formatType(types.bindingType.get(id)!)
+    }
+    const T = "const t = [\"a\", 1] as const\n"
+    check("keys, values, entries: a tuple's are tuples, an array's arrays", [
+        bindingOf(T + "const k = t:keys()", "k"),
+        bindingOf(T + "const v = t:values()", "v"),
+        bindingOf(T + "const e = t:entries()", "e"),
+        bindingOf("const xs = [\"a\", \"b\"]\nconst e = xs:entries()", "e"),
+        bindingOf("declare tt: [x: number, y: string]\nconst k = tt:keys()", "k"),
+        bindingOf("const o = { a: 1, b: \"x\" }\nconst e = o:entries()", "e"),
+        bindingOf("declare m: { [string]: boolean }\nconst e = m:entries()", "e"),
+        bindingOf("declare r: [number, ...string[]]\nconst x = r[5]", "x"),
+    ], ["[1, 2]", "[\"a\", 1]", "[[1, \"a\"], [2, 1]]", "[number, string][]", "[x: 1, y: 2]", "[[\"a\", number], [\"b\", string]]", "[string, boolean][]", "string"])
+}
+
+// fromEntries, and what makes entries worth having: destructured callbacks
+// typed from the call, list literals returned as tuples, map keeping a tuple's length.
+{
+    const bindingOf = (code: string, name: string): string => {
+        const program = parse(code)
+        const scopes = analyzeScopes(program)
+        const types = analyzeTypes(program, scopes, {})
+        const id = [...scopes.bindings.values()].find(b => b.name === name)!.id
+        return formatType(types.bindingType.get(id)!)
+    }
+    const errorsOf = (code: string): string[] => {
+        const program = parse(code)
+        const scopes = analyzeScopes(program)
+        return [...scopes.diagnostics, ...analyzeTypes(program, scopes, {}).diagnostics].map(d => d.message)
+    }
+    const O = "const o = { hp: 10, mp: 5 }\n"
+    check("fromEntries: the object a list of pairs makes", [
+        bindingOf("const t = [[\"a\", 1], [\"b\", \"x\"]] as const\nconst r = t:fromEntries()", "r"),
+        bindingOf("declare ps: [string, number][]\nconst r = ps:fromEntries()", "r"),
+        bindingOf("declare ps: [\"a\" | \"b\", number][]\nconst r = ps:fromEntries()", "r"),
+        bindingOf(O + "const r = o:entries():fromEntries()", "r"),
+        bindingOf(O + "const r = o:entries():map(([k, v]) => [k, v * 2]):fromEntries()", "r"),
+        errorsOf("const r = [1, 2]:fromEntries()"),
+    ], [
+        "{ a: 1, b: \"x\" }",
+        "{ [string]: number }",
+        "{ a?: number, b?: number }",
+        "{ hp: number, mp: number }",
+        "{ hp: number, mp: number }",
+        ["Argument of type 'number[]' is not assignable to parameter of type 'readonly (readonly [unknown, unknown])[]'"],
+    ])
+    check("callbacks: a destructured parameter takes its type from the call", [
+        bindingOf(O + "const r = o:entries():map(([k, v]) => k)", "r"),
+        bindingOf("declare xs: [string, number][]\nconst r = xs:map(([k, v]) => v)", "r"),
+        bindingOf("declare xs: [string, number][]\nconst r = xs:map(e => [e[1], e[2]])", "r"),
+        bindingOf("const r = [1, \"x\"] as const\nconst m = r:map(v => tostring(v))", "m"),
+    ], ["[\"hp\" | \"mp\", \"hp\" | \"mp\"]", "number[]", "[string, number][]", "[string, string]"])
 }
 
 for (const failure of failures) console.log(`FAIL ${failure}`)

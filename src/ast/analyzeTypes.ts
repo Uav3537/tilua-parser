@@ -4,7 +4,7 @@ import type {
     ObjectPattern, ArrayPattern, ObjectPatternProperty, ReturnStatement, AssignmentStatement, MemberExpression, IndexExpression,
     TableExpression, ArrayExpression, IfStatement, TypePredicateNode, DeclareClassStatement, DeclareStatement,
     ClassDeclaration, TypeAliasStatement, ExportTypeAliasStatement, ClassExpression, ClassLike, ClassMember,
-    GenericForStatement, MethodCallExpression, DeclareMetatableStatement,
+    GenericForStatement, MethodCallExpression, DeclareMetatableStatement, TryStatement, CatchClause, BinaryExpression, CompoundAssignmentStatement,
 } from "./nodes"
 import { LANGUAGE_GLOBALS, type ScopeAnalysis, type BindingId } from "./analyzeScopes"
 import { preludeProgram } from "./prelude"
@@ -31,7 +31,40 @@ export interface TypeDiagnostic {
      *  is to blame (a function that never returns). Only its span is read. */
     node: Expression | Statement | TypeNode | Block | ClassMember
     message: string
+    /** Code that runs as written but cannot be what was meant — a test that
+     *  always comes out the same. An editor shows it as a warning, and it
+     *  counts as no error. */
+    severity?: "warning"
 }
+
+/** One kind of value a type can hold at run time: what Luau's `type()` says
+ *  of it (`"*"` for anything), which scalar it is when the type says, and what
+ *  was taken out of it. See `runtimeValues`. */
+interface RuntimeValue {
+    tag: string
+    value?: string | number | boolean
+    out?: Type
+}
+
+/** Can a value of `a` be equal to one of `b`? */
+function runtimeOverlap(a: RuntimeValue, b: RuntimeValue): boolean {
+    const asType = (v: RuntimeValue): Type => v.value !== undefined ? literal(v.value)
+        : primitive(v.tag as Parameters<typeof primitive>[0])
+    // Taken out of the other side: `Exclude<unknown, 1>` is never `1`, nor
+    // is `Exclude<unknown, number>` any number.
+    const takenOut = (v: RuntimeValue, from: RuntimeValue): boolean =>
+        from.out !== undefined && v.tag !== "*" && (v.value !== undefined || SCALAR_TAGS.has(v.tag)) &&
+        isAssignable(asType(v), from.out)
+    if (takenOut(a, b) || takenOut(b, a)) return false
+    if (a.tag === "*" || b.tag === "*") return true
+    if (a.tag !== b.tag) return false
+    if (a.value !== undefined && b.value !== undefined) return a.value === b.value
+    return true
+}
+
+/** What `type()` names that compares by value: two of them are equal only
+ *  if they are the same value. */
+const SCALAR_TAGS: ReadonlySet<string> = new Set(["nil", "boolean", "number", "string"])
 
 /** Members a class carries to model itself, which no one writes and so no one
  *  should be told about. */
@@ -104,6 +137,11 @@ export interface TypeAnalysis {
     readonly methodReads: ReadonlyMap<MemberExpression, MethodSource>
     /** Each `.length` read of a string or a list: Luau's `#`. */
     readonly lengths: ReadonlySet<MemberExpression>
+    /** Each `+` — or `+=` — that joins strings rather than adding numbers:
+     *  `concat` where it surely does (Luau's `..`), `dynamic` where only the
+     *  values can say, a side being `any` or `string | number`. One missing
+     *  here adds. */
+    readonly joins: ReadonlyMap<BinaryExpression | CompoundAssignmentStatement, "concat" | "dynamic">
     /** Each `typeof v` whose `v`, where it is a table at all, is known by its
      *  type to be an array or to be an object. One missing here has to be
      *  told apart as the program runs. */
@@ -111,7 +149,18 @@ export interface TypeAnalysis {
     /** The members a value's metatable `__index` gives it — what an editor
      *  offers after `:`. Empty for a value no metatable matches. */
     readonly metatableMembers: (type: Type) => ReadonlyMap<string, Type>
+    /** Each run of statements no path reaches: what follows a `return`,
+     *  `break` or `continue` in its block, a call that never returns, or an
+     *  `if` every branch of which leaves. An editor dims them; the compiler
+     *  leaves out what follows the first three, which Luau does not allow. */
+    readonly unreachable: readonly UnreachableCode[]
     readonly diagnostics: TypeDiagnostic[]
+}
+
+/** The first and the last of a block's statements that never run. */
+export interface UnreachableCode {
+    readonly from: Statement
+    readonly to: Statement
 }
 
 /** Where a metatable reached by a method call was declared: by the language
@@ -367,10 +416,15 @@ function unassignedKey(id: BindingId): RefKey {
 }
 
 /** The state a function written here starts in. It runs later — whenever it
- *  is called — so what has not been assigned *yet* says nothing about it. */
+ *  is called — so what has not been assigned *yet* says nothing about it,
+ *  and neither does what a table's field or entry held here: anything may
+ *  have assigned it since, as TypeScript reasons too. `if (not t[k]) {
+ *  on(() => t[k]) }` is a `t[k]` that may well be there by then. */
 function functionEnv(env: FlowEnv): FlowEnv {
     const out = forkEnv(env)
-    for (const key of env.keys()) if (key.startsWith("!")) out.delete(key)
+    for (const key of env.keys()) {
+        if (key.startsWith("!") || (key.startsWith("$") && /[.#[]/.test(key))) out.delete(key)
+    }
     return out
 }
 
@@ -411,6 +465,18 @@ function topLevelParams(t: Type): Set<string> {
     if (t.kind === "typeParam") return new Set([t.name])
     if (t.kind === "union") return new Set(t.types.flatMap(m => [...topLevelParams(m)]))
     return new Set()
+}
+
+/** Does a pattern say a type anywhere — a name annotated, a default given?
+ *  Then it says what it takes, rather than being told. */
+function patternAnnotated(pattern: ObjectPattern | ArrayPattern): boolean {
+    const leaf = (v: BindingTarget, def: Expression | undefined): boolean =>
+        def !== undefined || (v.type === "ObjectPattern" || v.type === "ArrayPattern"
+            ? patternAnnotated(v)
+            : v.type === "IdentifierPattern" && v.typeAnnotation !== undefined)
+    return pattern.type === "ObjectPattern"
+        ? pattern.properties.some(p => leaf(p.value, p.default))
+        : pattern.elements.some(el => el !== undefined && el !== null && leaf(el.value, el.default))
 }
 
 /** `t` with every list in it — at the top, in a list, in a member — read-only. */
@@ -592,6 +658,9 @@ function keepsLiterals(paramType: Type): boolean {
     if (!paramType.constraint) return false
     // `K extends keyof T` takes a key: the key written, as TypeScript reads it.
     if (paramType.constraint.kind === "keyof") return true
+    // `L extends readonly T[]` takes a list: the list as its type says it,
+    // a tuple's places and all.
+    if (paramType.constraint.kind === "array" || paramType.constraint.kind === "tuple") return true
     const members = paramType.constraint.kind === "union"
         ? paramType.constraint.types
         : [paramType.constraint]
@@ -677,7 +746,23 @@ function definitelyAssigned(block: Block): Set<string> | undefined {
                 break
             }
             case "ReturnStatement":
+            case "ThrowStatement":
                 return undefined
+            case "TryStatement": {
+                // What the block assigns is assigned when it finishes; when it
+                // throws, the `catch` is what finishes, and has to assign it
+                // too. A `finally` runs on every way through.
+                const block = definitelyAssigned(statement.block)
+                const handler = statement.handler && definitelyAssigned(statement.handler.body)
+                const finalizer = statement.finalizer ? definitelyAssigned(statement.finalizer) : new Set<string>()
+                if (!finalizer) return undefined
+                const finishing = [block, ...(statement.handler ? [handler] : [])]
+                    .filter((arm): arm is Set<string> => arm !== undefined)
+                if (!finishing.length) return undefined
+                for (const name of finishing[0]) if (finishing.every(arm => arm.has(name))) names.add(name)
+                for (const name of finalizer) names.add(name)
+                break
+            }
             case "CallStatement": {
                 const call = statement.expression
                 if (call.type === "CallExpression" && call.callee.type === "Identifier" && call.callee.name === "error") {
@@ -894,7 +979,7 @@ function withoutNil(t: Type): Type {
 /** The metamethod each binary operator calls. */
 const METAMETHODS: Record<string, string> = {
     "+": "__add", "-": "__sub", "*": "__mul", "/": "__div", "//": "__idiv",
-    "%": "__mod", "^": "__pow", "..": "__concat",
+    "%": "__mod", "^": "__pow",
 }
 
 function posKey(name: string, line: number, column: number): string {
@@ -918,7 +1003,12 @@ class TypeAnalyzer {
     private readonly methodSources = new Map<MethodCallExpression, MethodSource>()
     private readonly methodReads = new Map<MemberExpression, MethodSource>()
     private readonly lengths = new Set<MemberExpression>()
+    private readonly joins = new Map<BinaryExpression | CompoundAssignmentStatement, "concat" | "dynamic">()
+    /** The `n + 1` that `n++` is: an increment, which a string has none of. */
+    private readonly increments = new WeakSet<Expression>()
     private readonly typeofTables = new Map<Expression, "array" | "object">()
+    /** By the first statement, since a body may be walked more than once. */
+    private readonly unreachable = new Map<Statement, UnreachableCode>()
     /** Public: each alias resolved once (generic aliases keep their params as
      *  `typeParam` nodes in the body). */
     private readonly aliases = new LazyMap<string>()
@@ -960,7 +1050,9 @@ class TypeAnalyzer {
     /** Guard against a self-referential type-level operator. */
     private reduceDepth = 0
     /** One entry per enclosing loop: the flow states its `break`s jump from. */
-    private readonly breakStates: FlowEnv[][] = []
+    /** One per loop being walked, innermost last: its label, and the state
+     *  at each `break` that leaves it. */
+    private readonly breakStates: { label?: string; states: FlowEnv[] }[] = []
     /** Memoised `reduceType`, keyed by type identity. */
     private readonly reduceCache = new WeakMap<object, Type>()
     /** Resolved alias bodies, keyed by reference. See `expand`. */
@@ -1062,7 +1154,9 @@ class TypeAnalyzer {
             methodSources: this.methodSources,
             methodReads: this.methodReads,
             lengths: this.lengths,
+            joins: this.joins,
             typeofTables: this.typeofTables,
+            unreachable: [...this.unreachable.values()],
             metatableMembers: type => this.metatableMembers(type),
             diagnostics: this.diagnostics,
         }
@@ -2261,6 +2355,8 @@ class TypeAnalyzer {
                 for (const value of Object.values(statement)) {
                     if (value && typeof value === "object" && "statements" in (value as object)) {
                         walk((value as Block).statements)
+                    } else if ((value as { type?: unknown } | undefined)?.type === "CatchClause") {
+                        walk((value as CatchClause).body.statements)
                     } else if (Array.isArray(value)) {
                         for (const item of value) {
                             const block = item as { body?: Block }
@@ -2279,6 +2375,8 @@ class TypeAnalyzer {
             })
             return
         }
+        // A body that only ever throws has nothing to return.
+        if (this.blockAlwaysExits(func.body)) return
         this.diagnostics.push({
             node: func.body,
             message: `A function that returns '${briefType(declared)}' must return a value`,
@@ -2616,7 +2714,12 @@ class TypeAnalyzer {
                 })
             }
             case "TypeofTypeNode": {
-                return this.infer(node.expression, new Map())
+                this.typeQueryDepth++
+                try {
+                    return this.infer(node.expression, new Map())
+                } finally {
+                    this.typeQueryDepth--
+                }
             }
             case "TemplateLiteralTypeNode": {
                 const types = node.types.map(x => this.resolveType(x))
@@ -3098,9 +3201,10 @@ class TypeAnalyzer {
             const at = (key: Type): Type => this.reduceType(substitute(t.template, new Map([[t.parameter, key]])))
             const made = source.kind === "array"
                 ? arrayOf(at(numberType))
-                : tuple(source.elements.map((_, i) => at(literal(i + 1))), source.rest && at(numberType))
+                : tupleMeta(tuple(source.elements.map((_, i) => at(literal(i + 1))), source.rest && at(numberType)), source)
             const readonly = t.readonly ?? source.readonly
-            return readonly ? { ...made, readonly: true } : made
+            // `-readonly` takes away what the source had; `readonly` adds it.
+            return readonly ? { ...made, readonly: true } : { ...made, readonly: undefined }
         }
         const members = constraint.kind === "union" ? constraint.types : [constraint]
         const entries: [string, ObjectProperty][] = []
@@ -3152,7 +3256,18 @@ class TypeAnalyzer {
     // --------------------------------------------------------
 
     private visitBlock(block: Block, env: FlowEnv): void {
-        for (const stmt of block.statements) this.visitStatement(stmt, env)
+        const statements = block.statements
+        for (let i = 0; i < statements.length; i++) {
+            this.visitStatement(statements[i], env)
+            if (i === statements.length - 1 || !this.statementAlwaysExits(statements[i])) continue
+            // Never run, but still read — as TypeScript reads it — so that
+            // its names are known and what is wrong in it is said. What it
+            // narrows is its own.
+            this.unreachable.set(statements[i + 1], { from: statements[i + 1], to: statements[statements.length - 1] })
+            const dead = forkEnv(env)
+            for (const stmt of statements.slice(i + 1)) this.visitStatement(stmt, dead)
+            return
+        }
     }
 
     private visitStatement(stmt: Statement, env: FlowEnv): void {
@@ -3338,6 +3453,13 @@ class TypeAnalyzer {
                     operator: stmt.operator.slice(0, -1) as Extract<Expression, { type: "BinaryExpression" }>["operator"],
                     left: stmt.target, right: stmt.value, ...span,
                 }
+                if (stmt.postfix) this.increments.add(combined)
+                // `s += "x"` joins as `s + "x"` does.
+                const joined = (): void => {
+                    const join = this.joins.get(combined as BinaryExpression)
+                    if (join) this.joins.set(stmt, join)
+                    else this.joins.delete(stmt)
+                }
                 if (stmt.target.type === "Identifier" || stmt.target.type === "MemberExpression" || stmt.target.type === "IndexExpression") {
                     const assignment: Statement = { type: "AssignmentStatement", target: stmt.target, value: combined, ...span }
                     const from = this.diagnostics.length
@@ -3351,6 +3473,7 @@ class TypeAnalyzer {
                 } else {
                     this.infer(combined, env)
                 }
+                joined()
                 return
             }
 
@@ -3374,7 +3497,7 @@ class TypeAnalyzer {
             case "WhileStatement": {
                 const condType = this.infer(stmt.condition, env)
                 const { whenTrue, whenFalse } = this.narrowFromCondition(stmt.condition, env)
-                const breaks = this.withBreakScope(() => this.visitBlock(stmt.body, whenTrue))
+                const breaks = this.withBreakScope(() => this.visitBlock(stmt.body, whenTrue), stmt.label)
                 // The loop is left either because the condition failed or by a
                 // `break`; `while true` has only the second way out.
                 const exits = isPossiblyFalsy(condType) ? [whenFalse, ...breaks] : breaks
@@ -3390,7 +3513,7 @@ class TypeAnalyzer {
                 const breaks = this.withBreakScope(() => {
                     this.visitBlock(stmt.body, bodyEnv)
                     this.infer(stmt.condition, bodyEnv)
-                })
+                }, stmt.label)
                 const { whenTrue } = this.narrowFromCondition(stmt.condition, bodyEnv)
                 this.applyLoopExits([whenTrue, ...breaks], env)
                 return
@@ -3411,7 +3534,8 @@ class TypeAnalyzer {
                     this.bindingType.set(id, t)
                     this.setBinding(bodyEnv, id, t)
                 }
-                this.visitBlock(stmt.body, bodyEnv)
+                // A `break` in it leaves this loop, not one around it.
+                this.withBreakScope(() => this.visitBlock(stmt.body, bodyEnv), stmt.label)
                 return
             }
 
@@ -3442,7 +3566,7 @@ class TypeAnalyzer {
                     this.bindPattern(stmt.variable, item, bodyEnv, stmt.kind === "const" ? "keep" : "widen")
                     this.loops.set(stmt, form)
                 }
-                this.visitBlock(stmt.body, bodyEnv)
+                this.withBreakScope(() => this.visitBlock(stmt.body, bodyEnv), stmt.label)
                 return
             }
 
@@ -3456,11 +3580,24 @@ class TypeAnalyzer {
                 // answers to the annotation alone, so a hint adds no errors.
                 const wanted = declared ?? this.contextualReturns[this.contextualReturns.length - 1]
                 if (wanted && stmt.argument) this.applyContext(stmt.argument, wanted)
+                const returned = stmt.argument && unwrapParens(stmt.argument)
+                if (!declared && this.tupleReturnStack[this.tupleReturnStack.length - 1] && returned?.type === "ArrayExpression"
+                    && returned.elements.length && !returned.elements.some(el => el.type === "SpreadElement")) {
+                    this.tupleArrays.set(returned, tuple(returned.elements.map(() => unknownType)))
+                }
                 const actual = stmt.argument ? this.infer(stmt.argument, env) : nilType
                 this.checkReturn(stmt, declared, actual, env)
                 if (this.returnTypes) this.returnTypes.push(actual)
                 return
             }
+
+            case "ThrowStatement":
+                this.infer(stmt.argument, env)
+                return
+
+            case "TryStatement":
+                this.visitTryStatement(stmt, env)
+                return
 
             case "ExportStatement":
                 this.visitStatement(stmt.declaration, env)
@@ -3543,11 +3680,16 @@ class TypeAnalyzer {
                 return
             }
 
-            case "BreakStatement":
+            case "BreakStatement": {
                 // Record the state at the jump: it is one of the ways the
-                // enclosing loop can be left, and it merges with the others.
-                this.breakStates[this.breakStates.length - 1]?.push(forkEnv(env))
+                // loop it leaves can be left — the enclosing one, or the one
+                // `break outer` names — and it merges with the others.
+                const left = stmt.label
+                    ? this.breakStates.findLast(scope => scope.label === stmt.label!.name)
+                    : this.breakStates[this.breakStates.length - 1]
+                left?.states.push(forkEnv(env))
                 return
+            }
 
             case "DeclareClassStatement":
                 this.checkClass(stmt)
@@ -3615,11 +3757,11 @@ class TypeAnalyzer {
 
     /** Run `visit` with a fresh place to collect `break` states, and return
      *  what it collected. */
-    private withBreakScope(visit: () => void): FlowEnv[] {
-        this.breakStates.push([])
+    private withBreakScope(visit: () => void, label?: Identifier): FlowEnv[] {
+        this.breakStates.push({ label: label?.name, states: [] })
         try {
             visit()
-            return this.breakStates[this.breakStates.length - 1]
+            return this.breakStates[this.breakStates.length - 1].states
         } finally {
             this.breakStates.pop()
         }
@@ -3641,30 +3783,39 @@ class TypeAnalyzer {
      *  it has to run *after* the block was visited: whether a call exits
      *  depends on its inferred return type. */
     private blockAlwaysExits(block: Block): boolean {
-        const last = block.statements[block.statements.length - 1]
-        if (!last) return false
-        switch (last.type) {
+        return block.statements.some(stmt => this.statementAlwaysExits(stmt))
+    }
+
+    /** Can control never get past `stmt`? See `blockAlwaysExits`. */
+    private statementAlwaysExits(stmt: Statement): boolean {
+        switch (stmt.type) {
             case "ReturnStatement":
             case "BreakStatement":
             case "ContinueStatement":
+            case "ThrowStatement":
                 return true
             case "DoStatement":
-                return this.blockAlwaysExits(last.body)
+                return this.blockAlwaysExits(stmt.body)
+            // Left by every way through: the block, and the `catch` that runs
+            // when it throws — or a `finally`, which runs whatever happened.
+            case "TryStatement":
+                if (stmt.finalizer && this.blockAlwaysExits(stmt.finalizer)) return true
+                return this.blockAlwaysExits(stmt.block) && (!stmt.handler || this.blockAlwaysExits(stmt.handler.body))
             case "CallStatement":
                 // `error(...)` is declared `-> never`, so the statement after
                 // it is unreachable.
-                return this.typeOf.get(last.expression)?.kind === "never"
+                return this.typeOf.get(stmt.expression)?.kind === "never"
             case "IfStatement":
-                return (last.alternate ? this.blockAlwaysExits(last.alternate) : this.exhaustiveIfs.has(last)) &&
-                    last.clauses.every(c => this.blockAlwaysExits(c.body))
+                return (stmt.alternate ? this.blockAlwaysExits(stmt.alternate) : this.exhaustiveIfs.has(stmt)) &&
+                    stmt.clauses.every(c => this.blockAlwaysExits(c.body))
             // `while (true)` with no `break` of its own is never left.
             case "WhileStatement": {
-                const test = this.typeOf.get(last.condition)
-                return test?.kind === "literal" && test.value === true && !this.breaksOut(last.body)
+                const test = this.typeOf.get(stmt.condition)
+                return test?.kind === "literal" && test.value === true && !this.breaksOut(stmt.body, stmt.label?.name)
             }
             case "RepeatStatement": {
-                const test = this.typeOf.get(last.condition)
-                return test?.kind === "literal" && test.value === false && !this.breaksOut(last.body)
+                const test = this.typeOf.get(stmt.condition)
+                return test?.kind === "literal" && test.value === false && !this.breaksOut(stmt.body, stmt.label?.name)
             }
             default:
                 return false
@@ -3674,6 +3825,35 @@ class TypeAnalyzer {
     /** Calls that gave back a type parameter read from a literal —
      *  `identity("x")` — which a `let` widens, as it would the literal. */
     private readonly widensInLet = new WeakSet<Expression>()
+
+    /** Callbacks whose return a call reads a type parameter from — see
+     *  `applyContext` — and, while one is walked, whether it is one. */
+    private readonly tupleReturns = new WeakSet<FunctionBody>()
+    private readonly tupleReturnStack: boolean[] = []
+
+    /** Function bodies whose return type is being worked out right now. */
+    private readonly inferringBodies = new Set<FunctionBody>()
+    /** Inside `typeof x` in a type. */
+    private typeQueryDepth = 0
+
+    /** `typeof f` read while `f`'s own return type is being worked out —
+     *  `let last: ReturnType<typeof f>` inside `f`: the answer depends on
+     *  itself. TypeScript says so, and reads it as `any`; so does this. */
+    private readsOwnReturn(node: Identifier, id: BindingId): boolean {
+        this.aheadDeclarations ??= this.indexAheadDeclarations()
+        const declared = this.aheadDeclarations.get(id)
+        if (declared?.type !== "FunctionDeclaration" || !this.inferringBodies.has(declared.func)) return false
+        if (this.emitDiagnostics && !this.ownReturnReported.has(node)) {
+            this.ownReturnReported.add(node)
+            this.diagnostics.push({
+                node,
+                message: `'${node.name}' is read in a type while its own return type is being worked out from it: write the return type of '${node.name}'`,
+            })
+        }
+        return true
+    }
+
+    private readonly ownReturnReported = new WeakSet<Identifier>()
 
     /** `if` chains with no `else` whose tests leave nothing for one. */
     private readonly exhaustiveIfs = new WeakSet<IfStatement>()
@@ -3690,17 +3870,75 @@ class TypeAnalyzer {
     }
 
     /** Is there a `break` that leaves this loop body — not one of a loop
-     *  written inside it, nor of a function? */
-    private breaksOut(block: Block): boolean {
-        const walk = (statements: readonly Statement[]): boolean => statements.some(s => {
+     *  written inside it, unless it names this loop's `label`, nor of a
+     *  function? */
+    private breaksOut(block: Block, label?: string): boolean {
+        const walk = (statements: readonly Statement[], nested: boolean): boolean => statements.some(s => {
             switch (s.type) {
-                case "BreakStatement": return true
-                case "IfStatement": return s.clauses.some(c => walk(c.body.statements)) || !!s.alternate && walk(s.alternate.statements)
-                case "DoStatement": return walk(s.body.statements)
+                case "BreakStatement": return s.label ? s.label.name === label : !nested
+                case "IfStatement": return s.clauses.some(c => walk(c.body.statements, nested)) || !!s.alternate && walk(s.alternate.statements, nested)
+                case "DoStatement": return walk(s.body.statements, nested)
+                case "TryStatement": return walk(s.block.statements, nested) || !!s.handler && walk(s.handler.body.statements, nested) ||
+                    !!s.finalizer && walk(s.finalizer.statements, nested)
+                case "WhileStatement":
+                case "RepeatStatement":
+                case "NumericForStatement":
+                case "GenericForStatement":
+                    return label !== undefined && walk(s.body.statements, true)
                 default: return false
             }
         })
-        return walk(block.statements)
+        return walk(block.statements, false)
+    }
+
+    /** A `try` may stop anywhere in its block, so the `catch` starts from the
+     *  state before it, less what the block changed: that may or may not have
+     *  happened. After the statement is whichever of the two finished. */
+    private visitTryStatement(stmt: TryStatement, env: FlowEnv): void {
+        const before = forkEnv(env)
+        const blockEnv = forkEnv(env)
+        this.visitBlock(stmt.block, blockEnv)
+        const finished: FlowEnv[] = []
+        if (!this.blockAlwaysExits(stmt.block)) finished.push(blockEnv)
+
+        // What the block may have changed: its narrowing is undone, and a
+        // name it assigns may still be unassigned.
+        const thrown = forkEnv(before)
+        for (const [key, type] of before) {
+            if (blockEnv.get(key) !== type && !key.startsWith("!")) thrown.delete(key)
+        }
+        if (stmt.handler) {
+            const handlerEnv = forkEnv(thrown)
+            const param = stmt.handler.param
+            if (param) {
+                let caught: Type = unknownType
+                if (param.typeAnnotation) {
+                    const written = this.resolveType(param.typeAnnotation)
+                    if (written.kind === "any" || written.kind === "unknown") caught = written
+                    else if (this.emitDiagnostics) {
+                        this.diagnostics.push({
+                            node: param.typeAnnotation,
+                            message: "What a 'catch' is handed may be anything: its type can only be 'unknown' or 'any'",
+                        })
+                    }
+                }
+                this.bindPattern(param, caught, handlerEnv, "keep")
+            }
+            this.visitBlock(stmt.handler.body, handlerEnv)
+            if (!this.blockAlwaysExits(stmt.handler.body)) finished.push(handlerEnv)
+        }
+
+        const base = (key: RefKey): Type => before.get(key) ?? this.declaredAtRef(key)
+        const after = finished.length ? finished.reduce((a, b) => mergeEnv(a, b, base)) : blockEnv
+        if (stmt.finalizer) {
+            // A `finally` also runs when nothing finished — on a throw that
+            // goes on, or a `return` — so it starts from no more than that.
+            const finalEnv = finished.length ? after : thrown
+            this.visitBlock(stmt.finalizer, finalEnv)
+            if (finalEnv !== after) return
+        }
+        env.clear()
+        for (const [key, type] of after) env.set(key, type)
     }
 
     private visitIfStatement(stmt: IfStatement, env: FlowEnv): void {
@@ -3795,7 +4033,7 @@ class TypeAnalyzer {
             return p.optional ? optional(t) : t
         }
         if (p.rest) return arrayOf(unknownType)
-        if (p.pattern) return this.patternToType(p.pattern, env)
+        if (p.pattern) return this.contextualParams.get(p) ?? this.patternToType(p.pattern, env)
         if (p.default) return widen(this.infer(p.default, env))
         const contextual = this.contextualParams.get(p)
         if (contextual) return contextual
@@ -3930,9 +4168,15 @@ class TypeAnalyzer {
         if (!e.func.returnType && !e.func.predicate) {
             const returns = signatures.map(s => s.returns).filter(t => !containsTypeParam(t))
             if (returns.length) this.contextualReturnOf.set(e.func, union(returns))
+            // What it gives back is what the call reads a type parameter
+            // from (`map`'s `U`): a list written there is read as the tuple
+            // it is — `([k, v]) => [k, v * 2]` gives pairs, not mixed lists.
+            if (signatures.every(sig => sig.returns.kind === "typeParam")) this.tupleReturns.add(e.func)
         }
         e.func.params.forEach((p, k) => {
-            if (p.typeAnnotation || p.pattern || p.default) return
+            // A pattern takes its type from the contract too, as a name does:
+            // `entries:map(([k, v]) => ...)` knows what `k` and `v` are.
+            if (p.typeAnnotation || p.default || (p.pattern && patternAnnotated(p.pattern))) return
             const candidates: Type[] = []
             for (const signature of signatures) {
                 const t = signature.params[k]?.type ?? signature.varargs
@@ -4176,11 +4420,13 @@ class TypeAnalyzer {
             ? withThis(declared, this.selfTypeOf(this.currentClass))
             : declared)
         this.contextualReturns.push(this.contextualReturnOf.get(func))
+        this.tupleReturnStack.push(this.tupleReturns.has(func))
         try {
             return body()
         } finally {
             this.declaredReturns.pop()
             this.contextualReturns.pop()
+            this.tupleReturnStack.pop()
         }
     }
 
@@ -4189,7 +4435,7 @@ class TypeAnalyzer {
         for (const p of func.params) {
             if (p.pattern) {
                 const type = this.paramType(p, env)
-                this.bindPattern(p.pattern, type, env, "widen")
+                this.bindPattern(p.pattern, type, env, "keep")
                 this.correlateDestructuring(p.pattern, type, env)
                 continue
             }
@@ -5014,13 +5260,17 @@ class TypeAnalyzer {
             // sees `p`'s type rather than `any`.
             const bodyEnv = functionEnv(env)
             for (const p of func.params) {
-                if (p.pattern) this.bindPattern(p.pattern, this.paramType(p, bodyEnv), bodyEnv, "widen")
+                if (p.pattern) this.bindPattern(p.pattern, this.paramType(p, bodyEnv), bodyEnv, "keep")
                 else {
                     const id = this.bindingIdByName(p.name, p)
                     if (id !== undefined) this.setBinding(bodyEnv, id, this.paramType(p, bodyEnv))
                 }
             }
             let returns: Type
+            // While what it returns is being worked out, a type that asks
+            // for it (`ReturnType<typeof f>` inside `f`) cannot have it.
+            if (!func.returnType) this.inferringBodies.add(func)
+            try {
             if (func.returnType) {
                 returns = this.resolveType(func.returnType)
             } else if (func.predicate) {
@@ -5048,6 +5298,9 @@ class TypeAnalyzer {
                     // read its `return`s where they stand instead.
                     return collected.length ? union(collected) : this.inferReturnType(func.body, bodyEnv)
                 }))
+            }
+            } finally {
+                this.inferringBodies.delete(func)
             }
             return this.withRest(fn(
                 params, returns,
@@ -5394,6 +5647,10 @@ class TypeAnalyzer {
                     walk(s.body)
                 } else if (s.type === "RepeatStatement") {
                     walk(s.body)
+                } else if (s.type === "TryStatement") {
+                    walk(s.block)
+                    if (s.handler) walk(s.handler.body)
+                    if (s.finalizer) walk(s.finalizer)
                 }
             }
         }
@@ -5949,6 +6206,9 @@ class TypeAnalyzer {
                     break
                 case "object":
                     if (part.properties.has(name)) continue
+                    // What its metatable gives it, it has, whatever its keys
+                    // are: `{ [Player]: number }:values()`.
+                    if (this.metatableMethod(part, name)) continue
                     // An indexer covers the name only if its keys take it:
                     // `{ [number]: V }` has no `.b`.
                     if (part.indexer && !isAssignable(literal(name), part.indexer.key)) break
@@ -6187,10 +6447,11 @@ class TypeAnalyzer {
         if (t.kind === "typeParam" && t.constraint) return this.indexedType(t.constraint, index)
         if (t.kind === "array") return t.element
         if (t.kind === "tuple") {
+            // Past its places, a tuple with a rest holds one of the rest.
             if (index.kind === "literal" && typeof index.value === "number") {
-                return t.elements[index.value - 1] ?? nilType
+                return t.elements[index.value - 1] ?? t.rest ?? nilType
             }
-            return union(t.elements)
+            return union([...t.elements, ...(t.rest ? [t.rest] : [])])
         }
         if (t.kind === "object") {
             if (index.kind === "literal" && typeof index.value === "string") {
@@ -6308,6 +6569,7 @@ class TypeAnalyzer {
             case "Identifier": {
                 const id = this.bindingIdOf(expr)
                 if (id === undefined) return anyType
+                if (this.typeQueryDepth > 0 && this.readsOwnReturn(expr, id)) return anyType
                 const unassigned = env.get(unassignedKey(id))
                 if (unassigned && isPossiblyTruthy(unassigned)) this.reportUnassigned(expr)
                 const t = this.currentType(id, env)
@@ -6473,11 +6735,17 @@ class TypeAnalyzer {
                     if (unwrapParens(expr.left).type === "StringLiteral") this.expectedTypeOf.set(unwrapParens(expr.left), r)
                 }
                 switch (op) {
-                    case "..": {
+                    case "+": {
                         const answered = this.operatorResult(expr, op, l, r)
-                        if (answered) return answered
+                        if (answered) {
+                            this.joins.delete(expr)
+                            return answered
+                        }
+                        const joined = this.joinOf(expr, l, r)
+                        if (joined) return joined
+                        this.joins.delete(expr)
                         this.checkOperands(expr, op, l, r)
-                        return stringType
+                        return this.arithmeticOn([l, r])
                     }
                     case "<": case ">": case "<=": case ">=":
                         if (!this.checkComparison(expr, op, l, r)) this.checkOperands(expr, op, l, r)
@@ -6487,7 +6755,7 @@ class TypeAnalyzer {
                             this.checkOverlap(expr, op, l, r)
                         }
                         return booleanType
-                    case "+": case "-": case "*": case "/": case "//": case "%": case "^": {
+                    case "-": case "*": case "/": case "//": case "%": case "^": {
                         const answered = this.operatorResult(expr, op, l, r)
                         if (answered) return answered
                         this.checkOperands(expr, op, l, r)
@@ -7334,9 +7602,17 @@ class TypeAnalyzer {
         const context = this.expectedTypeOf.get(expr)
         const genericContext = !asConst && context !== undefined && containsTypeParam(context)
         const accessors: Extract<TableExpression["fields"][number], { type: "TableFieldAccessor" }>[] = []
+        const methods: Extract<TableExpression["fields"][number], { type: "TableFieldNamed" }>[] = []
         for (const field of expr.fields) {
             if (field.type === "TableFieldAccessor") {
                 accessors.push(field)
+                continue
+            }
+            if (field.type === "TableFieldNamed" && field.method && field.value.type === "FunctionExpression") {
+                // Read once the rest is known: `this` is the object.
+                methods.push(field)
+                put(field.key.type === "Identifier" ? field.key.name : field.key.value,
+                    { type: this.writtenSignature(field.value.func), optional: false, readonly: asConst })
                 continue
             }
             if (field.type === "TableFieldNamed") {
@@ -7390,6 +7666,22 @@ class TypeAnalyzer {
                 }
             }
             this.checkDuplicateKey(expr, field, variants[0].entries)
+        }
+        if (methods.length) {
+            // `this` in a method is the object: its other members as they
+            // are, the methods as far as what they are written with says.
+            const first = variants[0]
+            const draft = typeParam(THIS_TYPE, objectType(first.entries, first.indexer))
+            this.withSelfType(draft, () => {
+                for (const field of methods) {
+                    const name = field.key.type === "Identifier" ? field.key.name : field.key.value
+                    const type = this.infer(field.value, env)
+                    for (const variant of variants) {
+                        const at = variant.entries.findIndex(([key]) => key === name)
+                        if (at >= 0) variant.entries[at] = [name, { ...variant.entries[at][1], type }]
+                    }
+                }
+            })
         }
         if (accessors.length) {
             // Read once; every way the spreads went has the same accessors.
@@ -8405,6 +8697,18 @@ class TypeAnalyzer {
     /** Type of the `self` parameter for the method currently being analysed. */
     private selfType: Type | undefined
 
+    /** A function's type as far as its annotations say: what a method is
+     *  taken to be while the object it belongs to is still being read. */
+    private writtenSignature(func: FunctionBody): Type {
+        const params = func.params.filter(p => !p.rest).map(p => ({
+            name: p.name,
+            type: p.typeAnnotation ? this.resolveType(p.typeAnnotation) : anyType,
+            optional: p.optional || p.default !== undefined,
+        }))
+        const rest = func.params.find(p => p.rest)
+        return fn(params, func.returnType ? this.resolveType(func.returnType) : anyType, rest ? anyType : undefined)
+    }
+
     private withSelfType(t: Type | undefined, fn: () => void): void {
         const saved = this.selfType
         this.selfType = t
@@ -8424,35 +8728,113 @@ class TypeAnalyzer {
     }
 
     /** `a == b` where nothing `a` can hold is anything `b` can: the answer is
-     *  always the same, so the comparison was not the one meant. Only types
-     *  that say what they hold take part — `any`, `unknown` and a type
-     *  parameter say nothing, and a table compares by identity, so two of them
-     *  may well be the same table. */
+     *  always the same, so the comparison was not the one meant — `n == "1"`
+     *  of a number, `"a" == "b"`, `s == "x"` of a string that is not `"x"`,
+     *  a table against a string. What each side can be is read as Luau holds
+     *  it (see `runtimeValues`); a side that says nothing about it — `any`, a
+     *  type parameter with no constraint — is never judged. */
     private checkOverlap(node: Expression, op: string, l: Type, r: Type): void {
         if (!this.emitDiagnostics) return
-        const left = this.expand(l)
-        const right = this.expand(r)
-        const judged = (t: Type): boolean => {
-            const parts = t.kind === "union" ? t.types.map(m => this.expand(m)) : [t]
-            // `Exclude<string, "a">` says what it holds as well as `string`
-            // does, and what it does not: `== "a"` is never true of it.
-            return parts.every(p => p.kind === "literal" || p.kind === "primitive" ||
-                (p.kind === "difference" && this.expand(p.base).kind === "primitive"))
-        }
         // A test against nil is never idle: a map's value and an array's
         // element are read as what they hold, so nil is exactly what a type
         // saying otherwise may still turn out to be.
         const isNil = (t: Type): boolean => t.kind === "primitive" && t.name === "nil"
-        if (isNil(left) || isNil(right)) return
-        if (!judged(left) || !judged(right)) return
-        if (isAssignable(left, right) || isAssignable(right, left)) return
-        // A literal against its own primitive overlaps even where neither is
-        // assignable to the other, which `isAssignable` already answers; what
-        // is left is two sets with nothing in common.
+        if (isNil(this.expand(l)) || isNil(this.expand(r))) return
+        const left = this.runtimeValues(l)
+        const right = this.runtimeValues(r)
+        // Nothing to judge, or nothing there at all: a branch no value reaches.
+        if (!left?.length || !right?.length) return
+        if (left.some(a => right.some(b => runtimeOverlap(a, b)))) return
+        this.alwaysTheSame(node, op, l, r)
+    }
+
+    /** What a value of `t` can be at run time, as Luau tells values apart:
+     *  by what `type()` says of it, and for a scalar by which one it is. A
+     *  table and a function compare by identity, so any two of a kind may be
+     *  the same. `undefined` when the type does not say. */
+    private runtimeValues(t: Type, depth = 0): RuntimeValue[] | undefined {
+        if (depth > 8) return undefined
+        const x = this.expand(t)
+        switch (x.kind) {
+            case "never": return []
+            case "unknown": return [{ tag: "*" }]
+            case "literal": return [{ tag: x.base, value: x.value }]
+            case "primitive":
+                // `object` is anything that is not a primitive.
+                return x.name === "object" ? [{ tag: "table" }, { tag: "function" }] : [{ tag: x.name }]
+            case "templateLiteral": return [{ tag: "string" }]
+            case "object": case "array": case "tuple": return [{ tag: "table" }]
+            case "function": return [{ tag: "function" }]
+            case "typeParam": return x.constraint ? this.runtimeValues(x.constraint, depth + 1) : undefined
+            case "difference": {
+                const base = this.runtimeValues(x.base, depth + 1)
+                return base?.map(v => ({ ...v, out: v.out ? union([v.out, x.excluded]) : x.excluded }))
+            }
+            case "union": {
+                const out: RuntimeValue[] = []
+                for (const member of x.types) {
+                    const values = this.runtimeValues(member, depth + 1)
+                    if (!values) return undefined
+                    out.push(...values)
+                }
+                return out
+            }
+            default: return undefined
+        }
+    }
+
+    /** A warning, not an error: the program means something, only not what
+     *  was meant. */
+    private alwaysTheSame(node: Expression, op: string, l: Type, r: Type): void {
         this.diagnostics.push({
             node,
+            severity: "warning",
             message: `This comparison is always ${op === "==" ? "false" : "true"}: '${formatType(l)}' and '${formatType(r)}' have no value in common`,
         })
+    }
+
+    /** `a + b` where a side is a string: the two joined, as TypeScript joins
+     *  them, with the other side a string or a number — which Luau writes
+     *  into one. A boolean, a table or nil it does not, so those are said
+     *  here, with how to write them. Where a side may be either a string or
+     *  a number, or is `any`, which `+` it is is the values' to say: the
+     *  compiler asks them as the program runs. `undefined` when both sides
+     *  are numbers, or as good as: an ordinary addition. */
+    private joinOf(node: BinaryExpression, l: Type, r: Type): Type | undefined {
+        if (this.increments.has(node)) return undefined
+        const kind = (t: Type): "string" | "number" | "either" | "any" | "never" | "other" => {
+            const x = this.expand(t)
+            if (x.kind === "any") return "any"
+            if (x.kind === "never") return "never"
+            if (isAssignable(x, stringType)) return "string"
+            if (isAssignable(x, numberType)) return "number"
+            if (isAssignable(x, union([stringType, numberType]))) return "either"
+            return "other"
+        }
+        const [left, right] = [kind(l), kind(r)]
+        const sides = [left, right]
+        if (sides.includes("string")) {
+            const other = left === "string" ? right : left
+            if (other === "other") {
+                if (this.emitDiagnostics) {
+                    const t = left === "string" ? r : l
+                    this.diagnostics.push({
+                        node,
+                        message: `'+' joins a string with a string or a number, not '${formatType(t)}': write it in a template string, \`\${x}\`, or call 'tostring(x)'`,
+                    })
+                }
+                this.joins.set(node, "dynamic")
+                return stringType
+            }
+            this.joins.set(node, other === "any" ? "dynamic" : "concat")
+            return stringType
+        }
+        // Neither is surely a string, but one may be.
+        if (sides.includes("either") || (sides.includes("any") && sides.every(s => s === "any" || s === "number" || s === "either"))) {
+            this.joins.set(node, "dynamic")
+            return sides.includes("any") ? anyType : union([stringType, numberType])
+        }
+        return undefined
     }
 
     /** What an operator takes, where no metamethod answered for it. Luau
@@ -8465,8 +8847,6 @@ class TypeAnalyzer {
             const x = this.expand(t)
             if (x.kind === "any" || x.kind === "never") return true
             switch (op) {
-                // `..` joins strings, and Luau writes a number into one.
-                case "..": return isAssignable(x, stringType) || isAssignable(x, numberType)
                 // `#` counts a string's bytes or a table's entries.
                 case "#": return x.kind === "array" || x.kind === "tuple" || x.kind === "object"
                     || isAssignable(x, stringType)

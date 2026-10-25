@@ -8,7 +8,7 @@ const shorthand = { x, y }
 const stringKeys = { ["data-id"]: 42, ["order"]: "first" }
 
 const key = "dynamic"
-const computed = { [key]: true, [key .. "2"]: false }
+const computed = { [key]: true, [key + "2"]: false }
 
 const base = { a: 1, b: 2 }
 const extended = { ...base, c: 3, b: 20 }

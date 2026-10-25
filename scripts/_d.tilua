@@ -1,0 +1,21 @@
+function f(n: number, s: string, a: any, e: string | number, b: boolean, v: Vector3Like, lit: "x") {
+    const r1 = "a" + "b"
+    const r2 = s + n
+    const r3 = n + s
+    const r4 = n + n
+    const r5 = a + 1
+    const r6 = e + 1
+    const r7 = "x" + a
+    const r8 = s + b
+    const r9 = 1 + 2 + "a"
+    const r10 = lit + "y"
+    let r11 = ""
+    r11 += "z"
+    r11 += 1
+    let r12 = 0
+    r12 += 1
+    const r13 = "a" .. "b"
+    const r14 = v + v
+    const r15 = "a" + "b" == "ab"
+}
+type Vector3Like = { __add: (a: Vector3Like, b: Vector3Like) => Vector3Like }

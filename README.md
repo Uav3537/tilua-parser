@@ -355,9 +355,19 @@ take any value, not only one the array's type already holds — and `includes`
 is a guard: `if (modes:includes(s))` narrows `s` to a mode. `concat` may join
 arrays of other types (`(T | U)[]`). `keys`, `values` and `entries` answer
 arrays rather than JavaScript's iterators — `for (const [i, v] in
-xs:entries())` — counting from 1. The ones that only read take a read-only
-list too (`readonly T[]`, what `as const` makes), as TypeScript's
-`ReadonlyArray` does; the ones that change it do not. A table's are `keys`, `values` and `entries`, which answer a tuple
+xs:entries())` — counting from 1, and say all that is known: a tuple's are
+tuples, `["a", 1] as const` having keys `[1, 2]` and entries `[[1, "a"], [2,
+1]]`, where an array's are `number[]`, `T[]` and `[number, T][]`. The ones
+that only read take a read-only list too (`readonly T[]`, what `as const`
+makes), as TypeScript's `ReadonlyArray` does; the ones that change it do not.
+`fromEntries` goes the other way, as `Object.fromEntries` does, written as a
+method of the list it takes: `[["a", 1], ["b", 2]]:fromEntries()` is `{ a: 1,
+b: 2 }` — each pair of a tuple there, each pair of an array maybe, so an
+array's keys are optional, and a plain `string` key makes an indexer. So
+`stats:entries():map(([k, v]) => [k, v * 2]):fromEntries()` is the stats
+doubled, as typed as they were: a destructured callback parameter takes its
+type from the call, a list a callback returns where the call reads its result
+from is the tuple it is, and `map` keeps a tuple's length. A table's are `keys`, `values` and `entries`, which answer a tuple
 in the order the table's type wrote its members, not `string[]` as
 JavaScript's `Object.keys` does; the analyzer supplies that order as
 `ObjectKeys<T>`, `ObjectValues<T>` and `ObjectEntries<T>`. A member of a
@@ -500,10 +510,24 @@ ternary. Parentheses end a chain. A chain cannot be assigned to (`a?.b = 1` is
 an error). A chain that got through narrows what it tested: inside
 `if (part?.Parent)`, and `if (part?.Name == "Door")`, `part` is not nil.
 
+**`+` joins strings**, as in TypeScript — tilua has no `..`, which reads as
+the `+` it meant, and is reported. A string on either side makes it a join,
+and the other side is a string or a number, which Luau writes into one:
+`"a" + "b" == "ab"`, `"x" + 1` is `"x1"`, `1 + 2 + "a"` is `"3a"`. A boolean,
+a table or `nil` is not joined — write it in a template string, or call
+`tostring`. Two numbers add, as does a value whose metatable has `__add`.
+Where only the values can say — a side that is `any`, or `string | number` —
+the compiler asks them as the program runs. `s += "x"` joins as `s + "x"`
+does; `n++` is an increment, and only of a number.
+
 **`??`** — `a ?? b` is `a`, or `b` where `a` is nil; `b` is read only then.
 Unlike `a or b` a `false` stays, which is what a `boolean | nil` wants:
 `settings.enabled ?? true`. As in TypeScript it does not mix with `and` or
 `or` without parentheses.
+
+**`??=`** — `t ??= v` assigns `v` only where `t` is nil, and reads `v` only
+then: `cache[key] ??= {}`, where Lua writes `cache[key] = cache[key] or {}` —
+which also replaces a `false`. After it, `t` is not nil.
 
 **`in`** — `"key" in t` asks whether `t` holds something at `key`: in Lua a
 key whose value is nil is a key that is not there, so it is `t.key ~= nil`.
@@ -949,7 +973,7 @@ already get.
 
 **Narrowing** follows TypeScript's model: references (`x`, `x.a.b`, `x["k"]`)
 rather than just variables, discriminated unions at any depth, `and`/`or`,
-early return, `break`/`continue`, `error()` (declared `=> never`), user type
+early return, `break`/`continue`, `throw`, `error()` (declared `=> never`), user type
 guards (`v is T`), and assertion signatures (`asserts v`).
 
 Reading a member of, indexing or calling a value that may be nil is an error
@@ -961,10 +985,10 @@ non-nil part.
 Only `nil` and `false` are falsy — `0` and `""` are truthy, unlike JavaScript.
 
 **What Luau raises on is said first.** An operator no metamethod answers takes
-numbers — `..` a string or a number, `#` a string or a table — so `n * 2` with
-`n` a `number | nil` is an error where it is written rather than where it runs.
-A comparison two types can never settle (`s == "c"` with `s` a `"a" | "b"`) is
-one too; a test against `nil` never is, since a map's value and an array's
+numbers — `+` a string and a string or a number, `#` a string or a table — so
+`n * 2` with `n` a `number | nil` is an error where it is written rather than
+where it runs. A comparison two types can never settle is a warning (see
+below); a test against `nil` never is, since a map's value and an array's
 element are read as what they hold. A name holds nothing until its line has
 run, a list is indexed by position (`xs["a"]` is not a read), `readonly T[]`
 rules out writing to the list as well as passing it where a `number[]` is
@@ -1016,7 +1040,20 @@ nil>` and `Exclude<any, nil>` stay, as a value known not to be `nil`, and so
 does `Exclude<string, "a">`, a string that is not `"a"` — of which `if (s ==
 "a")` is reported as a test that can never pass. Over a union it drops the
 members it takes whole (`Exclude<"a" | "b", "b">` is `"a"`), and `boolean` is
-the union `true | false`.
+the union `true | false`. A narrowing keeps it: inside `if (a ~= 1)` an
+`unknown` is `Exclude<unknown, 1>`, and after `if (s == "") return` a string
+is `Exclude<string, "">`. Where the branches meet again what was taken out is
+put back — `Exclude<unknown, 1 | 2> | 2` is `Exclude<unknown, 1>`, and once all
+of it is back, `unknown`.
+
+**A comparison that always comes out the same** is a warning, not an error:
+the program means something, only not what was meant. It is judged by what
+each side can be at run time — which of Luau's types, and which value — so it
+covers every such pair: `n == "1"` of a number, `"a" | "b"` against `"c"`, a
+table against a string, a function against a number, and `s == ""` again
+after `if (s == "") return`. A side whose type says nothing — `any`, `unknown`
+as a whole, a type parameter with no constraint — is never judged, and
+neither are two tables, which compare by identity, nor a test against `nil`.
 tilua has no `A - B` in types; `Exclude` is the one way to write it.
 
 A call may write its type arguments out — `find<Folder>("Remotes")`,
@@ -1054,12 +1091,71 @@ back, as TypeScript's do.
 `typeof v` operator in an expression, which answers a string as the program
 runs.
 
+**Methods in an object** — `{ m() { ... } }`, as a class writes one. A method
+takes the object as `this` and is called with `:`, as `m(): R` in an object
+type is: `Counter:increment(2)`. It fits an interface's method.
+
+```luau
+const Counter = {
+    count: 0,
+    increment(by: number): number {
+        this.count += by
+        return this:current()
+    },
+    current(): number { return this.count },
+}
+```
+
+**Labels** — `outer: for (...)`, `while` or `repeat`, and `break outer` or
+`continue outer` from a loop inside it, as in JavaScript. A label is the
+loops around a `break`'s only: one inside a function written in the loop
+cannot name it.
+
+```luau
+outer: for (const row in grid) {
+    for (const cell in row) {
+        if (cell == target) break outer
+    }
+}
+```
+
+**`throw` and `try`** — as JavaScript writes them. Anything may be thrown, a
+string most often, which is what every error the engine raises is; what a
+`catch` is handed is exactly what was thrown, so it is `unknown`:
+
+```luau
+function parse(text: string): number {
+    const n = tonumber(text)
+    if (n == nil) throw `not a number: ${text}`
+    return n
+}
+
+try {
+    print(parse(input))
+} catch (e) {
+    if (typeof e == "string") warn(e)
+} finally {
+    print("done")
+}
+```
+
+`catch` and `finally` may each be left out, not both; `catch { }` takes
+nothing. All four words are soft keywords, so a promise's `p:catch(f)` and
+`p:finally(f)` are methods still. A `throw` is an exit like a `return`: it
+narrows what follows it, and code after it is unreachable.
+
+**Unreachable code** — what follows a `return`, `break`, `continue` or
+`throw` in its block, or a call that never returns, is no error, as in
+JavaScript: it is read and typed, `TypeAnalysis.unreachable` lists it, and an
+editor shows it dimmed. A bare `return` returns nothing when a statement begins
+the line below it; otherwise what is below is its value, as in Lua.
+
 **Modules** — `import` / `export`, export lists, re-exports and `export *`.
 `export type { A }` (and `export type { A } from "./m"`) exports types and
 nothing else; naming a value there is an error.
 
 **What TypeScript has and tilua does not** says what to write instead, rather
-than reading as something else: `enum`, `namespace`, `try` / `catch`,
+than reading as something else: `enum`, `namespace`,
 `switch`, `declare module` and `declare global` are each reported with the
 tilua spelling. (A name followed by `{` is otherwise a call with a table
 argument, so `enum Color { ... }` would have meant `enum(Color { ... })`.)

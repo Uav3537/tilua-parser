@@ -1,5 +1,5 @@
 a: string | number
-afterOr: string | number
+afterOr: Exclude<string, "x"> | Exclude<number, 1>
 area: (shape: Shape) => number
 bag: Bag
 branches: (a: string | number) => nil

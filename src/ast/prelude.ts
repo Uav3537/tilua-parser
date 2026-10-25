@@ -50,6 +50,22 @@ type Mutable<T> = { -readonly [K in keyof T]: T[K] }
 type InstanceType<T> = T extends { new: (...args: any[]) => infer R } ? R : never
 type ConstructorParameters<T> = T extends { new: (...args: infer P) => any } ? P : never
 
+-- A list's positions, values and \`[position, value]\` pairs, each a new list:
+-- a tuple's place by place, an array's as arrays.
+type ListKeys<L> = { -readonly [K in keyof L]: K }
+type MappedList<L, U> = { -readonly [K in keyof L]: U }
+type ListValues<L> = { -readonly [K in keyof L]: L[K] }
+type ListEntries<L> = { -readonly [K in keyof L]: [K, L[K]] }
+
+-- The object a list of \`[key, value]\` pairs makes: each pair's key holding
+-- that pair's value. The pairs of a list of any length may each be missing.
+type EntriesObject<L> = {
+    [E in L[number] as E extends readonly [infer K, unknown] ? K : never]: E extends readonly [unknown, infer V] ? V : never
+}
+type FromEntries<L> = L extends readonly unknown[]
+    ? number extends L["length"] ? Partial<EntriesObject<L>> : EntriesObject<L>
+    : never
+
 type Pick<T, K> = { [P in K]: T[P] }
 type Omit<T, K> = Pick<T, Exclude<keyof T, K>>
 type Record<K, V> = { [P in K]: V }
@@ -113,7 +129,8 @@ declare metatable<T> T[]: {
         findIndex: (self: readonly T[], test: (value: T, index: number) => boolean) => number | nil,
         filter: (<S extends T>(self: readonly T[], test: (value: T, index: number) => value is S) => S[])
             & ((self: readonly T[], test: (value: T, index: number) => boolean) => T[]),
-        map: <U>(self: readonly T[], transform: (value: T, index: number) => U) => U[],
+        -- A tuple maps to a tuple as long: \`[1, 2]:map(f)\` is \`[U, U]\`.
+        map: <U, L extends readonly T[]>(self: L, transform: (value: T, index: number) => U) => MappedList<L, U>,
         forEach: (self: readonly T[], visit: (value: T, index: number) => nil) => nil,
         some: (self: readonly T[], test: (value: T, index: number) => boolean) => boolean,
         every: (self: readonly T[], test: (value: T, index: number) => boolean) => boolean,
@@ -127,10 +144,19 @@ declare metatable<T> T[]: {
         slice: (self: readonly T[], start?: number, stop?: number) => T[],
         flat: (self: readonly T[]) => T[],
         -- JavaScript's, as arrays rather than iterators: \`for (const [i, v] in
-        -- xs:entries())\` walks positions and values, counting from 1.
-        keys: (self: readonly T[]) => number[],
-        values: (self: readonly T[]) => T[],
-        entries: (self: readonly T[]) => [number, T][],
+        -- xs:entries())\` walks positions and values, counting from 1. Unlike
+        -- JavaScript's they say all that is known: of a tuple, its positions
+        -- and what each holds — \`["a", 1] as const\` has keys \`[1, 2]\` and
+        -- entries \`[[1, "a"], [2, 1]]\`; of an array, \`number[]\`, \`T[]\`
+        -- and \`[number, T][]\`.
+        keys: <L extends readonly T[]>(self: L) => ListKeys<L>,
+        values: <L extends readonly T[]>(self: L) => ListValues<L>,
+        entries: <L extends readonly T[]>(self: L) => ListEntries<L>,
+        -- JavaScript's \`Object.fromEntries\`, as a method of the list it takes:
+        -- \`[["a", 1], ["b", 2]]:fromEntries()\` is \`{ a: 1, b: 2 }\`. A tuple's
+        -- entries are each there; an array's may be or not, so its keys are
+        -- optional — and a key that is a plain \`string\` makes an indexer.
+        fromEntries: <L extends readonly (readonly [unknown, unknown])[]>(self: L) => FromEntries<L>,
         reverse: (self: T[]) => T[],
         sort: (self: T[], compare?: (a: T, b: T) => boolean) => T[],
         push: (self: T[], ...args: T[]) => number,

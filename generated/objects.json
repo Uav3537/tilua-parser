@@ -418,7 +418,7 @@
               "type": "TableFieldComputed",
               "key": {
                 "type": "BinaryExpression",
-                "operator": "..",
+                "operator": "+",
                 "left": {
                   "type": "Identifier",
                   "name": "key",
@@ -440,8 +440,8 @@
                     "end": 11
                   },
                   "column": {
-                    "start": 41,
-                    "end": 44
+                    "start": 40,
+                    "end": 43
                   }
                 },
                 "line": {
@@ -450,7 +450,7 @@
                 },
                 "column": {
                   "start": 34,
-                  "end": 44
+                  "end": 43
                 }
               },
               "value": {
@@ -461,8 +461,8 @@
                   "end": 11
                 },
                 "column": {
-                  "start": 47,
-                  "end": 52
+                  "start": 46,
+                  "end": 51
                 }
               }
             }
@@ -473,7 +473,7 @@
           },
           "column": {
             "start": 18,
-            "end": 54
+            "end": 53
           }
         },
         "line": {
@@ -482,7 +482,7 @@
         },
         "column": {
           "start": 1,
-          "end": 54
+          "end": 53
         }
       },
       {

@@ -890,27 +890,63 @@ function memberKey(t: Type): string {
 }
 
 export function union(types: Type[]): Type {
-    const flat: Type[] = []
-    for (const t of types) {
-        if (t.kind === "union") flat.push(...t.types)
-        else flat.push(t)
+    const deduped = (list: Type[]): Type[] => {
+        const flat: Type[] = []
+        for (const t of list) {
+            if (t.kind === "union") flat.push(...t.types)
+            else flat.push(t)
+        }
+        // drop `never`, dedupe by structural key
+        const seen = new Map<string, Type>()
+        for (const t of flat) {
+            if (t.kind === "never") continue
+            const key = memberKey(t)
+            if (!seen.has(key)) seen.set(key, t)
+        }
+        return [...seen.values()]
     }
+    const parts = deduped(mergeDifferences(deduped(types)))
     // `any` and `unknown` are both absorbing: everything is assignable to
     // them, so a union with either is just that type. `any` wins over
     // `unknown`, matching TypeScript.
-    if (flat.some(t => t.kind === "any")) return anyType
-    if (flat.some(t => t.kind === "unknown")) return unknownType
-    // drop `never`, dedupe by structural key
-    const seen = new Map<string, Type>()
-    for (const t of flat) {
-        if (t.kind === "never") continue
-        const key = memberKey(t)
-        if (!seen.has(key)) seen.set(key, t)
-    }
-    let members = reduceSubtypes([...seen.values()])
+    if (parts.some(t => t.kind === "any")) return anyType
+    if (parts.some(t => t.kind === "unknown")) return unknownType
+    let members = reduceSubtypes(parts)
     if (members.length === 0) return neverType
     if (members.length === 1) return members[0]
     return { kind: "union", types: members }
+}
+
+/** What was taken out of a difference, put back: `Exclude<X, 1 | 2> | 2` is
+ *  `Exclude<X, 1>`, and `Exclude<unknown, number> | Exclude<number, 1>` is
+ *  `Exclude<unknown, 1>`. Narrowing a value and merging the branches back
+ *  together makes exactly these: without this, `if (a == 2) { }` inside
+ *  `if (a ~= 1)` left `a` as `Exclude<unknown, 1 | 2> | 2` after it, where
+ *  `Exclude<unknown, 1>` is meant — and once every part is back, the base
+ *  itself. */
+function mergeDifferences(members: Type[]): Type[] {
+    for (let i = 0; i < members.length; i++) {
+        const taken = members[i]
+        if (taken.kind !== "difference") continue
+        const excluded = taken.excluded.kind === "union" ? taken.excluded.types : [taken.excluded]
+        for (let j = 0; j < members.length; j++) {
+            const back = members[j]
+            if (i === j) continue
+            // What it puts back: a member of what was taken out, whole — or
+            // all of one but what it takes out in turn.
+            const whole = back.kind === "difference" ? back.base : back
+            const at = excluded.findIndex(e => memberKey(e) === memberKey(whole))
+            if (at < 0) continue
+            const still = [
+                ...excluded.filter((_, k) => k !== at),
+                ...(back.kind === "difference" ? [back.excluded] : []),
+            ]
+            const merged = still.length ? difference(taken.base, union(still)) : taken.base
+            const rest = members.filter((_, k) => k !== i && k !== j)
+            return mergeDifferences([merged, ...rest])
+        }
+    }
+    return members
 }
 
 /** Subtype reduction, as TypeScript performs when forming a union: a literal
@@ -1366,7 +1402,12 @@ function isAssignableInner(a: Type, b: Type): boolean {
     }
     if (a.kind === "function") {
         if (b.kind !== "function") return false
-        return isFunctionAssignable(laidOut(a), laidOut(b))
+        // A generic function where a plain one is wanted is read as it would
+        // be called there: its type parameters read off what `b`'s callers
+        // pass, as TypeScript instantiates it — `<T>(x: T) => T` is a
+        // `(x: number) => number`.
+        const given = a.typeParams?.length && !b.typeParams?.length ? instantiatedFor(a, b) : a
+        return isFunctionAssignable(laidOut(given), laidOut(b))
     }
     if (b.kind === "typeParam") return false
     if (a.kind === "genericRef" || b.kind === "genericRef") {
@@ -1573,7 +1614,9 @@ export function narrowExclude(t: Type, exclude: Type): Type {
             kept.push(literal(!(exclude.value as boolean)))
             continue
         }
-        kept.push(m)
+        // `if (s == "x") return` leaves a string that is not `"x"`, and says
+        // so: a second `s == "x"` is then a test that cannot pass.
+        kept.push(m.kind === "primitive" ? difference(m, exclude) : m)
     }
     return union(kept)
 }
@@ -1796,6 +1839,13 @@ export function matchInfer(arg: Type, pattern: Type, out: Map<string, Type>, con
     if (arg.kind === "union" && pattern.kind !== "union") {
         return arg.types.every(m => matchInfer(m, pattern, out, contra))
     }
+    // A generic function read by a pattern is read with each of its own type
+    // parameters at its constraint, as TypeScript reads it: `ReturnType<typeof
+    // find>` for a `find<T extends Instance>(): T | nil` is `Instance | nil`,
+    // not a `T` that nothing outside the function can name.
+    if (pattern.kind === "function" && arg.kind === "function" && arg.typeParams?.length) {
+        return matchInfer(eraseTypeParams(arg), pattern, out, contra)
+    }
     // An overload set is matched by its last signature, as TypeScript reads
     // `ReturnType<typeof overloaded>`.
     if (pattern.kind === "function" && arg.kind === "intersection") {
@@ -1868,6 +1918,38 @@ export function matchInfer(arg: Type, pattern: Type, out: Map<string, Type>, con
         default:
             return true
     }
+}
+
+/** `f`, generic, as it is when called where `target` is wanted: each of its
+ *  type parameters read off the parameters `target` is called with, and one
+ *  they say nothing about at its constraint. */
+function instantiatedFor(f: FunctionType, target: FunctionType): FunctionType {
+    const vars = new Set(f.typeParams ?? [])
+    const found = new Map<string, Type>()
+    const wanted = laidOut(target)
+    f.params.forEach((p, i) => {
+        const given = wanted.params[i]?.type ?? (wanted.varargs && !wanted.restIsWhole ? wanted.varargs : undefined)
+        if (given) unify(p.type, given, vars, found, "first")
+    })
+    const constraints = new Map<string, Type>()
+    for (const part of [...f.params.map(p => p.type), f.varargs, f.returns]) collectTypeParams(part, constraints)
+    for (const name of vars) {
+        const bound = constraints.get(name)
+        // What was read has to be one it allows; past it, the most it allows.
+        const read = found.get(name)
+        if (!read || (bound && !isAssignable(read, bound))) found.set(name, bound ?? unknownType)
+    }
+    return substitute({ ...f, typeParams: undefined, typeParamDefaults: undefined }, found) as FunctionType
+}
+
+/** `f` with its own type parameters replaced by their constraints (`unknown`
+ *  for one with none) — what it is to someone who cannot pick them. */
+function eraseTypeParams(f: FunctionType): FunctionType {
+    const constraints = new Map<string, Type>()
+    for (const part of [...f.params.map(p => p.type), f.varargs, f.returns]) collectTypeParams(part, constraints)
+    const erased = new Map<string, Type>((f.typeParams ?? []).map(name => [name, constraints.get(name) ?? unknownType]))
+    const open: FunctionType = { ...f, typeParams: undefined, typeParamDefaults: undefined }
+    return substitute(open, erased) as FunctionType
 }
 
 function withoutNilMember(t: Type): Type {
@@ -2070,7 +2152,13 @@ function formatTypeUncached(t: Type): string {
         case "never": return "never"
         case "primitive": return t.name
         case "literal": return t.base === "string" ? JSON.stringify(t.value) : String(t.value)
-        case "array": return `${t.readonly ? "readonly " : ""}${formatAtom(t.element)}[]`
+        // `readonly (readonly [A, B])[]`: an element that is a read-only list in
+        // parentheses, or its `readonly` would read as the whole array's.
+        case "array": {
+            const element = (t.element.kind === "array" || t.element.kind === "tuple") && t.element.readonly
+                ? `(${formatType(t.element)})` : formatAtom(t.element)
+            return `${t.readonly ? "readonly " : ""}${element}[]`
+        }
         case "tuple": {
             // Nothing but a rest is a list of any length: `number[]`.
             if (!t.elements.length && t.rest) return `${t.readonly ? "readonly " : ""}${formatAtom(t.rest)}[]`

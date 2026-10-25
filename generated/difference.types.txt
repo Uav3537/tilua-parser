@@ -12,6 +12,6 @@ present: Exclude<unknown, nil>
 refine: (v: unknown) => Exclude<unknown, nil> | 0
 stillOpaque: Exclude<unknown, 1>
 stillString: string
-truthiness: (b: unknown) => Exclude<unknown, nil | false> | nil | false
+truthiness: (b: unknown) => unknown
 two: 2
 v: unknown

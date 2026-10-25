@@ -37,12 +37,12 @@ export type LiteralToken =
     | (BaseToken & { type: "Literal"; kind: "boolean"; value: boolean })
 
 export const Operators = [
-    "+=", "-=", "*=", "/=", "//=", "%=", "^=", "..=",
+    "+=", "-=", "*=", "/=", "//=", "%=", "^=",
     "==", "~=", "<=", ">=",
-    "//", "..", "...",
+    "//", "...",
     // `a ?? b`, and `n++` / `n--` (see `startsDecrement` for how a `--`
     // that ends a statement is told from a comment).
-    "??", "++", "--",
+    "??", "??=", "++", "--",
     "+", "-", "*", "/", "%", "^", "#",
     "<", ">", "=",
 ] as const
@@ -120,8 +120,12 @@ function isAlphaNumeric(ch: string): boolean {
 const KeywordSet: ReadonlySet<string> = new Set(Keywords)
 
 /** What TypeScript writes where Lua writes something else, longest first:
- *  `!==` before `!=` before `!`, `===` before `==`. */
+ *  `!==` before `!=` before `!`, `===` before `==` — and Lua's own `..`,
+ *  which tilua writes `+`, as TypeScript joins strings. (`...` is a spread,
+ *  and read before any of these.) */
 const TS_SPELLINGS: readonly [written: string, meant: string, kind: "Keyword" | "Operator"][] = [
+    ["..=", "+=", "Operator"],
+    ["..", "+", "Operator"],
     ["!==", "~=", "Operator"],
     ["===", "==", "Operator"],
     ["!=", "~=", "Operator"],
@@ -161,10 +165,16 @@ export interface TokenizeOptions {
     errors?: LexError[]
     /** When given, every comment is collected here, in order. */
     comments?: SourceComment[]
+    /** Recovery only: a template string, or a `${` in one, ends with its
+     *  line. Either may run over several lines, so the line is only a guess
+     *  at where an unclosed one was meant to end — one a reader tries when
+     *  the file does not read otherwise. */
+    lineTemplates?: boolean
 }
 
 export function tokenize(source: string, options: TokenizeOptions = {}): Token[] {
     const { errors, comments } = options
+    const lineTemplates = !!errors && !!options.lineTemplates
     const tokens: Token[] = []
     let cursor = 0
     let line = 1
@@ -503,6 +513,11 @@ export function tokenize(source: string, options: TokenizeOptions = {}): Token[]
                 flushString()
                 break
             }
+            if (lineTemplates && ch === "\n") {
+                fail("Unterminated interpolated string", line, column)
+                flushString()
+                break
+            }
 
             if (ch === "\\") {
                 const escStart = cursor
@@ -525,7 +540,7 @@ export function tokenize(source: string, options: TokenizeOptions = {}): Token[]
                 let depth = 1
                 let closed = true
                 while (depth > 0) {
-                    if (isAtEnd()) {
+                    if (isAtEnd() || (lineTemplates && peek() === "\n")) {
                         fail("Unterminated interpolation expression", line, column)
                         closed = false
                         break
@@ -669,7 +684,7 @@ export function tokenize(source: string, options: TokenizeOptions = {}): Token[]
 
         // TypeScript's spellings of operators Lua spells otherwise: said, and
         // read as what they meant, so the rest of the line still analyses.
-        const spelled = TS_SPELLINGS.find(([written]) => source.startsWith(written, cursor))
+        const spelled = !source.startsWith("...", cursor) && TS_SPELLINGS.find(([written]) => source.startsWith(written, cursor))
         if (spelled) {
             const [written, meant, kind] = spelled
             const startLine = line, startColumn = column
