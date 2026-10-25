@@ -723,6 +723,29 @@ const rel = (path: string | undefined): string | undefined =>
                 formatType(union([difference(unknownType, union([nilType, literal(false)])), nilType, literal(false)])),
             ], ["Exclude<unknown, 1>", "Exclude<unknown, 1>", "unknown"])
         }
+        {
+            // Dimmed is only what an exit written as one leaves: a test the
+            // types say always passes may still not, and what is after it is
+            // often there for exactly that.
+            const program = parse([
+                "declare Hooks: { [string]: { n: number } }",
+                "function a(key: string) {",
+                "    if (Hooks[key]) return",
+                "    Hooks[key] = { n: 1 }",
+                "}",
+                "function b(stat: \"TimeMulti\"): boolean {",
+                "    if (stat == \"TimeMulti\") { return true }",
+                "    return false",
+                "}",
+                "function c(stat: \"A\" | \"B\"): number {",
+                "    if (stat == \"A\") { return 1 } elseif (stat == \"B\") { return 2 }",
+                "}",
+            ].join("\n"))
+            const scopes = analyzeScopes(program)
+            const types = analyzeTypes(program, scopes)
+            check("unreachable: an `if` the types call exhaustive dims nothing, and still counts as returning",
+                [types.unreachable.length, types.diagnostics.map(d => d.message)], [0, []])
+        }
         const bare = parse("function f() {\n    return\n    const x = 1\n}")
         const body = (bare.body.statements[0] as any).func.body.statements
         check("unreachable: a bare `return` before a statement returns nothing",
@@ -2551,6 +2574,23 @@ function g() {
         [guards.bindings.named, guards.bindings.kept, guards.bindings.ids, guards.bindings.some, guards.bindings.long, guards.bindings.guard],
         ["string[]", "string[]", "string[]", "Exclude<string, \"x\">[]", "(string | nil)[]", "(v: string | nil) => v is string"])
     check("filter: guards raise no errors", guards.errors, [])
+
+    // `map` keeps a tuple a tuple; over a list whose elements are a type
+    // parameter it is still a list, and over a type parameter that stands for
+    // one it is used as one until that is known.
+    const generic = analyze([
+        "const Map = <T, U>(arr: T[], callback: (item: T) => U): U[] => arr:map(callback)",
+        "function each<T>(arr: T[]) { const ones = arr:map(x => 1) }",
+        "function listed<L extends unknown[]>(xs: L): number[] {",
+        "    const mapped = xs:map(x => 1)",
+        "    for (const v in mapped) { const n: number = v }",
+        "    return mapped",
+        "}",
+        "function kept<L extends unknown[]>(xs: L): { -readonly [K in keyof L]: string } { return xs:map(x => \"s\") }",
+        "const pair = kept([1, 2] as [number, number])",
+    ].join("\n"))
+    check("map: over a list of a type parameter, and over a type parameter that is a list",
+        [generic.errors, generic.bindings.ones, generic.bindings.pair], [[], "1[]", "[string, string]"])
     // A generic function of one's own: the callback reads `T` from the list
     // before it is asked whether it guards.
     const ownGuards = analyze([

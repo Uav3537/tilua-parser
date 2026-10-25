@@ -13,7 +13,7 @@ import {
     type Type, type ObjectProperty, type ObjectType, type FunctionType, type TypePredicate, type ClassInfo,
     type GenericRefType, type TypeOrigin, objectKeywordType,
     anyType, unknownType, declaredUnknownType, neverType, nilType, booleanType, numberType, stringType, threadType, bufferType,
-    primitive, literal, arrayOf, tuple, tupleMembers, spread, hasSpread, objectType, fn, union, intersection, optional,
+    primitive, literal, arrayOf, mappedList, tuple, tupleMembers, spread, hasSpread, objectType, fn, union, intersection, optional,
     typeParam, substitute, unify, containsTypeParam, matchInfer, setAliasExpander, setDeferredBound, setBuiltinMember, difference,
     widen, isAssignable, overlaps, narrowTo, narrowExclude, narrowTruthy, narrowFalsy,
     isClassType,
@@ -3191,12 +3191,11 @@ class TypeAnalyzer {
      *  bare `string` / `number` becomes an indexer instead (`Record<string, V>`
      *  is `{ [string]: V }`, not a property literally named "string"). */
     private reduceMapped(t: Extract<Type, { kind: "mapped" }>): Type {
-        const constraint = this.reduceType(t.constraint)
-        if (containsTypeParam(constraint)) return { ...t, constraint }
-
         const source = t.source ? this.expand(this.reduceType(t.source)) : undefined
         // Over a list, a homomorphic mapped type makes a list: each element
-        // mapped where it stands, `K` its position, as TypeScript does.
+        // mapped where it stands, `K` its position, as TypeScript does. What
+        // the elements are need not be known — `T[]` maps to a list as surely
+        // as `number[]` does — so this comes before waiting on them.
         if (source && !t.nameType && (source.kind === "tuple" || source.kind === "array")) {
             const at = (key: Type): Type => this.reduceType(substitute(t.template, new Map([[t.parameter, key]])))
             const made = source.kind === "array"
@@ -3206,6 +3205,8 @@ class TypeAnalyzer {
             // `-readonly` takes away what the source had; `readonly` adds it.
             return readonly ? { ...made, readonly: true } : { ...made, readonly: undefined }
         }
+        const constraint = this.reduceType(t.constraint)
+        if (containsTypeParam(constraint)) return { ...t, constraint }
         const members = constraint.kind === "union" ? constraint.types : [constraint]
         const entries: [string, ObjectProperty][] = []
         const placed = new Map<string, number>()
@@ -3259,7 +3260,12 @@ class TypeAnalyzer {
         const statements = block.statements
         for (let i = 0; i < statements.length; i++) {
             this.visitStatement(statements[i], env)
-            if (i === statements.length - 1 || !this.statementAlwaysExits(statements[i])) continue
+            // Only what is left by an exit written as one: an `if` with no
+            // `else` that the types say leaves nothing for one is still a
+            // test that may go the other way — a table's entry read as what
+            // it holds may be missing, and a defensive `return` after it is
+            // not dead code. TypeScript draws the line at the same place.
+            if (i === statements.length - 1 || !this.statementAlwaysExits(statements[i], true)) continue
             // Never run, but still read — as TypeScript reads it — so that
             // its names are known and what is wrong in it is said. What it
             // narrows is its own.
@@ -3782,12 +3788,14 @@ class TypeAnalyzer {
      *  an if/else where every branch does. Used for early-return narrowing, so
      *  it has to run *after* the block was visited: whether a call exits
      *  depends on its inferred return type. */
-    private blockAlwaysExits(block: Block): boolean {
-        return block.statements.some(stmt => this.statementAlwaysExits(stmt))
+    private blockAlwaysExits(block: Block, written = false): boolean {
+        return block.statements.some(stmt => this.statementAlwaysExits(stmt, written))
     }
 
     /** Can control never get past `stmt`? See `blockAlwaysExits`. */
-    private statementAlwaysExits(stmt: Statement): boolean {
+    /** `written`: count only exits written as such — not an `if` with no
+     *  `else` that the types alone say is exhaustive. */
+    private statementAlwaysExits(stmt: Statement, written = false): boolean {
         switch (stmt.type) {
             case "ReturnStatement":
             case "BreakStatement":
@@ -3795,19 +3803,19 @@ class TypeAnalyzer {
             case "ThrowStatement":
                 return true
             case "DoStatement":
-                return this.blockAlwaysExits(stmt.body)
+                return this.blockAlwaysExits(stmt.body, written)
             // Left by every way through: the block, and the `catch` that runs
             // when it throws — or a `finally`, which runs whatever happened.
             case "TryStatement":
-                if (stmt.finalizer && this.blockAlwaysExits(stmt.finalizer)) return true
-                return this.blockAlwaysExits(stmt.block) && (!stmt.handler || this.blockAlwaysExits(stmt.handler.body))
+                if (stmt.finalizer && this.blockAlwaysExits(stmt.finalizer, written)) return true
+                return this.blockAlwaysExits(stmt.block, written) && (!stmt.handler || this.blockAlwaysExits(stmt.handler.body, written))
             case "CallStatement":
                 // `error(...)` is declared `-> never`, so the statement after
                 // it is unreachable.
                 return this.typeOf.get(stmt.expression)?.kind === "never"
             case "IfStatement":
-                return (stmt.alternate ? this.blockAlwaysExits(stmt.alternate) : this.exhaustiveIfs.has(stmt)) &&
-                    stmt.clauses.every(c => this.blockAlwaysExits(c.body))
+                return (stmt.alternate ? this.blockAlwaysExits(stmt.alternate, written) : !written && this.exhaustiveIfs.has(stmt)) &&
+                    stmt.clauses.every(c => this.blockAlwaysExits(c.body, written))
             // `while (true)` with no `break` of its own is never left.
             case "WhileStatement": {
                 const test = this.typeOf.get(stmt.condition)
@@ -5851,6 +5859,7 @@ class TypeAnalyzer {
      *  object every time. The cache entry is seeded with the ref itself before
      *  resolving, which is what breaks re-entry on a recursive alias. */
     private expand(t: Type): Type {
+        if (t.kind === "mapped") return mappedList(t) ?? t
         if (t.kind !== "genericRef") return t
         // A ref another module made: its name means what it meant there.
         if (t.origin && t.origin !== this.origin) return t.origin.expand(t)

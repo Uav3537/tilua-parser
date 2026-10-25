@@ -1184,6 +1184,21 @@ function builtinFitsShape(a: Type, b: ObjectType): boolean {
  *  lets two recursive class types compare at all. */
 const comparing: Type[] = []
 
+/** What `{ [K in keyof T]: U }` is while `T` is a type parameter that stands
+ *  for a list: a list of `U`, as TypeScript reads it — what `xs:map(f)` of an
+ *  `xs: T` with `T extends unknown[]` can be assigned to, looped over and
+ *  asked the length of. The mapped type itself is kept, so that once `T` is
+ *  known — a tuple, say — it maps that. `undefined` for any other. */
+export function mappedList(t: MappedType): Type | undefined {
+    if (t.nameType || t.source?.kind !== "typeParam") return undefined
+    const constraint = t.source.constraint
+    if (constraint?.kind !== "array" && constraint?.kind !== "tuple") return undefined
+    const element = substitute(t.template, new Map([[t.parameter, numberType]]))
+    const readonly = t.readonly ?? constraint.readonly
+    const made = arrayOf(element)
+    return readonly ? { ...made, readonly: true } : made
+}
+
 export function isAssignable(rawA: Type, rawB: Type): boolean {
     // `()` (the empty type pack, "returns nothing") and `nil` describe the
     // same observable value in Lua: reading the result of a call that returns
@@ -1225,6 +1240,17 @@ function isAssignableInner(a: Type, b: Type): boolean {
     if (b.kind === "unknown") return true
     if (b.kind === "never") return false
     if (a.kind === "unknown") return false
+
+    // Two mapped types over one source, keyed alike: the one fits the other
+    // where what it maps each key to does.
+    if (a.kind === "mapped" && b.kind === "mapped" && !a.nameType && !b.nameType &&
+        a.source && b.source && formatType(a.source) === formatType(b.source) &&
+        (a.readonly ?? false) === (b.readonly ?? false)) {
+        const key: Type = { kind: "typeParam", name: a.parameter }
+        return isAssignable(a.template, substitute(b.template, new Map([[b.parameter, key]])))
+    }
+    const listed = a.kind === "mapped" ? mappedList(a) : undefined
+    if (listed) return isAssignable(listed, b)
 
     // One subtraction fits another when its base does and it already excludes
     // everything the target excludes — `Exclude<unknown, nil>` is itself, which the
