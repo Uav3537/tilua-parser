@@ -1,4 +1,4 @@
-T: {} & { configure: (self: {}, { retries?: number, verbose?: boolean }) => nil }
+T: { configure: (self: {}, { retries?: number, verbose?: boolean }) => nil }
 a: number
 a: number
 add: Reducer

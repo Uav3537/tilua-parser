@@ -5,7 +5,7 @@ head: 10 | 20 | 30
 identity: <T>(x: T) => T
 intBox: Box<number>
 n: 5
-p: Pair<A, B>
+p: Pair<string, boolean>
 pair: <A, B>(a: A, b: B) => Pair<A, B>
 r: { ok: true, value: number } | { error: string, ok: false }
 s: "hello"

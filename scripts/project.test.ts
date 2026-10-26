@@ -2392,6 +2392,117 @@ function g() {
     check("prelude: utility types are built in", [utilities.errors, utilities.bindings.p, utilities.bindings.o, utilities.bindings.r, utilities.bindings.n, utilities.bindings.t], [
         [], "{ id: number, name: string }", "{ id: number, name: string }", "{ a: number, b: number }", "string", "number",
     ])
+    const signatures = analyze([
+        "declare function f(x: number, y?: string): boolean",
+        "const r: ReturnType<typeof f> = true",
+        "const p: Parameters<typeof f> = [1]",
+    ].join("\n"))
+    check("prelude: ReturnType and Parameters read a function with typed parameters",
+        [signatures.errors, signatures.bindings.r, signatures.bindings.p], [[], "boolean", "[x: number, y?: string]"])
+    check("prelude: Pick takes only the keys the type has; Omit any", analyze([
+        "type User = { id: number, name: string }",
+        "declare a: Pick<User, \"id\">",
+        "declare b: Pick<User, \"typo\">",
+        "declare c: Omit<User, \"typo\">",
+    ].join("\n")).errors, [`Type '"typo"' does not satisfy the constraint '"id" | "name"'`])
+    const included = analyze([
+        "declare names: string[]",
+        "declare letters: (\"a\" | \"b\")[]",
+        "function check(s: string, u: string | number) {",
+        "    if (names:includes(s)) { const isIn = s } else { const notIn = s }",
+        "    if (letters:includes(s)) { const isLetter = s } else { const notLetter = s }",
+        "    if (not names:includes(u)) { const notU = u }",
+        "}",
+    ].join("\n"))
+    check("prelude: includes narrows when found, and says nothing when not",
+        [included.errors, included.bindings.isIn, included.bindings.notIn, included.bindings.isLetter,
+            included.bindings.notLetter, included.bindings.notU],
+        [[], "string", "string", `"a" | "b"`, "string", "string | number"])
+    const implied = analyze([
+        "function isSmall(v: unknown): implies v is number { return v == 1 }",
+        "declare function isText(v: unknown): v is string",
+        "declare function wantsGuard(test: (v: unknown) => v is number): nil",
+        "declare xs: (number | string)[]",
+        "function f(x: number | string) {",
+        "    if (isSmall(x)) { const yes = x } else { const no = x }",
+        "}",
+        "const nums = xs:filter(isSmall)",
+        "const texts = xs:filter(isText)",
+        "wantsGuard(isSmall)",
+    ].join("\n"))
+    check("implies: a one-sided guard narrows only its true branch, and is no two-sided one",
+        [implied.bindings.yes, implied.bindings.no, implied.bindings.isSmall, implied.bindings.nums, implied.bindings.texts,
+            implied.errors.length],
+        ["number", "number | string", "(v: unknown) => implies v is number", "number[]", "string[]", 1])
+    const narrowedParams = analyze([
+        "function g<T>(v: T): T {",
+        "    if (typeof v == \"array\") { const list = v; const size = v.length }",
+        "    if (v == nil) { const none = v }",
+        "    if (not v) { const falsy = v }",
+        "    if (v) { const truthy = v }",
+        "    return v",
+        "}",
+        "function h<T extends number | string[]>(v: T) {",
+        "    if (typeof v == \"array\") { const strings = v; const first = v[1]; for (const each in v) { } }",
+        "}",
+        "function k<T extends string[]>(v: T) { for (const walked in v) { } }",
+        "declare u: unknown",
+        "if (typeof u == \"array\") { const anyList = u }",
+    ].join("\n"))
+    check("narrowing: a type parameter narrows to what it is there, never to nothing",
+        [narrowedParams.errors, narrowedParams.bindings.list, narrowedParams.bindings.size, narrowedParams.bindings.none, narrowedParams.bindings.falsy,
+            narrowedParams.bindings.strings, narrowedParams.bindings.first, narrowedParams.bindings.each, narrowedParams.bindings.walked, narrowedParams.bindings.anyList],
+        [[], "T & unknown[]", "number", "T & nil", "(T & nil) | (T & (nil | false))",
+            "T & string[]", "string", "string", "string", "unknown[]"])
+    // What a schema library such as @tilua-types/zod leans on: a guard read
+    // off a generic shape, a rest parameter's constraint, an alias of shapes
+    // joined that is named by what fills it, and `{}` adding nothing.
+    const library = analyze([
+        "type Any = { readonly _output: unknown }",
+        "type Schema<T> = { readonly _output: T, is: (self: Any, value: unknown) => implies value is T }",
+        "type Output<S> = { [K in keyof S as nil extends S[K][\"_output\"] ? never : K]: S[K][\"_output\"] }",
+        "    & { [K in keyof S as nil extends S[K][\"_output\"] ? K : never]?: S[K][\"_output\"] }",
+        "type Obj<S> = Schema<Output<S>> & { pick: <K extends keyof S>(self: Any, ...keys: K[]) => Obj<Pick<S, K>> }",
+        "declare function object<S extends { [string]: Any }>(shape: S): Obj<S>",
+        "declare name: Schema<string>",
+        "declare age: Schema<number | nil>",
+        "const shape = { name: name, age: age }",
+        "const User = object(shape)",
+        "declare v: unknown",
+        "if (User:is(v)) { const named = v.name }",
+        "const picked = User:pick(\"name\")",
+        "const typo = User:pick(\"typo\")",
+        "const user: Output<{ name: Schema<string>, age: Schema<number | nil> }> = { name: \"a\" }",
+    ].join("\n"))
+    check("schemas: a guard, a rest parameter's constraint and a shape's name, as a library uses them",
+        [library.bindings.named, library.bindings.picked, library.errors],
+        ["string", "Obj<{ name: Schema<string> }>",
+            [`Argument of type '"typo"' is not assignable to parameter of type '"name" | "age"'`]])
+    check("generic display: a generic shape a call fills in is named with what it was filled with", analyze([
+        "type Box<T> = { value: T }",
+        "declare function box<T>(v: T): Box<T>",
+        "const boxed = box(1)",
+    ].join("\n")).bindings.boxed, "Box<number>")
+    check("constraints: an empty list is a list, as a type argument", analyze([
+        "type Signal<T extends unknown[]> = { args: T }",
+        "declare a: Signal<[]>",
+        "declare b: Signal<string>",
+    ].join("\n")).errors, ["Type 'string' does not satisfy the constraint 'unknown[]'"])
+    const positions = analyze([
+        "const [ok, err] = pcall(() => nil)",
+        "declare byNumber: { [number]: string }",
+        "const [first] = byNumber",
+        "const [x, y] = [1, \"a\"]",
+    ].join("\n"))
+    check("destructuring: `[ ]` on a table with no positions is an error",
+        [positions.errors, positions.bindings.first, positions.bindings.y],
+        [["'pcall(...)' is not an array: type '{ data: nil, error: nil, success: true } | { data: nil, error: unknown, success: false }' cannot be destructured with [ ]"],
+            "string", "number | string"])
+    check("prelude: forEach's callback may answer anything", analyze([
+        "const out: number[] = []",
+        "const xs = [1, 2]",
+        "xs:forEach(x => out:push(x))",
+    ].join("\n")).errors, [])
     check("prelude: a file may declare one of them again", analyze([
         "type Partial<T> = string",
         "const s: Partial<number> = \"x\"",

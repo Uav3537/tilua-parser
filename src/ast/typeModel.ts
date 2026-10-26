@@ -138,6 +138,9 @@ export interface ObjectType {
     /** The alias this object was resolved from — display only, ignored by
      *  `isAssignable` (the type is structural). Dropped on `widen`/`substitute`. */
     name?: string
+    /** For a generic alias's name, the reference it names: `Box<T>` is
+     *  `Box` with `[T]`, so filling `T` in names it `Box<number>`. */
+    nameRef?: GenericRefType
     /** Set on a `declare class` — the type is then *nominal*. See `ClassInfo`. */
     class?: ClassInfo
 }
@@ -198,6 +201,9 @@ export interface TypePredicate {
     /** The type the parameter is narrowed to; absent = narrow to truthy. */
     type?: Type
     asserts: boolean
+    /** `implies v is T`: only a true answer narrows. `includes` is one —
+     *  a value not in the list may still be of the list's type. */
+    implies?: boolean
 }
 
 export interface FunctionType {
@@ -250,6 +256,8 @@ export interface IntersectionType {
      *  `ObjectType.name`. A class hierarchy written as `type Part = BasePart &
      *  { ... }` is unreadable without it. */
     name?: string
+    /** As `ObjectType.nameRef`. */
+    nameRef?: GenericRefType
 }
 
 /** An unresolved reference: an in-scope generic parameter, or a named type
@@ -378,7 +386,7 @@ export function withoutAliasName(type: Type): Type {
         const out = objectType(type.properties, type.indexer, type.frozen)
         return type.class ? Object.assign(out, { class: type.class, name: type.name }) : out
     }
-    if (type.kind === "intersection") return { ...type, name: undefined }
+    if (type.kind === "intersection") return { ...type, name: undefined, nameRef: undefined }
     // `ALIASABLE` has already said this kind carries the field; the cast is
     // only because a `Set` membership test narrows nothing for TypeScript.
     return { ...(type as Type & { alias?: string }), alias: undefined } as Type
@@ -386,10 +394,11 @@ export function withoutAliasName(type: Type): Type {
 
 /** `type` remembered as the alias it was written as. A type that already
  *  carries one keeps it: the name nearest what the reader wrote wins. */
-export function withAliasName(type: Type, alias: string): Type {
+export function withAliasName(type: Type, alias: string, ref?: GenericRefType): Type {
     if (isClassType(type)) return type
     if (type.kind === "object" || type.kind === "intersection") {
-        return type.name === undefined ? { ...type, name: alias } : type
+        if (type.name !== undefined) return type
+        return ref ? { ...type, name: alias, nameRef: ref } : { ...type, name: alias }
     }
     if (!ALIASABLE.has(type.kind)) return type
     return (type as { alias?: string }).alias === undefined
@@ -574,7 +583,11 @@ export function substitute(t: Type, subst: Map<string, Type>): Type {
             )
             // An instantiated class is still that class: `Box<number>` and
             // `Box<string>` are both `Box`, and only their arguments differ.
-            if (t.name) out.name = t.name
+            // A generic alias's name says its arguments, filled in with them.
+            if (t.nameRef) {
+                out.nameRef = substitute(t.nameRef, subst) as GenericRefType
+                out.name = formatType(out.nameRef)
+            } else if (t.name) out.name = t.name
             if (t.class) {
                 out.class = {
                     ...t.class,
@@ -622,7 +635,10 @@ export function substitute(t: Type, subst: Map<string, Type>): Type {
             return union(t.types.map(x => substitute(x, subst)))
         case "intersection": {
             const r = intersection(t.types.map(x => substitute(x, subst)))
-            return t.name && r.kind === "intersection" && !r.name ? { ...r, name: t.name } : r
+            if (!t.name || r.kind !== "intersection" || r.name) return r
+            if (!t.nameRef) return { ...r, name: t.name }
+            const nameRef = substitute(t.nameRef, subst) as GenericRefType
+            return { ...r, name: formatType(nameRef), nameRef }
         }
         case "genericRef":
             return {
@@ -991,9 +1007,13 @@ export function intersection(types: Type[]): Type {
         const others = flat.filter((_, i) => i !== at)
         return union((flat[at] as UnionType).types.map(m => intersection([m, ...others])))
     }
+    // `{}` beside another table shape adds nothing to it: `{ a: 1 } & {}` is
+    // `{ a: 1 }`. Beside a string it is a brand, and stays.
+    const empty = (t: Type): boolean => t.kind === "object" && !t.properties.size && !t.indexer && !t.class && !t.name
+    const dropEmpty = flat.some(t => t.kind === "object" && !empty(t))
     const seen = new Map<string, Type>()
     for (const t of flat) {
-        if (t.kind === "unknown") continue
+        if (t.kind === "unknown" || (dropEmpty && empty(t))) continue
         seen.set(memberKey(t), t)
     }
     const members = simplifyIntersection([...seen.values()])
@@ -1111,6 +1131,7 @@ export function widen(t: Type): Type {
             for (const [k, v] of t.properties) entries.push([k, { ...v, type: widen(v.type) }])
             const w = objectType(entries, t.indexer && { key: t.indexer.key, value: widen(t.indexer.value) })
             if (t.name) w.name = t.name
+            if (t.nameRef) w.nameRef = t.nameRef
             return w
         }
         case "union":
@@ -1552,10 +1573,12 @@ function isFunctionAssignable(a: FunctionType, b: FunctionType): boolean {
     }
     // Where a guard is wanted, a plain `boolean` says nothing about the
     // value: only a guard on the same parameter, narrowing no wider, is one.
+    // One that says nothing when false is no guard where false is read.
     const wanted = b.predicate
     if (wanted?.type && !wanted.asserts) {
         const given = a.predicate
         if (!given?.type || given.asserts || given.param !== wanted.param || !isAssignable(given.type, wanted.type)) return false
+        if (given.implies && !wanted.implies) return false
     }
     return isAssignable(a.returns, b.returns)
 }
@@ -1616,6 +1639,13 @@ export function narrowTo(t: Type, filter: Type): Type {
         if (m.kind === "any") { kept.push(filter); continue }
         if (isAssignable(m, filter)) kept.push(m)
         else if (isAssignable(filter, m)) kept.push(filter)
+        // A parameter is one value not known yet: `typeof v == "array"` on a
+        // `T` says it is a `T` that is a list, `T & unknown[]`, as in
+        // TypeScript — unless its constraint rules that out.
+        else if (m.kind === "typeParam") {
+            const within = m.constraint ? narrowTo(m.constraint, filter) : filter
+            if (within.kind !== "never") kept.push(intersection([m, within]))
+        }
     }
     return union(kept)
 }
@@ -1663,6 +1693,8 @@ export function isPossiblyTruthy(t: Type): boolean {
     if (t.kind === "never") return false
     if (t.kind === "difference") return isPossiblyTruthy(t.base) && !isAssignable(t.base, t.excluded)
     if (t.kind === "union") return t.types.some(isPossiblyTruthy)
+    // `T & nil` is a `nil`: a value of every member at once.
+    if (t.kind === "intersection") return t.types.every(isPossiblyTruthy)
     if (t.kind === "primitive" && t.name === "nil") return false
     if (t.kind === "literal" && t.value === false) return false
     return true
@@ -1673,6 +1705,7 @@ export function isPossiblyFalsy(t: Type): boolean {
     if (t.kind === "never") return false
     if (t.kind === "difference") return isPossiblyFalsy(t.base) && !isAssignable(falsyType, t.excluded)
     if (t.kind === "union") return t.types.some(isPossiblyFalsy)
+    if (t.kind === "intersection") return t.types.every(isPossiblyFalsy)
     if (t.kind === "any" || t.kind === "unknown") return true
     if (t.kind === "primitive") return t.name === "nil" || t.name === "boolean"
     if (t.kind === "literal") return t.value === false
@@ -1704,11 +1737,21 @@ export function narrowFalsy(t: Type): Type {
     const members = t.kind === "union" ? t.types : [t]
     const out: Type[] = []
     for (const m of members) {
-        if (m.kind === "primitive" && m.name === "nil") out.push(nilType)
+        // What of `Exclude<T, nil>` is falsy is what of `T` is, less `nil`;
+        // `T & nil` already is falsy, all of it.
+        if (m.kind === "difference") {
+            if (isPossiblyFalsy(m)) out.push(difference(narrowFalsy(m.base), m.excluded))
+        }
+        else if (m.kind === "intersection") {
+            if (isPossiblyFalsy(m)) out.push(m)
+        }
+        else if (m.kind === "primitive" && m.name === "nil") out.push(nilType)
         else if (m.kind === "primitive" && m.name === "boolean") out.push(literal(false))
         else if (m.kind === "literal" && m.value === false) out.push(literal(false))
-        else if (m.kind === "any" || m.kind === "unknown" ||
-            m.kind === "typeParam" || m.kind === "genericRef") {
+        // A parameter stays itself, a falsy one: `T & (nil | false)` still
+        // goes where a `T` does.
+        else if (m.kind === "typeParam") out.push(intersection([m, falsyType]))
+        else if (m.kind === "any" || m.kind === "unknown" || m.kind === "genericRef") {
             out.push(nilType)
             out.push(literal(false))
         }
@@ -2272,7 +2315,7 @@ function formatPredicate(t: FunctionType): string | undefined {
     const p = t.predicate
     if (!p) return undefined
     const name = t.params[p.param]?.name ?? `arg${p.param}`
-    const head = p.asserts ? "asserts " : ""
+    const head = p.asserts ? "asserts " : p.implies ? "implies " : ""
     return p.type ? `${head}${name} is ${formatType(p.type)}` : `${head}${name}`
 }
 

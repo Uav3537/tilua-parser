@@ -11,7 +11,7 @@ import { preludeProgram } from "./prelude"
 import { standardLibrary } from "./standardLibrary"
 import {
     type Type, type ObjectProperty, type ObjectType, type FunctionType, type TypePredicate, type ClassInfo,
-    type GenericRefType, type TypeOrigin, objectKeywordType,
+    type GenericRefType, type IntersectionType, type TypeOrigin, objectKeywordType,
     anyType, unknownType, declaredUnknownType, neverType, nilType, booleanType, numberType, stringType, threadType, bufferType,
     primitive, literal, arrayOf, mappedList, tuple, tupleMembers, spread, hasSpread, objectType, fn, union, intersection, optional,
     typeParam, substitute, unify, containsTypeParam, matchInfer, setAliasExpander, setDeferredBound, setBuiltinMember, difference,
@@ -118,6 +118,10 @@ export interface TypeAnalysis {
      *  not type-check, since that is exactly when an editor wants to offer the
      *  values that would. */
     readonly expectedTypeOf: Map<Expression, Type>
+    /** What each destructuring pattern reads from, `nil` taken out: the value
+     *  of `const { a } = v`, a parameter's, a loop's, or the member an inner
+     *  pattern reads — what an editor offers as the keys of `{ | }`. */
+    readonly patternSourceType: ReadonlyMap<ObjectPattern | ArrayPattern, Type>
     /** Top-level type aliases, resolved — and the type names this module
      *  imports, so tooling treats both alike. */
     readonly aliases: Map<string, Type>
@@ -487,7 +491,7 @@ function readonlyLists(t: Type): Type {
         case "object": {
             if (t.class) return t
             const made = objectType([...t.properties].map(([k, p]): [string, ObjectProperty] => [k, { ...p, type: readonlyLists(p.type) }]), t.indexer, t.frozen)
-            return t.name ? { ...made, name: t.name } : made
+            return t.name ? { ...made, name: t.name, nameRef: t.nameRef } : made
         }
         case "union": return union(t.types.map(readonlyLists))
         default: return t
@@ -849,6 +853,8 @@ interface AliasDef {
     /** A `class ... end` written in the file: the name is its *instance*
      *  type, nominal in the same way a `declare class` is. */
     runtimeClass?: ClassDeclaration
+    /** Declared by the prelude or a library rather than the file. */
+    library?: boolean
 }
 
 /** A map of types where an entry can be registered before its type exists:
@@ -1149,6 +1155,7 @@ class TypeAnalyzer {
             narrowedTypeOf: this.narrowedTypeOf,
             typeOfTypeNode: this.typeOfTypeNode,
             expectedTypeOf: this.expectedTypeOf,
+            patternSourceType: this.patternSourceType,
             aliases: this.resolveDeferredAliases(),
             loops: this.loops,
             methodSources: this.methodSources,
@@ -1256,6 +1263,7 @@ class TypeAnalyzer {
                     params: previous && !previous.class && previous.params.length ? previous.params : alias.generics,
                     node,
                     ...(alias.interface ? { interface: true } : {}),
+                    ...(layering ? { library: true } : {}),
                 })
             }
             if (stmt.type === "DeclareClassStatement") {
@@ -2264,6 +2272,13 @@ class TypeAnalyzer {
                 this.aliases.defer(name, () => this.classType(cls))
                 continue
             }
+            // So does any other type a library declares: the standard
+            // library's `z.ZodObject` costs every file nothing until one
+            // names it.
+            if (def.library) {
+                this.aliases.defer(name, () => this.withTypeParams(def.params, () => this.resolveDef(def)))
+                continue
+            }
             // `type Config = typeof defaults` needs `defaults` to have a type,
             // which only happens once the statements are walked. Such an alias
             // resolves on first use (through `expand`) or at the end instead —
@@ -2515,6 +2530,41 @@ class TypeAnalyzer {
         return subst
     }
 
+    /** `Pick<User, "typo">`: a written type argument has to be what its
+     *  parameter's `extends` allows, as in TypeScript. Only where the
+     *  arguments are known — inside a generic body, `Omit`'s own
+     *  `Pick<T, Exclude<keyof T, K>>`, they are checked where it is used. */
+    private checkTypeArgumentConstraints(
+        written: readonly TypeNode[],
+        params: readonly GenericTypeParameter[],
+        args: readonly Type[],
+    ): void {
+        if (!this.emitDiagnostics || this.instantiationDepth > 0) return
+        if (!params.some(p => p.constraint)) return
+        const subst = this.bindTypeArguments(params, args)
+        this.instantiationDepth++
+        try {
+            params.forEach((p, i) => {
+                const arg = args[i]
+                if (!p.constraint || !arg || arg.kind === "any" || containsTypeParam(arg)) return
+                const bound = this.reduceType(substitute(
+                    this.withTypeParams(params, () => this.resolveType(p.constraint!)), subst))
+                if (containsTypeParam(bound) || isAssignable(arg, bound)) return
+                // `isAssignable` reads an empty `[]` as a call's "nothing",
+                // which is `nil`; written as an argument it is the empty list,
+                // `RBXScriptSignal<[]>`, which any list type takes.
+                if (arg.kind === "tuple" && !arg.elements.length && !arg.rest &&
+                    isAssignable(arrayOf(neverType), bound)) return
+                this.diagnostics.push({
+                    node: written[i],
+                    message: `Type '${briefType(arg)}' does not satisfy the constraint '${briefType(bound)}'`,
+                })
+            })
+        } finally {
+            this.instantiationDepth--
+        }
+    }
+
     /** An imported type, with its type arguments applied. */
     private importedType(imported: ExportedType, typeArguments: readonly (TypeNode)[]): Type {
         if (!imported.params.length) return imported.type
@@ -2595,10 +2645,13 @@ class TypeAnalyzer {
                         // recursive type). Resolving the body inline here
                         // instead re-resolves it at every mention, which for a
                         // set of mutually referring classes blows up.
+                        const typeArguments = node.typeArguments.map(a => this.resolveType(a))
+                        this.checkTypeArgumentConstraints(
+                            node.typeArguments, this.aliasDefs.get(node.base)!.params, typeArguments)
                         return this.expand({
                             kind: "genericRef",
                             name: node.base,
-                            typeArguments: node.typeArguments.map(a => this.resolveType(a)),
+                            typeArguments,
                             origin: this.origin,
                         })
                     }
@@ -2854,8 +2907,16 @@ class TypeAnalyzer {
                     // `Capitalize<K>` resolves to a ref while `K` is generic;
                     // once `K` is a real string it becomes computable.
                     if (this.computesWith(t)) return this.reduceType(this.expand(t))
-                    if (t.typeArguments.length !== 1 || this.aliasDefs.has(t.name)) return t
-                    return this.applyIntrinsic(t.name, t.typeArguments[0]) ?? t
+                    // An argument that is a computation with all it needs is
+                    // worked out, so the reference reads as what it holds:
+                    // `ZodObject<{ name: ZodString }>`, not the `Pick` it was.
+                    const computed = (a: Type): boolean => !containsTypeParam(a) &&
+                        (a.kind === "mapped" || a.kind === "conditional" || a.kind === "indexedAccess" || a.kind === "keyof")
+                    const ref = t.typeArguments.some(computed)
+                        ? { ...t, typeArguments: t.typeArguments.map(a => (computed(a) ? this.reduceType(a) : a)) }
+                        : t
+                    if (ref.typeArguments.length !== 1 || this.aliasDefs.has(ref.name)) return ref
+                    return this.applyIntrinsic(ref.name, ref.typeArguments[0]) ?? ref
                 }
                 case "spread": return spread(this.reduceType(this.expand(t.type)))
                 case "conditional": return this.reduceConditional(t)
@@ -2865,9 +2926,7 @@ class TypeAnalyzer {
                     // Rebuilding must not drop the alias name — an unnamed
                     // class intersection prints as its whole expansion.
                     const r = intersection(t.types.map(m => this.reduceType(m)))
-                    return t.name && r.kind === "intersection" && !r.name
-                        ? { ...r, name: t.name }
-                        : r
+                    return t.name && r.kind === "intersection" && !r.name ? this.renamed(t, r) : r
                 }
                 case "array": {
                     const made = arrayOf(this.reduceType(t.element))
@@ -2896,8 +2955,7 @@ class TypeAnalyzer {
                         key: this.reduceType(t.indexer.key),
                         value: this.reduceType(t.indexer.value),
                     }, t.frozen)
-                    if (t.name) reduced.name = t.name
-                    return reduced
+                    return t.name ? this.renamed(t, reduced) : reduced
                 }
                 default: return t
             }
@@ -4702,11 +4760,14 @@ class TypeAnalyzer {
                 for (let i = f.params.length; i < written; i++) rest.push(at(i))
                 if (!this.restShapesTaking(shapes, rest).byType.length) return false
             }
-        } else if (f.varargs && !f.typeParams?.length) {
+        } else if (f.varargs && !(f.typeParams?.length && f.restIsWhole)) {
+            // A generic one by its parameters' constraints, as the places
+            // before it: `pick<K extends keyof S>(...keys: K[])`.
+            const varargs = this.boundVarargs(f)!
             const last = spread && !spread.elements ? Math.max(f.params.length + 1, written) : written
             for (let i = f.params.length; i < last; i++) {
                 const arg = at(i)
-                if (arg !== undefined && !isAssignable(arg, f.varargs)) return false
+                if (arg !== undefined && !isAssignable(arg, varargs)) return false
             }
         }
         const params = this.boundParams(f)
@@ -4767,6 +4828,18 @@ class TypeAnalyzer {
     }
 
     private readonly boundParamsCache = new WeakMap<FunctionType, Type[]>()
+
+    /** What `...` takes, read as `boundParams` reads the places before it. */
+    private boundVarargs(f: FunctionType): Type | undefined {
+        if (!f.varargs || !f.typeParams?.length) return f.varargs
+        const known = this.boundVarargsCache.get(f)
+        if (known) return known
+        const bound = this.boundParams({ ...f, params: [...f.params, { name: "rest", type: f.varargs }] })[f.params.length]
+        this.boundVarargsCache.set(f, bound)
+        return bound
+    }
+
+    private readonly boundVarargsCache = new WeakMap<FunctionType, Type>()
 
     /** Each type parameter in `t` mapped to its constraint (`unknown` when it
      *  has none, or one that names another type parameter). */
@@ -5004,15 +5077,20 @@ class TypeAnalyzer {
             })
             return
         }
-        if (!f.varargs || f.typeParams?.length) return
-        const shapes = f.restIsWhole ? this.restShapes(f.varargs) : undefined
-        if (shapes) return this.reportRestList(call, written, f, args, self, f.varargs, shapes)
+        if (!f.varargs) return
+        // A generic rest is checked as its parameters' constraints allow, as
+        // the places before it are: `pick<K extends keyof S>(...keys: K[])`
+        // takes only keys. A whole list (`...args: A`) is left to inference.
+        if (f.typeParams?.length && f.restIsWhole) return
+        const varargs = this.boundVarargs(f)!
+        const shapes = f.restIsWhole ? this.restShapes(varargs) : undefined
+        if (shapes) return this.reportRestList(call, written, f, args, self, varargs, shapes)
         for (let i = f.params.length; i < args.length; i++) {
-            if (isAssignable(args[i], f.varargs)) continue
+            if (isAssignable(args[i], varargs)) continue
             this.diagnostics.push({
                 node: (placed ? this.writtenAt(written, i - self) : written[i - self]) ?? call,
-                message: `Argument of type '${formatType(args[i])}' is not assignable to parameter of type '${briefType(f.varargs)}'`
-                    + this.explainMismatch(args[i], f.varargs),
+                message: `Argument of type '${formatType(args[i])}' is not assignable to parameter of type '${briefType(varargs)}'`
+                    + this.explainMismatch(args[i], varargs),
             })
             return
         }
@@ -5236,6 +5314,7 @@ class TypeAnalyzer {
             param,
             type: node.typeAnnotation ? this.resolveType(node.typeAnnotation) : undefined,
             asserts: node.asserts,
+            ...node.implies ? { implies: true } : {},
         }
     }
 
@@ -5632,6 +5711,13 @@ class TypeAnalyzer {
                 return [union(each.map(([item]) => item)), first[1]]
             }
         }
+        // `T extends string[]` walks as what it may be does.
+        if (t.kind === "typeParam" && t.constraint) return this.iterationOf(source, t.constraint, report)
+        // `T & string[]`, what narrowing a `T` leaves, walks as its list does.
+        if (t.kind === "intersection") {
+            const known = t.types.filter(m => m.kind !== "typeParam")
+            if (known.length === 1) return this.iterationOf(source, known[0], report)
+        }
         if (t.kind !== "never" && report && this.emitDiagnostics) {
             this.diagnostics.push({
                 node: source,
@@ -5774,6 +5860,7 @@ class TypeAnalyzer {
     }
 
     private readonly destructuredReported = new WeakSet<object>()
+    private readonly patternSourceType = new Map<ObjectPattern | ArrayPattern, Type>()
 
     /** What a pattern reads from. `const { a } = v` is `v.a`, and fails where
      *  that would: on a `v` that may be nil, and on one that is `unknown`.
@@ -5791,9 +5878,33 @@ class TypeAnalyzer {
             report(t.kind === "primitive" ? "is nil" : "is possibly nil. Check it first, or give it a default")
             type = withoutNil(t)
         }
+        this.patternSourceType.set(pattern, type)
         const read = this.expand(type)
         if (read.kind === "unknown" && read.declared) report("is of type 'unknown'")
+        // `const [ok, err] = pcall(f)` reads positions 1 and 2 of a table
+        // that has none: an error, not two `unknown`s.
+        else if (pattern.type === "ArrayPattern" && !this.isListLike(read)) {
+            report(`is not an array: type '${briefType(type)}' cannot be destructured with [ ]`)
+        }
         return type
+    }
+
+    /** Whether `[a, b] = v` can read `v` by position: an array, a tuple, or a
+     *  table with a number indexer or a `[1]` member — every member of a union. */
+    private isListLike(raw: Type): boolean {
+        const t = this.expand(raw)
+        switch (t.kind) {
+            case "array": case "tuple": case "any": case "unknown": case "never": case "infer": return true
+            case "union": return t.types.every(m => this.isListLike(m))
+            case "intersection": return t.types.some(m => this.isListLike(m))
+            case "difference": return this.isListLike(t.base)
+            case "typeParam": return !t.constraint || this.isListLike(t.constraint)
+            case "object":
+                if (t.class) return false
+                return t.properties.has("1") || (!!t.indexer && isAssignable(numberType, t.indexer.key))
+            case "genericRef": case "conditional": case "mapped": case "indexedAccess": return true
+            default: return false
+        }
     }
 
     private bindPattern(target: BindingTarget, valueType: Type, env: FlowEnv, mode: BindMode, label?: string): void {
@@ -5910,10 +6021,14 @@ class TypeAnalyzer {
             // A generic *shape* — an object type or an interface, written out
             // rather than computed — is known by its name too, as TypeScript
             // shows it: `RBXScriptSignal<[BasePart]>`, not its members.
-            const shape = def.interface || def.node.type === "TableTypeNode"
+            // So is one written as shapes joined — `ZodType<T[]> & { ... }` —
+            // but not one that computes, whose members are what to show.
+            const shape = def.interface || def.node.type === "TableTypeNode" ||
+                (def.node.type === "IntersectionTypeNode" &&
+                    def.node.types.every(m => m.type === "TableTypeNode" || m.type === "TypeReference"))
             const named = def.params.length === 0 ? withAliasName(r, t.name)
                 : shape || ((r.kind === "conditional" || r.kind === "mapped" || r.kind === "indexedAccess") && containsTypeParam(r))
-                    ? withAliasName(r, formatType(t))
+                    ? withAliasName(r, formatType(t), t)
                     : r
             this.expandCache.set(key, named)
             return named
@@ -5987,8 +6102,12 @@ class TypeAnalyzer {
             return match ? [{ entry, ...match }] : []
         })
         const best = Math.max(0, ...matches.map(m => m.specificity))
+        // Filled in, not worked out: a member's type is reduced when it is
+        // read (`metatableMember`). Reducing them all here computed every
+        // method's `ObjectKeys<T>`, `Readonly<T>`... for each value asked
+        // about — over a large type, most of what a file cost.
         const found = matches.filter(m => m.specificity === best).map(({ entry, bindings }) => ({
-            type: this.expand(this.reduceType(substitute(this.resolvedMetatable(entry).metatable, bindings))),
+            type: this.expand(substitute(this.resolvedMetatable(entry).metatable, bindings)),
             source: entry.source,
         }))
         this.metatableCache.set(t, found)
@@ -6019,7 +6138,7 @@ class TypeAnalyzer {
         for (let i = indexes.length - 1; i >= 0; i--) {
             const { table, source } = indexes[i]
             const property = table.kind === "object" ? table.properties.get(name) : undefined
-            if (property) return { type: property.type, source }
+            if (property) return { type: this.reduceType(property.type), source }
         }
         return undefined
     }
@@ -6036,7 +6155,7 @@ class TypeAnalyzer {
         const members = new Map<string, Type>()
         for (const { table } of this.metatableIndexes(t)) {
             if (table.kind !== "object") continue
-            for (const [name, property] of table.properties) members.set(name, property.type)
+            for (const [name, property] of table.properties) members.set(name, this.reduceType(property.type))
         }
         return members
     }
@@ -6048,8 +6167,16 @@ class TypeAnalyzer {
     private receiverMetatableMember(objType: Type, name: string): { type: Type; source: MethodSource } | undefined {
         const t = this.expand(objType)
         const parts = (t.kind === "union" ? t.types : [t]).map(m => this.expand(m))
-        if (parts.some(m => m.kind === "object" && m.properties.has(name))) return undefined
+        if (parts.some(m => this.hasOwnMember(m, name))) return undefined
         return this.metatableMember(t, name)
+    }
+
+    /** Whether `t` holds `name` itself — an object, or any part of an
+     *  intersection (`ZodType<string> & { min: ... }` has its `parse`). */
+    private hasOwnMember(t: Type, name: string, depth = 0): boolean {
+        if (t.kind === "object") return t.properties.has(name)
+        if (t.kind === "intersection" && depth < 8) return t.types.some(m => this.hasOwnMember(this.expand(m), name, depth + 1))
+        return false
     }
 
     /** The most a deferred type could turn out to be. A conditional is one of
@@ -6454,6 +6581,13 @@ class TypeAnalyzer {
         if (index.kind === "union") return union(index.types.map(m => this.indexedType(t, m)))
         if (t.kind === "difference") return this.indexedType(t.base, index)
         if (t.kind === "typeParam" && t.constraint) return this.indexedType(t.constraint, index)
+        // `T & string[]`, what narrowing a `T` leaves: read through the parts
+        // that say what is there.
+        if (t.kind === "intersection") {
+            const parts = t.types.filter(m => m.kind !== "typeParam")
+                .map(m => this.indexedType(m, index)).filter(p => p.kind !== "unknown")
+            if (parts.length) return intersection(parts)
+        }
         if (t.kind === "array") return t.element
         if (t.kind === "tuple") {
             // Past its places, a tuple with a rest holds one of the rest.
@@ -6486,6 +6620,15 @@ class TypeAnalyzer {
         }
         // An `any` key could have been any of them.
         return index.kind === "any" ? anyType : unknownType
+    }
+
+    /** `to`, rebuilt from `from`, under `from`'s alias name — with the name's
+     *  arguments reduced too: `ZodArray<ZodString["_output"]>` is shown as
+     *  `ZodArray<string>`. */
+    private renamed<T extends ObjectType | IntersectionType>(from: ObjectType | IntersectionType, to: T): T {
+        if (!from.nameRef) return { ...to, name: from.name }
+        const nameRef = { ...from.nameRef, typeArguments: from.nameRef.typeArguments.map(a => this.reduceType(a)) }
+        return { ...to, name: formatType(nameRef), nameRef }
     }
 
     /** What a deferred `T[K]` can be: every property its index could name.
@@ -6523,7 +6666,18 @@ class TypeAnalyzer {
         if (t.kind === "union") return union(t.types.map(m => this.elementType(m, index)))
         if (t.kind === "difference") return this.elementType(t.base, index)
         if (t.kind === "typeParam" && t.constraint) return this.elementType(t.constraint, index)
+        if (t.kind === "intersection") {
+            const parts = t.types.filter(m => m.kind !== "typeParam")
+                .map(m => this.elementType(m, index)).filter(p => p.kind !== "unknown")
+            if (parts.length) return intersection(parts)
+        }
         if (t.kind === "any") return anyType
+        // A table read by position: its `[1]` member, or its number indexer.
+        if (t.kind === "object" && !t.class) {
+            const member = t.properties.get(String(index + 1))
+            if (member) return member.type
+            if (t.indexer && isAssignable(numberType, t.indexer.key)) return t.indexer.value
+        }
         return unknownType
     }
 
@@ -8260,7 +8414,9 @@ class TypeAnalyzer {
                         dropped.push(subtracts ? narrowExclude(member, answered) : member)
                         continue
                     }
-                    if (names.has(name)) kept.push(member)
+                    // `T extends number | string` that answered "string" is
+                    // the `T` that is a string, `T & string`.
+                    if (names.has(name)) kept.push(member.kind === "typeParam" && names.size > 1 ? narrowTo(member, answered) : member)
                     if (!(names.size === 1 && names.has(name))) dropped.push(member)
                 }
                 return { yes: union(kept), no: union(dropped) }
@@ -8313,8 +8469,9 @@ class TypeAnalyzer {
         const found = this.predicateCallTarget(cond, env)
         if (!found) return
         const filter = found.predicate.type
+        const implies = found.predicate.implies
         this.narrowRef(found.arg, env, t, f, cur => filter
-            ? { yes: narrowTo(cur, filter), no: narrowExclude(cur, filter) }
+            ? { yes: narrowTo(cur, filter), no: implies ? cur : narrowExclude(cur, filter) }
             : { yes: narrowTruthy(cur), no: narrowFalsy(cur) })
     }
 
@@ -8381,6 +8538,9 @@ class TypeAnalyzer {
                     },
                 }
             }
+            // A guard read off a generic shape (`ZodType<T>`'s `is`) holds
+            // its `T` as it was filled in, which may still be a computation.
+            if (f.predicate.type) return { arg, predicate: { ...f.predicate, type: this.reduceType(f.predicate.type) } }
             return { arg, predicate: f.predicate }
         }
         return undefined

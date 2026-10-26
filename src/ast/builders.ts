@@ -3420,8 +3420,9 @@ export class Parser {
      *      : v is string          -- narrows `v` in the caller's true branch
      *      : asserts v            -- narrows `v` for the rest of the caller's block
      *      : asserts v is string
+     *      : implies v is string  -- the true branch only: false says nothing
      *
-     *  `is` and `asserts` are *soft* keywords -- they lex as plain identifiers,
+     *  `is`, `asserts` and `implies` are *soft* keywords -- they lex as plain identifiers,
      *  so a return type that merely happens to be named `is` still parses. We
      *  only commit when the two-token lookahead can't mean anything else. */
     private tryParseTypePredicate(): TypePredicateNode | undefined {
@@ -3440,6 +3441,18 @@ export class Parser {
             }
             return {
                 type: "TypePredicateNode", parameterName, asserts: true, typeAnnotation,
+                ...spanFrom(start, this.previous()),
+            }
+        }
+
+        // `implies x is T`
+        if (isWord(start, "implies") && this.peek(1).type === "Identifier" && isWord(this.peek(2), "is")) {
+            this.advance()
+            const parameterName = this.expectIdentifier().value as string
+            this.advance() // 'is'
+            const typeAnnotation = this.parseType()
+            return {
+                type: "TypePredicateNode", parameterName, asserts: false, implies: true, typeAnnotation,
                 ...spanFrom(start, this.previous()),
             }
         }

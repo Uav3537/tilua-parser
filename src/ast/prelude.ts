@@ -66,7 +66,9 @@ type FromEntries<L> = L extends readonly unknown[]
     ? number extends L["length"] ? Partial<EntriesObject<L>> : EntriesObject<L>
     : never
 
-type Pick<T, K> = { [P in K]: T[P] }
+-- \`Pick\` takes only keys \`T\` has: \`Pick<User, "typo">\` is an error. \`Omit\`
+-- takes any, as TypeScript's does.
+type Pick<T, K extends keyof T> = { [P in K]: T[P] }
 type Omit<T, K> = Pick<T, Exclude<keyof T, K>>
 type Record<K, V> = { [P in K]: V }
 
@@ -127,17 +129,20 @@ declare metatable<T> T[]: {
     __index: {
         find: (self: readonly T[], test: (value: T, index: number) => boolean) => T | nil,
         findIndex: (self: readonly T[], test: (value: T, index: number) => boolean) => number | nil,
-        filter: (<S extends T>(self: readonly T[], test: (value: T, index: number) => value is S) => S[])
+        filter: (<S extends T>(self: readonly T[], test: (value: T, index: number) => implies value is S) => S[])
             & ((self: readonly T[], test: (value: T, index: number) => boolean) => T[]),
         -- A tuple maps to a tuple as long: \`[1, 2]:map(f)\` is \`[U, U]\`.
         map: <U, L extends readonly T[]>(self: L, transform: (value: T, index: number) => U) => MappedList<L, U>,
-        forEach: (self: readonly T[], visit: (value: T, index: number) => nil) => nil,
+        -- What \`visit\` answers is thrown away, so it may answer anything:
+        -- \`xs:forEach(x => out:push(x))\`, as TypeScript's \`void\` allows.
+        forEach: (self: readonly T[], visit: (value: T, index: number) => unknown) => nil,
         some: (self: readonly T[], test: (value: T, index: number) => boolean) => boolean,
         every: (self: readonly T[], test: (value: T, index: number) => boolean) => boolean,
         reduce: <U>(self: readonly T[], step: (total: U, value: T, index: number) => U, initial: U) => U,
         -- Asking is not adding: any value may be looked for, and finding it
         -- says it is one of the array's — \`if (names:includes(s))\` narrows \`s\`.
-        includes: (self: readonly T[], value: unknown) => value is T,
+        -- Not finding it says nothing: \`s\` may still be a string not listed.
+        includes: (self: readonly T[], value: unknown) => implies value is T,
         indexOf: (self: readonly T[], value: unknown, start?: number) => number | nil,
         join: (self: readonly T[], separator?: string) => string,
         concat: <U>(self: readonly T[], ...others: (readonly U[])[]) => (T | U)[],
@@ -204,7 +209,7 @@ declare metatable<T extends {}> T: {
             & (<U, V>(self: T, a: U, b: V) => T & U & V)
             & (<U, V, W>(self: T, a: U, b: V, c: W) => T & U & V & W)
             -- Generic like the rest: a plain signature would be tried first.
-            & (<S extends {}>(self: T, ...sources: S[]) => T),
+            & (<S extends {}>(self: T, ...sources: (S | nil)[]) => T),
         freeze: (self: T) => Readonly<T>,
         isFrozen: (self: T) => boolean,
     },

@@ -974,7 +974,9 @@ already get.
 **Narrowing** follows TypeScript's model: references (`x`, `x.a.b`, `x["k"]`)
 rather than just variables, discriminated unions at any depth, `and`/`or`,
 early return, `break`/`continue`, `throw`, `error()` (declared `=> never`), user type
-guards (`v is T`), and assertion signatures (`asserts v`).
+guards (`v is T`), one-sided guards as in Flow (`implies v is T`: a true answer
+narrows `v`, a false one says nothing — the array `includes` is one), and
+assertion signatures (`asserts v`).
 
 Reading a member of, indexing or calling a value that may be nil is an error
 until a check narrows the nil away, as with TypeScript's `strictNullChecks`:

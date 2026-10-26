@@ -1012,6 +1012,8 @@ export interface TypePredicateNode extends BaseNode {
     parameterName: string
     /** `asserts x` — narrows the rest of the enclosing block, not a branch. */
     asserts: boolean
+    /** `implies x is T` (Flow's): true says `x` is a `T`, false says nothing. */
+    implies?: boolean
     /** Absent for a bare `asserts x` (a truthiness assertion). */
     typeAnnotation?: TypeNode
 }
