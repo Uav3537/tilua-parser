@@ -49,7 +49,7 @@ export interface NeverType { kind: "never"; alias?: string }
 
 /** `object` is TypeScript's: any value that is not one of the others — a
  *  table, a list, a function, a class instance. */
-export type PrimitiveName = "nil" | "boolean" | "number" | "string" | "thread" | "buffer" | "object"
+export type PrimitiveName = "nil" | "void" | "boolean" | "number" | "string" | "thread" | "buffer" | "object"
 export interface PrimitiveType { kind: "primitive"; name: PrimitiveName; alias?: string }
 
 /** `"foo"`, `42`, `true` — a single-valued type. `base` is the primitive it widens to. */
@@ -431,6 +431,15 @@ export const unknownType: UnknownType = { kind: "unknown" }
 export const declaredUnknownType: UnknownType = { kind: "unknown", declared: true }
 export const neverType: NeverType = { kind: "never" }
 export const nilType: PrimitiveType = { kind: "primitive", name: "nil" }
+/** What a function gives back when it gives nothing worth reading —
+ *  TypeScript's `void`. As a value it is `nil`; as what a function type
+ *  returns it takes a function that returns anything, whose answer nobody
+ *  reads: `() => task.defer(f)` goes where `() => void` is wanted. */
+export const voidType: PrimitiveType = { kind: "primitive", name: "void" }
+
+export function isVoid(t: Type): boolean {
+    return t.kind === "primitive" && t.name === "void"
+}
 export const booleanType: PrimitiveType = { kind: "primitive", name: "boolean" }
 export const numberType: PrimitiveType = { kind: "primitive", name: "number" }
 export const stringType: PrimitiveType = { kind: "primitive", name: "string" }
@@ -1109,7 +1118,10 @@ export function optional(t: Type): Type {
 /** Widens literal types to their primitive base (the default for a plain
  *  `local x = "foo"` binding, unless `as const` says otherwise). Recurses
  *  into arrays/tuples/objects/unions. */
-export function widen(t: Type): Type {
+/** `keep` names a value that is not to be widened, however far in: one read
+ *  from somewhere rather than written as a literal (see `analyzeTypes`). */
+export function widen(t: Type, keep?: (t: Type) => boolean): Type {
+    if (keep?.(t)) return t
     // A type an alias names was written down, not inferred from a literal, so
     // there is nothing to widen — and widening into it would turn a declared
     // `Mode: "A" | "B"` into `string` and break the alias it came from.
@@ -1121,23 +1133,23 @@ export function widen(t: Type): Type {
         // object was: what it holds stays as narrow as it was written.
         case "array":
             if (t.readonly) return t
-            return arrayOf(widen(t.element))
+            return arrayOf(widen(t.element, keep))
         case "tuple":
             if (t.readonly) return t
-            return tupleMeta(tuple(t.elements.map(widen), t.rest && widen(t.rest)), t)
+            return tupleMeta(tuple(t.elements.map(e => widen(e, keep)), t.rest && widen(t.rest, keep)), t)
         case "object": {
             if (t.frozen || t.class) return t
             const entries: [string, ObjectProperty][] = []
-            for (const [k, v] of t.properties) entries.push([k, { ...v, type: widen(v.type) }])
-            const w = objectType(entries, t.indexer && { key: t.indexer.key, value: widen(t.indexer.value) })
+            for (const [k, v] of t.properties) entries.push([k, { ...v, type: widen(v.type, keep) }])
+            const w = objectType(entries, t.indexer && { key: t.indexer.key, value: widen(t.indexer.value, keep) })
             if (t.name) w.name = t.name
             if (t.nameRef) w.nameRef = t.nameRef
             return w
         }
         case "union":
-            return union(t.types.map(widen))
+            return union(t.types.map(m => widen(m, keep)))
         case "difference":
-            return difference(widen(t.base), t.excluded)
+            return difference(widen(t.base, keep), t.excluded)
         default:
             return t
     }
@@ -1159,8 +1171,10 @@ export function widen(t: Type): Type {
  *  nominally as before. */
 let expandAlias: ((t: GenericRefType) => Type) | undefined
 
-export function setAliasExpander(fn: ((t: GenericRefType) => Type) | undefined): void {
+export function setAliasExpander(fn: ((t: GenericRefType) => Type) | undefined): ((t: GenericRefType) => Type) | undefined {
+    const previous = expandAlias
     expandAlias = fn
+    return previous
 }
 
 /** The most a type still waiting on a type parameter could turn out to be —
@@ -1170,8 +1184,10 @@ export function setAliasExpander(fn: ((t: GenericRefType) => Type) | undefined):
  *  with `expandAlias`, without one nothing changes. */
 let deferredBound: ((t: Type) => Type | undefined) | undefined
 
-export function setDeferredBound(fn: ((t: Type) => Type | undefined) | undefined): void {
+export function setDeferredBound(fn: ((t: Type) => Type | undefined) | undefined): ((t: Type) => Type | undefined) | undefined {
+    const previous = deferredBound
     deferredBound = fn
+    return previous
 }
 
 /** What a string or a list has under a name — its `length`, and the methods
@@ -1179,8 +1195,10 @@ export function setDeferredBound(fn: ((t: Type) => Type | undefined) | undefined
  *  the duration of a run, as `expandAlias` is. */
 let builtinMember: ((t: Type, name: string) => Type | undefined) | undefined
 
-export function setBuiltinMember(fn: ((t: Type, name: string) => Type | undefined) | undefined): void {
+export function setBuiltinMember(fn: ((t: Type, name: string) => Type | undefined) | undefined): ((t: Type, name: string) => Type | undefined) | undefined {
+    const previous = builtinMember
     builtinMember = fn
+    return previous
 }
 
 /** Is a string or a list one of a shape — `"abc"` a `{ length: number }`, as
@@ -1225,8 +1243,10 @@ export function isAssignable(rawA: Type, rawB: Type): boolean {
     // same observable value in Lua: reading the result of a call that returns
     // nothing yields nil. A function inferred `-> nil` therefore satisfies a
     // `-> ()` annotation, and the reverse.
-    let a: Type = isNoValue(rawA) ? nilType : rawA
-    let b: Type = isNoValue(rawB) ? nilType : rawB
+    // `void` is `nil` as a value; only a function type's return reads it
+    // otherwise (`isFunctionAssignable`).
+    let a: Type = isNoValue(rawA) || isVoid(rawA) ? nilType : rawA
+    let b: Type = isNoValue(rawB) || isVoid(rawB) ? nilType : rawB
     if (a === b) return true
 
     // See through nominal references before comparing structurally, but only
@@ -1580,6 +1600,10 @@ function isFunctionAssignable(a: FunctionType, b: FunctionType): boolean {
         if (!given?.type || given.asserts || given.param !== wanted.param || !isAssignable(given.type, wanted.type)) return false
         if (given.implies && !wanted.implies) return false
     }
+    // A function wanted for what it does, not for what it gives back — `=>
+    // void` — takes one that gives something back: `() => task.defer(f)` is
+    // a callback whose answer nobody reads. `=> nil` promises a `nil`.
+    if (isVoid(b.returns)) return true
     return isAssignable(a.returns, b.returns)
 }
 
@@ -1695,7 +1719,7 @@ export function isPossiblyTruthy(t: Type): boolean {
     if (t.kind === "union") return t.types.some(isPossiblyTruthy)
     // `T & nil` is a `nil`: a value of every member at once.
     if (t.kind === "intersection") return t.types.every(isPossiblyTruthy)
-    if (t.kind === "primitive" && t.name === "nil") return false
+    if (t.kind === "primitive" && (t.name === "nil" || t.name === "void")) return false
     if (t.kind === "literal" && t.value === false) return false
     return true
 }
@@ -1707,7 +1731,7 @@ export function isPossiblyFalsy(t: Type): boolean {
     if (t.kind === "union") return t.types.some(isPossiblyFalsy)
     if (t.kind === "intersection") return t.types.every(isPossiblyFalsy)
     if (t.kind === "any" || t.kind === "unknown") return true
-    if (t.kind === "primitive") return t.name === "nil" || t.name === "boolean"
+    if (t.kind === "primitive") return t.name === "nil" || t.name === "void" || t.name === "boolean"
     if (t.kind === "literal") return t.value === false
     // typeParam / genericRef: unresolved, so assume it could be either.
     return t.kind === "typeParam" || t.kind === "genericRef"

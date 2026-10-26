@@ -135,7 +135,7 @@ declare metatable<T> T[]: {
         map: <U, L extends readonly T[]>(self: L, transform: (value: T, index: number) => U) => MappedList<L, U>,
         -- What \`visit\` answers is thrown away, so it may answer anything:
         -- \`xs:forEach(x => out:push(x))\`, as TypeScript's \`void\` allows.
-        forEach: (self: readonly T[], visit: (value: T, index: number) => unknown) => nil,
+        forEach: (self: readonly T[], visit: (value: T, index: number) => unknown) => void,
         some: (self: readonly T[], test: (value: T, index: number) => boolean) => boolean,
         every: (self: readonly T[], test: (value: T, index: number) => boolean) => boolean,
         reduce: <U>(self: readonly T[], step: (total: U, value: T, index: number) => U, initial: U) => U,

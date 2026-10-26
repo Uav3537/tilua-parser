@@ -109,6 +109,8 @@ npm i -D @tilua-types/roblox        # Luau + Roblox
   one that is not installed is an error. `"lua"` — `@tilua-types/lua`, where
   the standard library used to be — loads nothing: it is already there, and
   a library that still depends on it does not bring it in twice.
+- **`treeShaking`** — the compiler's: `true` leaves out of a bundle what the
+  entry never reaches. The parser only checks it.
 - **`noLib`** — `true` leaves the standard library out, as TypeScript's
   `noLib` does: no `print`, no `string`, only what `types` declares. For a
   host with none of Lua's, or a library of one's own in its place. With it,
@@ -120,11 +122,12 @@ npm i -D @tilua-types/roblox        # Luau + Roblox
   follow it, and a file the tree maps gets its own `script`, so
   `script.Parent.Remotes` is typed. A `.tilua` file matches the Luau file of
   the same path.
-- **`target`** and **`output`** — the compiler's: which Lua to emit for
-  (`"luau"`, the default, or `"lua51"`), and how many files to write
-  (`"single"`, the default; `"chunks"`, which also writes a file for what only
-  an `import()` reaches; or `"modules"`, one file per module). The parser only
-  checks them.
+- **`output`** — the compiler's: how many files to write (`"single"`, the
+  default; `"chunks"`, which also writes a file for what only an `import()`
+  reaches; or `"modules"`, one file per module). The parser only checks it.
+  Which Lua the output is written for is no option: it is Lua any Lua runs,
+  and a type library says what more its Lua has (`"luau"`). A config that
+  still sets `target` is told so.
 
 | function | does |
 |---|---|
@@ -434,6 +437,12 @@ project. One that answers with a new array wraps it in `__ARRAY__(...)`, which
 writes it down as an array for `typeof`. The compiler's own lowering of the
 standard library — `console:log`, `error`, `pcall` — is built on these hooks.
 
+A plugin may also list `syntax`: what its Lua can write beyond Lua 5.1's
+(`LuaSyntax` — `"compoundAssignment"`, `"continue"`, `"ifExpression"`,
+`"floorDivision"`, `"iteration"`, `"attributes"`, `"numberLiterals"`,
+`"requireByPath"`). Without one the compiler writes Lua any Lua runs;
+`@tilua-types/luau` lists Luau's, so a Luau project is written as Luau.
+
 **A `(` that starts a line** continues the statement above it, as in Lua and
 in JavaScript — `const v = map[key]` followed by `("A"):upper()` is one
 statement, a call of `map[key]`. tilua says so rather than letting it pass:
@@ -452,7 +461,7 @@ other ways TypeScript writes them:
 type Counter = {
     readonly id: number
     step(by: number): this        -- a method: (self: this, by: number) => this
-    reset?(): nil                 -- an optional one
+    reset?(): void                -- an optional one
     get total(): number           -- read-only, unless a `set` is written too
     set label(value: string)
     (n: number): string           -- calling the value; several are overloads
@@ -823,7 +832,11 @@ it. An object says how it is walked with `__iter`, which answers one of those
 two. `for (k, v in ...)` and `for (x in f, s, v)` are Luau's packs, and are
 syntax errors.
 
-A function that returns nothing returns `nil`: `() => nil`, not `() => ()`.
+A function that returns nothing returns `void`: `() => void`, not `() => ()`.
+As a value `void` is `nil`. As what a function type returns it says nobody
+reads the answer, as TypeScript's does, so a function that returns something
+fits it: `() => task.defer(f)` goes where a `() => void` is wanted. `() =>
+nil` promises a `nil`, and takes only a function that gives one back.
 Bare `...` is gone — a
 function takes a rest parameter, and what the script was started with is
 `scriptArgs: unknown[]`. `()`, `(A, B)` as a type, `T...`, `...: T` and
@@ -849,13 +862,13 @@ firstOf(1, 2)             -- number | nil: the arguments say what `T` is
 ```
 
 A type is written the same way: `type Reporter = (level: string, ...lines:
-string[]) => nil`. Without an annotation a rest parameter is `unknown[]`. A rest
+string[]) => void`. Without an annotation a rest parameter is `unknown[]`. A rest
 parameter may also be a tuple, or a type parameter standing for one — then the
 arguments are exactly its elements, which is how a function says it forwards
 another's:
 
 ```luau
-declare function spawn<A extends unknown[]>(f: (...args: A) => nil, ...args: A): thread
+declare function spawn<A extends unknown[]>(f: (...args: A) => void, ...args: A): thread
 
 spawn(function(n: number) { print(n) }, 1)       -- ok
 spawn(function(n: number) { print(n) }, "no")    -- '"no"' is not a number
@@ -918,7 +931,7 @@ and to an assignment such as `remote.OnServerInvoke = function(player) { ... }`.
 
 **Signals and other variadic generics** — a type parameter can stand for a
 list of arguments: `type Signal<T extends unknown[] = any[]> = { Connect:
-(self, cb: (...args: T) => nil) => Connection }`, given as a tuple —
+(self, cb: (...args: T) => void) => Connection }`, given as a tuple —
 `Signal<[Player, string]>`, `Signal<[]>` for none.
 
 **Operators** — on a type that declares metamethods (`__add`, `__mul`,
@@ -945,7 +958,7 @@ where that parameter is.
 **Functions compare as under `strictFunctionTypes`.** A function fits a
 function type when it takes whatever that type's callers pass — its parameters
 are contravariant — and needs no more arguments than they hand it: `(x: Part)
-=> nil` is not a `(x: Instance) => nil`, which may be called with any
+=> void` is not a `(x: Instance) => void`, which may be called with any
 instance. A method — a function taking its receiver first, `self` or `this`
 — is compared both ways, as TypeScript compares methods, so an override may
 narrow what it takes.
@@ -1010,7 +1023,7 @@ Type-level programs work as they do in TypeScript. A tuple may spread anywhere
 (`[...A, ...B]`, `[infer H, ...infer R]`) and name its elements
 (`[x: number, y?: number]`) — an element marked `?` may be left out, so
 `[number, string?]` takes `[1]` and its `length` is `1 | 2`, and
-`Parameters<(a: number, b?: string) => nil>` is `[a: number, b?: string]`; a
+`Parameters<(a: number, b?: string) => void>` is `[a: number, b?: string]`; a
 list of any length may stand before the elements written after it
 (`[...unknown[], infer L]`); `T["length"]` counts a tuple, and `keyof` a list is
 its positions and its `length`, `number | "length"` (`keyof string[]` is the

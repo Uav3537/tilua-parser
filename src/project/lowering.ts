@@ -47,7 +47,14 @@ export interface LoweringPlugin {
      *     positions replaced by the project's, followed by a traceback of
      *     those. It is an `xpcall` handler — the one the entry runs under —
      *     so a runtime that runs a callback on a thread of its own can report
-     *     that callback's errors the same way.
+     *     that callback's errors the same way;
+     *   - `__ARRAY__`, a function that writes a new table down as an array
+     *     and answers it, so `typeof` tells it from an object;
+     *   - `__ARRAYS__`, the record of every table written down as an array:
+     *     `__ARRAYS__[t]` is true for `[]`, and nil for `{}`;
+     *   - `__JSON__`, the language's JSON, which knows `[]` from `{}`:
+     *     `encode(value)`, `decode(text)`, and `null` / `undefined`, values a
+     *     table can hold where JSON has `null` or nothing.
      *
      *      local __NAME__ = {}
      *      function __NAME__.first(t) return t[1] end
@@ -71,7 +78,37 @@ export interface LoweringPlugin {
      *  There is no call site to describe here, so this is where a plugin
      *  that rewrites calls keeps the rest of the program consistent with it. */
     globalValue?(value: GlobalValue): string | undefined
+
+    /** What the Lua the output runs on can write beyond Lua 5.1's syntax.
+     *  The compiler knows only Lua: what it writes runs on Lua 5.1 to 5.4,
+     *  LuaJIT and Luau alike, and a construct 5.1 has no syntax for — `+=`,
+     *  `continue` — becomes what 5.1 does have. A library for a Lua with more
+     *  (`@tilua-types/luau`, which `roblox` loads) names it here, and the
+     *  compiler writes it as that Lua would. */
+    readonly syntax?: readonly LuaSyntax[]
 }
+
+/** Syntax beyond Lua 5.1's, as a library says its Lua has it:
+ *
+ *   - `compoundAssignment`: `a += b`, and the rest of the operators;
+ *   - `continue`: `continue` in a loop;
+ *   - `ifExpression`: `if c then a else b` as an expression;
+ *   - `floorDivision`: `a // b`;
+ *   - `iteration`: `for _, v in t` walking a table itself, or what its
+ *     `__iter` says;
+ *   - `attributes`: `@native` and the like on a function;
+ *   - `numberLiterals`: `1_000` and `0b1010` as written;
+ *   - `requireByPath`: `require("./file")`, reading a path from the file
+ *     that asks — how a bundle written as several files loads the others. */
+export type LuaSyntax =
+    | "compoundAssignment"
+    | "continue"
+    | "ifExpression"
+    | "floorDivision"
+    | "iteration"
+    | "attributes"
+    | "numberLiterals"
+    | "requireByPath"
 
 /** Where a call was written. */
 export interface CallSite {

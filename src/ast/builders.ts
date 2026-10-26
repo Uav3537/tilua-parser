@@ -1078,6 +1078,18 @@ export class Parser {
         const start = this.current()
         this.advance() // consume 'import'
 
+        // `import "./setup"`: the module runs, and nothing is named.
+        if (this.current().type === "Literal" && (this.current() as any).kind === "string") {
+            const sourceTok = this.advance()
+            const source: StringLiteral = {
+                type: "StringLiteral",
+                value: (sourceTok as any).value,
+                raw: (sourceTok as any).raw,
+                ...spanFrom(sourceTok, sourceTok),
+            }
+            return { type: "ImportStatement", specifiers: [], source, ...spanFrom(start, this.previous()) }
+        }
+
         // `import type { A } from` / `import type D from` / `import type * as M from`.
         // `import type from "./m"` is still a default import named `type`.
         const next = this.peek(1)

@@ -26,26 +26,23 @@ export interface TiluaConfig {
     readonly baseUrl: string
     /** Absolute path of a Rojo sourcemap, or `null` for none. */
     readonly sourceMap: string | null
-    /** Which Lua the compiler must emit for. `"luau"` (the default) keeps
-     *  Luau's own syntax; `"lua51"` also lowers what stock Lua 5.1 has no
-     *  syntax for. The parser does not care — it is the compiler's to act on,
-     *  and lives here because it belongs to the project. */
-    readonly target: BuildTarget
     /** How many files the compiler writes. `"single"` (the default) is one
      *  file holding every module. `"chunks"` keeps what the entry imports in
      *  the entry's file and writes what only an `import()` reaches to files of
      *  their own, loaded when first asked for. `"modules"` writes one file per
-     *  module. Like `target`, it is the compiler's to act on. */
+     *  module. The parser does not care — it is the compiler's to act on,
+     *  and lives here because it belongs to the project. */
     readonly output: OutputMode
     /** Leave out Lua's standard library, which every file otherwise has the
      *  way every TypeScript file has JavaScript's: `print`, `string`, `pcall`.
      *  For a host that offers none of it, or a library of one's own in its
      *  place. `false` unless set. */
     readonly noLib: boolean
+    /** Leave out of the bundle what the entry never reaches: declarations
+     *  nothing reads, and modules whose exports nothing reads and that do
+     *  nothing as they run. The compiler's to act on. `false` unless set. */
+    readonly treeShaking: boolean
 }
-
-/** `"luau"` is Roblox's Lua. `"lua51"` is stock Lua 5.1. */
-export type BuildTarget = "luau" | "lua51"
 
 /** See `TiluaConfig.output`. */
 export type OutputMode = "single" | "chunks" | "modules"
@@ -93,8 +90,7 @@ export function findConfig(file: string, host: ProjectHost = nodeHost): ConfigLo
     }
 }
 
-const OPTIONS = ["types", "paths", "baseUrl", "sourceMap", "target", "output", "noLib"] as const
-const TARGETS = ["luau", "lua51"] as const
+const OPTIONS = ["types", "paths", "baseUrl", "sourceMap", "output", "noLib", "treeShaking"] as const
 const OUTPUTS = ["single", "chunks", "modules"] as const
 
 /** Read and check one config file. Problems do not stop the rest of it from
@@ -122,7 +118,7 @@ export function loadConfig(path: string, host: ProjectHost = nodeHost): { config
     const problem = (key: string, message: string): void => { problems.push({ file, message, ...at(key) }) }
 
     for (const key of Object.keys(options)) {
-        if (!(OPTIONS as readonly string[]).includes(key)) {
+        if (!(OPTIONS as readonly string[]).includes(key) && key !== "target") {
             problem(key, `Unknown option '${key}'. Options are: ${OPTIONS.join(", ")}`)
         }
     }
@@ -159,13 +155,11 @@ export function loadConfig(path: string, host: ProjectHost = nodeHost): { config
         else problem("sourceMap", "'sourceMap' must be a path string, or null for none")
     }
 
-    let target: BuildTarget = "luau"
+    // The output is Lua that runs anywhere; what more a Lua has is said by
+    // the library for it, not by the project.
     if (options.target !== undefined) {
-        if (typeof options.target === "string" && (TARGETS as readonly string[]).includes(options.target)) {
-            target = options.target as BuildTarget
-        } else {
-            problem("target", `'target' must be one of: ${TARGETS.join(", ")}`)
-        }
+        problem("target", "'target' is gone: the output is Lua that runs on 5.1 to 5.4, LuaJIT and Luau, "
+            + "and a library says what more its Lua has — add \"luau\" to 'types' (\"roblox\" loads it)")
     }
 
     let output: OutputMode = "single"
@@ -183,7 +177,13 @@ export function loadConfig(path: string, host: ProjectHost = nodeHost): { config
         else problem("noLib", "'noLib' must be true or false")
     }
 
-    return { config: { path: file, directory, source, types, paths, baseUrl, sourceMap, target, output, noLib }, problems }
+    let treeShaking = false
+    if (options.treeShaking !== undefined) {
+        if (typeof options.treeShaking === "boolean") treeShaking = options.treeShaking
+        else problem("treeShaking", "'treeShaking' must be true or false")
+    }
+
+    return { config: { path: file, directory, source, types, paths, baseUrl, sourceMap, output, noLib, treeShaking }, problems }
 }
 
 /** Blank out `//` and `/* *\/` comments and trailing commas, keeping every

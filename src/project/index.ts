@@ -6,11 +6,11 @@
 export { nodeHost, type ProjectHost } from "./host"
 export {
     CONFIG_FILE_NAMES, findConfig, loadConfig, stripJsonComments,
-    type TiluaConfig, type BuildTarget, type OutputMode, type ConfigProblem, type ConfigLookup,
+    type TiluaConfig, type OutputMode, type ConfigProblem, type ConfigLookup,
 } from "./config"
 export { resolveTypeLibraries, type TypeLibraries, type LoweringModule } from "./libraries"
 export type {
-    LoweringPlugin, MethodCall, MethodLowering, GlobalCall, GlobalValue, CallLowering, CallSite, ArgumentInfo,
+    LoweringPlugin, LuaSyntax, MethodCall, MethodLowering, GlobalCall, GlobalValue, CallLowering, CallSite, ArgumentInfo,
 } from "./lowering"
 export { moduleCandidates, resolveModulePath, importExpressions } from "./modules"
 export { sourceMapTypes, type SourceMapNode, type SourceMapOptions, type SourceMapTypes } from "./sourcemap"

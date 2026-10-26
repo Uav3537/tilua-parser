@@ -5459,6 +5459,68 @@ function g() {
     ], ["[\"hp\" | \"mp\", \"hp\" | \"mp\"]", "number[]", "[string, number][]", "[string, string]"])
 }
 
+{
+    const errorsOf = (code: string): string[] => {
+        const program = parse(code)
+        const scopes = analyzeScopes(program)
+        return [...scopes.diagnostics, ...analyzeTypes(program, scopes, {}).diagnostics].map(d => d.message)
+    }
+    check("??: what the declaration wants is wanted of either side", [
+        errorsOf("type Stat = { n: number }\ndeclare m: { [string]: Stat[] }\nconst a: Stat[] = m[\"k\"] ?? []"),
+        errorsOf("declare m: { [string]: { [string]: number } }\nconst a: { [string]: number } = m[\"k\"] ?? {}"),
+        errorsOf("declare m: { [string]: number[] }\nconst a: string[] = m[\"k\"] ?? []"),
+    ], [[], [], ["Type 'number[] | string[]' is not assignable to 'string[]'"]])
+    check("=> void: a function wanted for what it does may give something back", [
+        errorsOf("declare defer: () => thread\nconst f: () => void = () => defer()"),
+        errorsOf("declare each: (f: (n: number) => void) => void\neach((n) => n + 1)"),
+        errorsOf("const f: () => void = function() { print(1) }\nconst g: () => void = () => nil"),
+        errorsOf("const f: () => number = () => \"x\""),
+        errorsOf("function f(): void { return 5 }"),
+        errorsOf("function f(): void { print(1) }\nfunction g(): void { return }\nconst r: number | nil = f()"),
+    ], [[], [], [], ["Type '() => \"x\"' is not assignable to '() => number'"], ["Type '5' is not assignable to 'void'"], []])
+    check("generic inference: a value read from somewhere keeps its literals", [
+        errorsOf([
+            "type Box<T> = { value: T }",
+            "declare function lit<T extends string>(v: T): Box<T>",
+            "declare function obj<S>(s: S): S",
+            "const L = lit(\"cmd\")",
+            "const b: Box<\"cmd\"> = obj({ t: L }).t",
+            "declare raw: { kind: \"a\" }",
+            "const k: \"a\" = obj({ r: raw }).r.kind",
+        ].join("\n")),
+        errorsOf("declare function obj<S>(s: S): S\nconst w = obj({ k: \"x\" })\nconst s: \"x\" = w.k"),
+    ], [[], ["Type 'string' is not assignable to '\"x\"'"]])
+    check("=> nil: a function that promises nil returns nil", [
+        errorsOf("declare defer: () => thread\nconst f: () => nil = () => defer()"),
+        errorsOf("function f(): nil { return 5 }"),
+    ], [["Type '() => thread' is not assignable to '() => nil'"], ["Type '5' is not assignable to 'nil'"]])
+}
+
+// `import "./setup"`: run for what it does, naming nothing.
+{
+    const program = parse("import \"./setup\"\nprint(1)")
+    const statement = program.body.statements[0] as { type: string; specifiers: unknown[]; source: { value: string } }
+    check("import \"...\": a statement with no names", [statement.type, statement.specifiers.length, statement.source.value], ["ImportStatement", 0, "./setup"])
+    const scopes = analyzeScopes(program)
+    const types = analyzeTypes(program, scopes, { resolveModule: () => undefined })
+    check("import \"...\": a missing module is still reported", types.diagnostics.map(d => d.message), ["Cannot find module './setup'"])
+}
+
+// A module `import()` reaches is analyzed in the middle of the importing
+// one's run; when it is done, the importer's types still compare as they did.
+{
+    const lib = parse("type Signal<T extends unknown[] = any[]> = { Wait: (self: Signal<T>) => T }")
+    const other = parse("export const sig = nil as any as Signal<[]>")
+    const resolveModule = (): ModuleExports => {
+        const scopes = analyzeScopes(other)
+        return moduleExports(other, scopes, analyzeTypes(other, scopes, { libs: [lib] }))
+    }
+    const program = parse("const m = import(\"./other\")\nconst s: Signal<[]> = m.sig\nconst t: Signal<[]> = s")
+    const scopes = analyzeScopes(program)
+    const types = analyzeTypes(program, scopes, { libs: [lib], resolveModule })
+    check("import(): a type from the module is the type the importer names", types.diagnostics.map(d => d.message), [])
+}
+
 for (const failure of failures) console.log(`FAIL ${failure}`)
 console.log(`\nproject: ${passed} passed, ${failures.length} failed`)
 process.exit(failures.length ? 1 : 0)

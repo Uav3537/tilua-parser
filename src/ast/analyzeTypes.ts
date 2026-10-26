@@ -12,7 +12,7 @@ import { standardLibrary } from "./standardLibrary"
 import {
     type Type, type ObjectProperty, type ObjectType, type FunctionType, type TypePredicate, type ClassInfo,
     type GenericRefType, type IntersectionType, type TypeOrigin, objectKeywordType,
-    anyType, unknownType, declaredUnknownType, neverType, nilType, booleanType, numberType, stringType, threadType, bufferType,
+    anyType, unknownType, declaredUnknownType, neverType, nilType, voidType, booleanType, numberType, stringType, threadType, bufferType,
     primitive, literal, arrayOf, mappedList, tuple, tupleMembers, spread, hasSpread, objectType, fn, union, intersection, optional,
     typeParam, substitute, unify, containsTypeParam, matchInfer, setAliasExpander, setDeferredBound, setBuiltinMember, difference,
     widen, isAssignable, overlaps, narrowTo, narrowExclude, narrowTruthy, narrowFalsy,
@@ -617,6 +617,13 @@ function writesLiteral(e: Expression): boolean {
     }
 }
 
+/** Does `e` write a new value — a literal, or a table or list holding what
+ *  it writes — rather than read one from somewhere? */
+function writesFresh(e: Expression): boolean {
+    const inner = unwrapParens(e)
+    return writesLiteral(inner) || inner.type === "TableExpression" || inner.type === "ArrayExpression"
+}
+
 /** Every `infer U` name written inside a conditional's `extends` clause.
  *  They behave like type parameters scoped to that conditional. */
 function collectInferNames(node: TypeNode): string[] {
@@ -1135,19 +1142,23 @@ class TypeAnalyzer {
         }
         // Let structural comparison see through nominal alias references —
         // unavoidable for recursive types such as a class hierarchy.
-        setAliasExpander(t => this.expand(t))
-        setDeferredBound(t => this.deferredBound(t))
-        // A string or a list fits a shape that names what it answers to.
-        setBuiltinMember((t, name) => (name === "length" ? this.lengthOf(t, name) : this.metatableMethod(t, name)))
+        // A module an `import()` reaches is analyzed in the middle of this
+        // run, and puts back what it found when it is done.
+        const outer = [
+            setAliasExpander(t => this.expand(t)),
+            setDeferredBound(t => this.deferredBound(t)),
+            // A string or a list fits a shape that names what it answers to.
+            setBuiltinMember((t, name) => (name === "length" ? this.lengthOf(t, name) : this.metatableMethod(t, name))),
+        ] as const
         try {
             const env: FlowEnv = new Map()
             this.visitBlock(this.program.body, env)
             this.resolveDeferredDeclares()
             if (this.options.reportUnknownTypes) this.reportUnknownTypes()
         } finally {
-            setAliasExpander(undefined)
-            setDeferredBound(undefined)
-            setBuiltinMember(undefined)
+            setAliasExpander(outer[0])
+            setDeferredBound(outer[1])
+            setBuiltinMember(outer[2])
         }
         return {
             typeOf: this.typeOf,
@@ -2598,6 +2609,7 @@ class TypeAnalyzer {
                     case "unknown": return declaredUnknownType
                     case "never": return neverType
                     case "nil": return nilType
+                    case "void": return voidType
                     case "boolean": return booleanType
                     case "number": return numberType
                     case "string": return stringType
@@ -4218,10 +4230,11 @@ class TypeAnalyzer {
         this.expectedTypeOf.set(e, expected)
         if (e.type === "ArrayExpression") return this.applyArrayContext(e, expected)
         if (e.type === "TableExpression") return this.applyTableContext(e, expected)
-        // `Config.Paths or []` is the Lua way to write a default: what the
-        // surroundings want of the whole is wanted of either side.
-        if (e.type === "BinaryExpression" && (e.operator === "or" || e.operator === "and")) {
-            if (e.operator === "or") this.applyContext(e.left, expected)
+        // `Config.Paths or []` is the Lua way to write a default, and
+        // `m[k] ?? []` the other: what the surroundings want of the whole is
+        // wanted of either side.
+        if (e.type === "BinaryExpression" && (e.operator === "or" || e.operator === "and" || e.operator === "??")) {
+            if (e.operator !== "and") this.applyContext(e.left, expected)
             this.applyContext(e.right, expected)
             return
         }
@@ -4607,13 +4620,13 @@ class TypeAnalyzer {
         if (f.varargs && f.restIsWhole) {
             // `<const T>(...xs: T)` keeps what was written, as narrow as it is.
             const keep = f.varargs.kind === "typeParam" && f.varargs.isConst
-            const rest = argTypes.slice(f.params.length).map(a => a === undefined ? unknownType : keep ? a : widen(a))
+            const rest = argTypes.slice(f.params.length).map(a => a === undefined ? unknownType : keep ? a : widen(a, this.keepRead))
             unify(f.varargs, tuple(rest), vars, subst, "first")
         } else if (f.varargs) {
             const keeps = keepsLiterals(f.varargs)
             for (let i = f.params.length; i < argTypes.length; i++) {
                 const arg = argTypes[i]
-                if (arg !== undefined) unify(f.varargs, keeps ? arg : widen(arg), vars, subst)
+                if (arg !== undefined) unify(f.varargs, keeps ? arg : widen(arg, this.keepRead), vars, subst)
             }
         }
         for (const i of later) this.unifyArgument(f.params[i].type, argTypes[i], vars, subst, topLevel)
@@ -4647,7 +4660,7 @@ class TypeAnalyzer {
         // Each parameter is its own inference site: the first one to
         // pin a name down keeps it, and a later argument that does not
         // fit is reported against it rather than widening it away.
-        unify(declared, preserve ? arg : widen(arg), vars, subst, "first")
+        unify(declared, preserve ? arg : widen(arg, this.keepRead), vars, subst, "first")
     }
 
     /** Re-infer the arguments that land on a `<const T>` parameter, keeping
@@ -6877,9 +6890,15 @@ class TypeAnalyzer {
                 }
                 if (op === "??") {
                     // `b` is read only where `a` was nil, and stands in for it.
-                    const left = this.infer(expr.left, env)
+                    const left = withoutNil(this.infer(expr.left, env))
                     const right = this.infer(expr.right, env)
-                    return union([withoutNil(left), right])
+                    // `counts[k] ?? {}`: an empty fallback adds nothing to
+                    // what the left side already is, as with `or`.
+                    const fallback = unwrapParens(expr.right)
+                    const empty = (fallback.type === "TableExpression" && fallback.fields.length === 0)
+                        || (fallback.type === "ArrayExpression" && fallback.elements.length === 0)
+                    if (empty && left.kind !== "never" && left.kind !== "any" && isAssignable(right, left)) return left
+                    return union([left, right])
                 }
                 const l = this.infer(expr.left, env)
                 const r = this.infer(expr.right, env)
@@ -7784,7 +7803,7 @@ class TypeAnalyzer {
                     ? this.inferAsConst(field.value, env)
                     : this.infer(field.value, env)
                 const v = asConst ? inferred
-                    : genericContext ? this.keepContextualLiterals(inferred, context)
+                    : genericContext ? this.keepContextualLiterals(inferred, context, field.value)
                     : this.widenUnlessAsked(inferred, field.value)
                 put(key, { type: v, optional: false, readonly: asConst })
             } else if (field.type === "TableFieldShorthand") {
@@ -7793,7 +7812,7 @@ class TypeAnalyzer {
                     : this.infer(field.name, env)
                 put(field.name.name, {
                     type: asConst ? inferred
-                        : genericContext ? this.keepContextualLiterals(inferred, context)
+                        : genericContext ? this.keepContextualLiterals(inferred, context, field.name)
                         : this.widenUnlessAsked(inferred, field.name),
                     optional: false, readonly: asConst,
                 })
@@ -7805,7 +7824,7 @@ class TypeAnalyzer {
                 if (k.kind === "literal" && typeof k.value === "string") {
                     put(k.value, {
                         type: asConst ? v
-                            : genericContext ? this.keepContextualLiterals(v, context)
+                            : genericContext ? this.keepContextualLiterals(v, context, field.value)
                             : this.widenUnlessAsked(v, field.value),
                         optional: false, readonly: asConst,
                     })
@@ -8014,7 +8033,20 @@ class TypeAnalyzer {
      *  when the contract's property admits string literals, and becomes
      *  `string` when it is only `string`; a tuple becomes an array unless the
      *  contract is a tuple; nothing stays readonly. */
-    private keepContextualLiterals(value: Type, context: Type | undefined): Type {
+    /** Values a generic call's object literal holds that were read from
+     *  somewhere — `L` in `obj({ t: L })` — which inferring the call's type
+     *  parameters leaves as they are: only what was written there widens. */
+    private readonly readValues = new WeakSet<Type>()
+    private readonly keepRead = (t: Type): boolean => this.readValues.has(t)
+
+    private keepContextualLiterals(value: Type, context: Type | undefined, at?: Expression): Type {
+        // `{ t: L }`: a value read from somewhere keeps the type it has there
+        // — `L`'s `Box<"cmd">` — as `widenUnlessAsked` keeps it. Only what is
+        // written here is new.
+        if (at && !writesFresh(at)) {
+            this.readValues.add(value)
+            return value
+        }
         const ctx = context === undefined ? undefined : this.expand(context)
         switch (value.kind) {
             case "literal":

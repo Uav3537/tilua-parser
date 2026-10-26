@@ -43,7 +43,7 @@ declare _VERSION: string
 declare function require(module: unknown): unknown
 declare function tostring(value: unknown): string
 declare function tonumber(value: unknown, base?: number): number | nil
-declare function print(...args: unknown[]): nil
+declare function print(...args: unknown[]): void
 -- \`error\` never returns, which is what lets
 -- \`if v == nil then error("...") end\` narrow the rest of the block.
 declare function error(message: unknown, level?: number): never
@@ -165,7 +165,7 @@ declare math: {
     rad: (deg: number) => number,
     deg: (rad: number) => number,
     random: (m?: number, n?: number) => number,
-    randomseed: (x: number) => nil,
+    randomseed: (x: number) => void,
     huge: number,
     pi: number,
 }
@@ -173,10 +173,10 @@ declare math: {
 
 declare table: {
     -- \`insert(t, v)\` appends; \`insert(t, pos, v)\` puts it there.
-    insert: (<T>(t: T[], value: T) => nil) & (<T>(t: T[], pos: number, value: T) => nil),
+    insert: (<T>(t: T[], value: T) => void) & (<T>(t: T[], pos: number, value: T) => void),
     remove: <T>(t: T[], pos?: number) => T | nil,
     concat: (t: readonly (string | number)[], sep?: string, i?: number, j?: number) => string,
-    sort: <T>(t: T[], compare?: (a: T, b: T) => boolean) => nil,
+    sort: <T>(t: T[], compare?: (a: T, b: T) => boolean) => void,
     -- Lua 5.1's originals. Deprecated there and gone from 5.2 on, but Luau
     -- still answers to them, so code being ported still type-checks.
     getn: <T>(t: readonly T[]) => number,
@@ -226,9 +226,9 @@ declare coroutine: {
 -- calling thread — the error goes to \`task.spawn\`, so reporting a problem
 -- never becomes one.
 type Console = {
-    log: (self: Console, ...args: unknown[]) => nil,
-    warn: (self: Console, ...args: unknown[]) => nil,
-    error: (self: Console, ...args: unknown[]) => nil,
+    log: (self: Console, ...args: unknown[]) => void,
+    warn: (self: Console, ...args: unknown[]) => void,
+    error: (self: Console, ...args: unknown[]) => void,
 }
 
 declare console: Console

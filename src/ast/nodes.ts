@@ -35,6 +35,8 @@ export interface ImportSpecifier extends BaseNode {
     local: Identifier
 }
 
+/** `import { a } from '...'`, and the rest. With no names at all —
+ *  `import '...'` — the module is run for what it does. */
 export interface ImportStatement extends BaseNode {
     type: "ImportStatement"
     /** `import Default from '...'` */
