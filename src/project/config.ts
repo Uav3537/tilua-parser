@@ -42,6 +42,12 @@ export interface TiluaConfig {
      *  nothing reads, and modules whose exports nothing reads and that do
      *  nothing as they run. The compiler's to act on. `false` unless set. */
     readonly treeShaking: boolean
+    /** Write into the bundle the map from its lines back to the project's,
+     *  which an error nothing caught, a callback's error and `console` read to
+     *  name the `.tilua` file and line instead of the bundle's. The
+     *  compiler's to act on. `true` unless set; a release build that will
+     *  not be debugged can leave it out. */
+    readonly lineMap: boolean
 }
 
 /** See `TiluaConfig.output`. */
@@ -90,7 +96,7 @@ export function findConfig(file: string, host: ProjectHost = nodeHost): ConfigLo
     }
 }
 
-const OPTIONS = ["types", "paths", "baseUrl", "sourceMap", "output", "noLib", "treeShaking"] as const
+const OPTIONS = ["types", "paths", "baseUrl", "sourceMap", "output", "noLib", "treeShaking", "lineMap"] as const
 const OUTPUTS = ["single", "chunks", "modules"] as const
 
 /** Read and check one config file. Problems do not stop the rest of it from
@@ -183,7 +189,13 @@ export function loadConfig(path: string, host: ProjectHost = nodeHost): { config
         else problem("treeShaking", "'treeShaking' must be true or false")
     }
 
-    return { config: { path: file, directory, source, types, paths, baseUrl, sourceMap, output, noLib, treeShaking }, problems }
+    let lineMap = true
+    if (options.lineMap !== undefined) {
+        if (typeof options.lineMap === "boolean") lineMap = options.lineMap
+        else problem("lineMap", "'lineMap' must be true or false")
+    }
+
+    return { config: { path: file, directory, source, types, paths, baseUrl, sourceMap, output, noLib, treeShaking, lineMap }, problems }
 }
 
 /** Blank out `//` and `/* *\/` comments and trailing commas, keeping every

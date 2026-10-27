@@ -111,6 +111,9 @@ npm i -D @tilua-types/roblox        # Luau + Roblox
   a library that still depends on it does not bring it in twice.
 - **`treeShaking`** — the compiler's: `true` leaves out of a bundle what the
   entry never reaches. The parser only checks it.
+- **`lineMap`** — the compiler's: `false` leaves out of a bundle the map that
+  names an error's place in the project's files (`true` unless set). The
+  parser only checks it.
 - **`noLib`** — `true` leaves the standard library out, as TypeScript's
   `noLib` does: no `print`, no `string`, only what `types` declares. For a
   host with none of Lua's, or a library of one's own in its place. With it,
