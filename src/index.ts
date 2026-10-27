@@ -20,7 +20,7 @@ export * from '@ast/typeModel'
 export { PRELUDE_SOURCE } from '@ast/prelude'
 export { STANDARD_LIBRARY_SOURCE, standardLibrary, standardGlobals } from '@ast/standardLibrary'
 export {
-    readDirectives, directivesOf, applyDirectives, UNUSED_EXPECT_ERROR,
+    readDirectives, directivesOf, applyDirectives, UNUSED_EXPECT_ERROR, UNUSED_EXPECT_WARNING,
     type Directive, type DirectiveKind, type Directives, type DirectiveOutcome,
 } from '@ast/directives'
 export * from './project'

@@ -532,15 +532,19 @@ export interface NumericForStatement extends BaseNode {
     body: Block
 }
 
-/** `for (const item in source)`. One value each time — several are an
- *  array, taken apart with a pattern: `for (const [k, v] in pairs(t))`.
- *  `let` instead of `const` when the body assigns to the name. */
+/** `for (const item of source)` walks what a source holds or hands out, one
+ *  value each time — several are an array, taken apart with a pattern:
+ *  `for (const [k, v] of pairs(t))`. `for (const key in table)` walks a
+ *  table's keys, as in TypeScript. `let` instead of `const` when the body
+ *  assigns to the name. */
 export interface GenericForStatement extends BaseNode {
     type: "GenericForStatement"
     /** `outer: for (...)` — what a `break outer` or `continue outer` in a
      *  loop inside it names. */
     label?: Identifier
     kind: "const" | "let"
+    /** `of`: the values; `in`: the keys. */
+    over: "values" | "keys"
     variable: BindingTarget
     iterator: Expression
     body: Block

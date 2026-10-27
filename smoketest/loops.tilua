@@ -8,12 +8,12 @@ const records = [
 ]
 
 -- an iteration: `[step, state, first]`, whose steps are one `[i, value]` each
-for (const [i, entry] in ipairs(pairsList)) {
+for (const [i, entry] of ipairs(pairsList)) {
     print(i, entry)
 }
 
 -- a table walked as it is: each item is one of its values
-for (const record in records) {
+for (const record of records) {
     print(record.id, record.label)
 }
 
@@ -26,7 +26,7 @@ for (i: number = 10, 1, -1) {
 }
 
 -- the item taken apart by a pattern, as deep as it goes
-for (const [key, { deep }] in pairs({ x: { deep: 1 } })) {
+for (const [key, { deep }] of pairs({ x: { deep: 1 } })) {
     print(key, deep)
 }
 
@@ -40,6 +40,6 @@ function counter(limit: number): () => number | nil {
     }
 }
 
-for (const n in counter(3)) {
+for (const n of counter(3)) {
     print(n)
 }

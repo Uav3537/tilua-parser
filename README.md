@@ -186,7 +186,7 @@ if (n < 0) {
 
 while (going) { step() }
 for (i = 1, 10) { total += i }
-for (const [name, value] in pairs(t)) { print(name, value) }
+for (const [name, value] of pairs(t)) { print(name, value) }
 repeat { step() } until (done)
 do { ... }
 
@@ -214,7 +214,7 @@ if (n < 0) return "negative"
 elseif (n == 0) return "zero"
 else return "positive"
 
-for (const item in items) if (item) print(item)
+for (const item of items) if (item) print(item)
 while (queued > 0) queued -= 1
 ```
 
@@ -357,7 +357,7 @@ the array. Looking for a value is not adding one, so `includes` and `indexOf`
 take any value, not only one the array's type already holds — and `includes`
 is a guard: `if (modes:includes(s))` narrows `s` to a mode. `concat` may join
 arrays of other types (`(T | U)[]`). `keys`, `values` and `entries` answer
-arrays rather than JavaScript's iterators — `for (const [i, v] in
+arrays rather than JavaScript's iterators — `for (const [i, v] of
 xs:entries())` — counting from 1, and say all that is known: a tuple's are
 tuples, `["a", 1] as const` having keys `[1, 2]` and entries `[[1, "a"], [2,
 1]]`, where an array's are `number[]`, `T[]` and `[number, T][]`. The ones
@@ -815,13 +815,13 @@ the call an array's last element:
 const [a, b] = [require(module)]    -- { require(module) }: every value
 ```
 
-**A loop takes one value too** — `for (const item in source)`, and several are
+**A loop takes one value too** — `for (const item of source)`, and several are
 an array the pattern takes apart:
 
 ```luau
-for (const name in names) { print(name) }
-for (const [i, name] in ipairs(names)) { print(i, name) }
-for (const [key, score] in pairs(scores)) { print(key, score) }
+for (const name of names) { print(name) }
+for (const [i, name] of ipairs(names)) { print(i, name) }
+for (const [key, score] of pairs(scores)) { print(key, score) }
 ```
 
 The name is `const`, or `let` where the body assigns to it, as anywhere else.
@@ -829,8 +829,23 @@ A source is an array or a table, walked for its values; an iterator function,
 called until it answers `nil`; or an iteration — `[step, state, first]`, what
 `pairs(t)` answers — whose `step` is called with the state and the item before
 it. An object says how it is walked with `__iter`, which answers one of those
-two. `for (k, v in ...)` and `for (x in f, s, v)` are Luau's packs, and are
+two. `for (k, v of ...)` and `for (x of f, s, v)` are Luau's packs, and are
 syntax errors.
+
+`for (const key in table)` walks a table's keys, as TypeScript's does: a
+list's positions, a record's property names, an indexer's key type. It is
+`for key in pairs(table)`, values left behind.
+
+```luau
+const scores = { alice: 10, bob: 20 }
+for (const name in scores) { print(name, scores[name]) }   -- name: "alice" | "bob"
+for (const i in ["a", "b"]) { print(i) }                    -- i: number
+```
+
+A key is one value, so `for ... in` takes no pattern, and an iterator has no
+keys to give — `for (const [k, v] in pairs(t))` or `for (const w in
+s:gmatch("%a+"))` are errors that say to write `of`. `of` is a keyword only
+there: anywhere else it is a name like any other.
 
 A function that returns nothing returns `void`: `() => void`, not `() => ()`.
 As a value `void` is `nil`. As what a function type returns it says nobody
@@ -1127,8 +1142,8 @@ loops around a `break`'s only: one inside a function written in the loop
 cannot name it.
 
 ```luau
-outer: for (const row in grid) {
-    for (const cell in row) {
+outer: for (const row of grid) {
+    for (const cell of row) {
         if (cell == target) break outer
     }
 }
@@ -1203,18 +1218,25 @@ type names. Both are off by default, since they are only right when the type
 libraries the file names are loaded.
 
 **Directives** — comments that switch checking off, as TypeScript's
-`// @ts-...` do. They silence scope and type errors, never syntax errors:
+`// @ts-...` do. They silence scope and type errors and lint warnings, never
+syntax errors:
 
 ```luau
 --@tilua-nocheck          -- before the first line of code: the whole file
---@tilua-ignore           -- the next line of code
+--@tilua-ignore           -- the next line of code, errors and warnings
 --@tilua-expect-error     -- the next line of code, which must have an error
+--@tilua-expect-warning   -- the next line of code, which must have a warning
 ```
+
+An `expect-` directive covers its own kind only: a warning neither answers an
+`expect-error` nor is hidden by one, and the other way round. An unused
+`expect-error` is an error; an unused `expect-warning` is a warning.
 
 `parseWithRecovery` returns them as `directives`; `directivesOf(source)` reads
 them for a caller that parsed some other way, and
-`applyDirectives(directives, diagnostics, lineOf)` filters a list and names
-each `expect-error` that had nothing to suppress.
+`applyDirectives(directives, diagnostics, lineOf, isWarning)` filters a list
+and names each `expect-error` and `expect-warning` that had nothing to
+suppress.
 
 ## Options
 

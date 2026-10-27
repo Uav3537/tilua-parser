@@ -88,13 +88,13 @@ declare function newproxy(addMeta?: boolean): unknown
 -- The entry after \`key\` — or nil, past the last one.
 declare function next<K, V>(t: { [K]: V }, key?: K): [K, V] | nil
 
--- What \`for (const item in source)\` walks: \`step\` is called with the state
+-- What \`for (const item of source)\` walks: \`step\` is called with the state
 -- and the item before it — \`first\` the first time — until it answers nil.
 -- An array, a table and an iterator function are walked too, so this is only
 -- what a source such as \`pairs(t)\` hands over.
 type Iteration<S, T> = [(state: S, previous: T | nil) => T | nil, S, T | nil]
 
--- \`for (const [k, v] in pairs(t))\` / \`ipairs(t)\`: each item is one \`[key,
+-- \`for (const [k, v] of pairs(t))\` / \`ipairs(t)\`: each item is one \`[key,
 -- value]\` — a table, as every array is. The analyzer types it from \`t\` itself
 -- (a record's keys as literals, an array's elements); these declare the
 -- names, and their shape for any other use. Walking a list only reads it, so
@@ -127,7 +127,7 @@ declare string: {
     -- JavaScript's \`match\` answers — or nil.
     match: (s: string, pattern: string, init?: number) => [...string[]] | nil,
     -- Each match's captures (the whole match when there are none), one
-    -- array at a time: \`for (const [word] in s:gmatch("%a+"))\`.
+    -- array at a time: \`for (const [word] of s:gmatch("%a+"))\`.
     gmatch: (s: string, pattern: string) => () => [string, ...string[]] | nil,
     -- The new string, as JavaScript's \`replace\` answers; Luau's count of
     -- replacements is left behind.

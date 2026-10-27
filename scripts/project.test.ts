@@ -411,7 +411,7 @@ const rel = (path: string | undefined): string | undefined =>
         loop,
     ].join("\n"))
     check("widening: a value read from a declared table keeps its alias's literals",
-        iterate("for (const [_, card] in pairs(cards)) { apply(card) }").errors, [])
+        iterate("for (const [_, card] of pairs(cards)) { apply(card) }").errors, [])
     check("widening: a fresh literal still widens",
         iterate(`let fresh = { Mode: "A" }`).bindings.fresh, "{ Mode: string }")
 
@@ -428,7 +428,7 @@ const rel = (path: string | undefined): string | undefined =>
         "type Func = { kind: \"function\" }",
         "declare remotes: { Char: Event, Settings: Func, Maybe: Event | nil }",
         "function scan() {",
-        "    for (const [name, remote] in pairs(remotes)) {",
+        "    for (const [name, remote] of pairs(remotes)) {",
         "        const anyName = name",
         "        if (remote == nil) { return }",
         "        if (name == \"Settings\") {",
@@ -1135,12 +1135,12 @@ const rel = (path: string | undefined): string | undefined =>
         parseWithRecovery("for (k, v in pairs(t)) { }").errors.map(e => e.message),
         parseWithRecovery("for (item in items) { }").errors.map(e => e.message),
         parseWithRecovery("for (const i = 1, 10) { }").errors.map(e => e.message),
-        analyze("declare names: string[]\nfor (let name in names) { name = name + \"!\" }\nfor (const other in names) { other = \"x\" }").errors,
-        parseWithRecovery("for (const x in f, s, v) { }").errors.map(e => e.message),
-        analyze("declare n: number\nfor (const x in n) { }").errors,
+        analyze("declare names: string[]\nfor (let name of names) { name = name + \"!\" }\nfor (const other of names) { other = \"x\" }").errors,
+        parseWithRecovery("for (const x of f, s, v) { }").errors.map(e => e.message),
+        analyze("declare n: number\nfor (const x of n) { }").errors,
     ], [
-        ["A loop takes one value each time: take its parts with a destructuring, 'for (const [k, v] in pairs(t))' (1:7)"],
-        ["A loop over a source names its value with 'const' or 'let': 'for (const item in source)' (1:1)"],
+        ["A loop takes one value each time: take its parts with a destructuring, 'for (const [k, v] of pairs(t))' (1:7)"],
+        ["A loop over a source names its value with 'const' or 'let': 'for (const item of source)' (1:1)"],
         ["A counting loop names its variable without 'const': 'for (i = 1, 10)' (1:1)"],
         ["Cannot assign to 'other' — it is a const"],
         ["A loop has one source: an array, a table, an iterator function or an iteration '[step, state, first]' (1:18)"],
@@ -1363,7 +1363,7 @@ const rel = (path: string | undefined): string | undefined =>
         "declare options: { headers?: { [string]: string } }",
         "const headers = options.headers or {}",
         "const copy: { [string]: string } = {}",
-        "for (const [key, value] in pairs(headers)) {",
+        "for (const [key, value] of pairs(headers)) {",
         "    copy[key] = value",
         "}",
     ].join("\n"))
@@ -1401,10 +1401,10 @@ const rel = (path: string | undefined): string | undefined =>
             "declare function rows(): () => [string, number] | nil",
         ].join("\n"))
         const program = parse([
-            "for (const [part] in gmatch(\"a/b\", \"[^/]+\")) {",
+            "for (const [part] of gmatch(\"a/b\", \"[^/]+\")) {",
             "    const word = part",
             "}",
-            "for (const [name, count] in rows()) {",
+            "for (const [name, count] of rows()) {",
             "    const who = name",
             "    const many = count",
             "}",
@@ -1428,12 +1428,12 @@ const rel = (path: string | undefined): string | undefined =>
             "declare list: number[]",
             "declare map: { [string]: number }",
             "declare walk: [(s: number[], previous: [number, number] | nil) => [number, number] | nil, number[], nil]",
-            "for (const v in list) { print(v) }",
-            "for (const v in map) { print(v) }",
-            "for (const [k, v] in pairs(map)) { print(k, v) }",
-            "for (const [i, n] in ipairs(list)) { print(i, n) }",
-            "for (const c in gmatch(\"ab\", \"%a\")) { print(c) }",
-            "for (const [i, n] in walk) { print(i, n) }",
+            "for (const v of list) { print(v) }",
+            "for (const v of map) { print(v) }",
+            "for (const [k, v] of pairs(map)) { print(k, v) }",
+            "for (const [i, n] of ipairs(list)) { print(i, n) }",
+            "for (const c of gmatch(\"ab\", \"%a\")) { print(c) }",
+            "for (const [i, n] of walk) { print(i, n) }",
             "",
             "",
         ].join("\n"))
@@ -2342,6 +2342,33 @@ function g() {
         "10: Type '\"x\"' is not assignable to 'number'",
         "8: unused",
     ])
+    // A warning is the lint's: `expect-warning` waits for one, `expect-error`
+    // does not take one for an error, and `ignore` takes either.
+    const severed = (code: string) => {
+        const { program, directives } = parseWithRecovery(code)
+        const scopes = analyzeScopes(program)
+        const all = [...scopes.diagnostics, ...analyzeTypes(program, scopes).diagnostics]
+        const { kept, unusedExpectErrors, unusedExpectWarnings } = applyDirectives(directives, all, d => d.node.line.start,
+            d => (d as { severity?: string }).severity === "warning")
+        return [
+            ...kept.map(d => `${d.node.line.start}: ${(d as { severity?: string }).severity ?? "error"}`),
+            ...unusedExpectErrors.map(d => `${d.line}: unused error`),
+            ...unusedExpectWarnings.map(d => `${d.line}: unused warning`),
+        ]
+    }
+    check("directives: expect-warning covers warnings, expect-error errors, ignore both", severed([
+        "declare n: number",
+        "--@tilua-expect-warning",
+        "const a = n == \"x\"",
+        "--@tilua-expect-error",
+        "const b = n == \"x\"",
+        "--@tilua-expect-warning",
+        "const c: number = \"x\"",
+        "--@tilua-ignore",
+        "const d = n == \"x\"",
+        "--@tilua-expect-warning",
+        "const e = 1",
+    ].join("\n")), ["5: warning", "7: error", "4: unused error", "6: unused warning", "10: unused warning"])
     check("directives: nocheck before the code turns the file off", [
         directed("-- header\n--@tilua-nocheck\nconst a: number = \"x\"\nnope = 1"),
         directed("const a: number = \"x\"\n--@tilua-nocheck"),
@@ -2443,9 +2470,9 @@ function g() {
         "    return v",
         "}",
         "function h<T extends number | string[]>(v: T) {",
-        "    if (typeof v == \"array\") { const strings = v; const first = v[1]; for (const each in v) { } }",
+        "    if (typeof v == \"array\") { const strings = v; const first = v[1]; for (const each of v) { } }",
         "}",
-        "function k<T extends string[]>(v: T) { for (const walked in v) { } }",
+        "function k<T extends string[]>(v: T) { for (const walked of v) { } }",
         "declare u: unknown",
         "if (typeof u == \"array\") { const anyList = u }",
     ].join("\n"))
@@ -2694,7 +2721,7 @@ function g() {
         "function each<T>(arr: T[]) { const ones = arr:map(x => 1) }",
         "function listed<L extends unknown[]>(xs: L): number[] {",
         "    const mapped = xs:map(x => 1)",
-        "    for (const v in mapped) { const n: number = v }",
+        "    for (const v of mapped) { const n: number = v }",
         "    return mapped",
         "}",
         "function kept<L extends unknown[]>(xs: L): { -readonly [K in keyof L]: string } { return xs:map(x => \"s\") }",
@@ -2720,7 +2747,7 @@ function g() {
     // a callback is a function of its own.
     const jumps = analyze([
         "declare xs: number[]",
-        "for (const x in xs) { const doubled = xs:map(y => { if (y > 1) { continue }\n return y * 2 }) }",
+        "for (const x of xs) { const doubled = xs:map(y => { if (y > 1) { continue }\n return y * 2 }) }",
         "while (true) { if (xs[1] == 1) { break }\n repeat { continue } until (true) }",
         "break",
     ].join("\n"))
@@ -2961,7 +2988,7 @@ function g() {
         "    for (i = 1, 3) {",
         "        total += i",
         "    }",
-        "    for (const [name, n] in pairs({ a: 1 })) {",
+        "    for (const [name, n] of pairs({ a: 1 })) {",
         "        total += n",
         "    }",
         "    while (total > 0) {",
@@ -3769,7 +3796,7 @@ function g() {
         "const less = a < b",
         "const size = a.length",
         "const scaled = a(3)",
-        "for (const [index, label] in a) {",
+        "for (const [index, label] of a) {",
         "    const i: number = index",
         "    const l: string = label",
         "}",
@@ -5288,6 +5315,105 @@ function g() {
         bindingOf("function identity<T>(x: T): T { return x }\nconst i = identity(\"x\")", "i"),
         bindingOf("function identity<T>(x: T): T { return x }\nlet i = identity(\"x\")", "i"),
     ], [[], "[1, \"a\"]", "1", "\"x\"", "string"])
+    check("generic functions: a constraint naming another type parameter is checked at the call", [
+        errorsOf("function get<T, K extends keyof T>(o: T, k: K): T[K] { return o[k] }\nconst x = get({ a: 1, b: \"s\" }, \"c\")"),
+        errorsOf("function pick<T, K extends keyof T>(o: T, ...ks: K[]) {}\npick({ a: 1 }, \"a\", \"z\")"),
+        errorsOf("function pick<T, K extends keyof T>(o: T, ks: K[]) {}\npick({ a: 1 }, [\"a\", \"z\"])"),
+        errorsOf("function f<A, B extends A>(a: A, b: B) {}\nf(1, \"s\")\nf(1, 2)"),
+    ], [
+        ["Argument of type '\"c\"' is not assignable to parameter of type '\"a\" | \"b\"'"],
+        ["Argument of type '\"z\"' is not assignable to parameter of type '\"a\"'"],
+        ["Argument of type '(\"a\" | \"z\")[]' is not assignable to parameter of type '\"a\"[]'"],
+        ["Argument of type '\"s\"' is not assignable to parameter of type 'number'"],
+    ])
+    check("generic functions: a callback's rest list indexed by a type parameter is its elements", [
+        errorsOf("type E = { click: [x: number, y: number], key: [code: string, shift?: boolean] }\ndeclare function on<K extends keyof E>(name: K, cb: (...args: E[K]) => nil): nil\non(\"click\", (x, y) => { const n: number = x; const m: number = y })\non(\"key\", c => { const s: string = c })\non(\"key\", (c, s) => { const b: boolean | nil = s })\non(\"click\", x => {})"),
+        errorsOf("type E = { key: [string] }\ndeclare function on<K extends keyof E>(name: K, cb: (...args: E[K]) => nil): nil\non(\"key\", c => { const n: number = c })"),
+        errorsOf("type E = { click: [number] }\ndeclare function on<K extends keyof E>(name: K, cb: (...args: E[K]) => nil): nil\non(\"click\", (x: string) => {})"),
+    ], [
+        [],
+        ["Type 'string' is not assignable to 'number'"],
+        ["Argument of type '(x: string) => nil' is not assignable to parameter of type '(number) => nil'"],
+    ])
+    check("generic functions: type arguments written out, defaults, and callbacks read last", [
+        errorsOf("function id<T>(x: T): T { return x }\nconst r = id<number>(\"s\")"),
+        errorsOf("class A { constructor() {}  function id<T>(x: T): T { return x } }\nconst r = A.new():id<number>(\"s\")"),
+        bindingOf("function mk<T = string>(): T[] { return [] }\nconst r = mk()", "r"),
+        bindingOf("const mk = <T = string>(): T[] => []\nconst r = mk()", "r"),
+        bindingOf("declare function f<T, U = T[]>(x: T): [T, U]\nconst r = f(1)", "r"),
+        bindingOf("const r = [1, 2]:reduce((a, b) => a + b, 0)", "r"),
+        errorsOf("const r = [1, 2]:reduce((a, b) => a + b, 0)"),
+    ], [
+        ["Argument of type '\"s\"' is not assignable to parameter of type 'number'"],
+        ["Argument of type '\"s\"' is not assignable to parameter of type 'number'"],
+        "string[]", "string[]", "[number, number[]]", "number", [],
+    ])
+    check("narrowing: a discriminant inside an intersection with a union", [
+        errorsOf("type X = ({ k: \"a\", x: number } | { k: \"b\", y: string }) & { id: number }\ndeclare v: X\nif (v.k == \"a\") { const n: number = v.x; const s = v.y; const i: number = v.id }"),
+        errorsOf("type X = ({ k: \"a\", x: number } | { k: \"b\", y: string }) & { id: number }\nfunction f(v: X): number {\n    if (v.k == \"a\") return v.x\n    elseif (v.k == \"b\") return v.id\n    const n: never = v\n    return n\n}"),
+    ], [["Property 'y' does not exist on type '{ k: \"a\", x: number } & { id: number }'"], []])
+    check("methods: an optional one may not be there to call", [
+        errorsOf("interface A { f?(): number }\ndeclare a: A\nconst r = a:f()"),
+        bindingOf("interface A { f?(): number }\ndeclare a: A\nconst r = a:f()", "r"),
+        errorsOf("interface A { f?(): number }\ndeclare a: A\nif (a.f) { const r = a:f() }"),
+    ], [["'a.f' is possibly nil. Check it first"], "number", []])
+    check("as: one side has to fit the other", [
+        errorsOf("const a = 1 as string\nconst o = { a: 1 } as { a: string }\nconst s = \"s\" as { a: number }"),
+        errorsOf("declare u: number | string\nconst a = u as number\nconst b = {} as { x: number }\nconst c = 1 as any as string\nconst d = { x: 1 } as { x: number, f: () => nil }"),
+    ], [[
+        "Conversion of type 'number' to type 'string' may be a mistake: neither fits the other. If it is meant, assert to 'any' first",
+        "Conversion of type '{ a: number }' to type '{ a: string }' may be a mistake: neither fits the other. If it is meant, assert to 'any' first",
+        "Conversion of type 'string' to type '{ a: number }' may be a mistake: neither fits the other. If it is meant, assert to 'any' first",
+    ], []])
+    check("narrowing: what a test rules out of an unknown leaves it unknown", [
+        errorsOf("function f(u: unknown) {\n    if (typeof u == \"string\") { return }\n    const a = u.x\n    u:m()\n    const { b } = u\n}"),
+        errorsOf("function f(u: unknown) {\n    if (u == nil) { return }\n    const a = u.x\n}"),
+        errorsOf("function f() {\n    let u: unknown = nil\n    if (typeof u == \"string\") { u = 1 }\n    const a = u.x\n}"),
+        errorsOf("function f(u: unknown) {\n    if (typeof u ~= \"string\") { return }\n    const n = u.length\n}"),
+    ], [
+        ["'u' is of type 'unknown'", "'u' is of type 'unknown'", "'u' is of type 'unknown'"],
+        ["'u' is of type 'unknown'"],
+        ["'u' is of type 'unknown'"],
+        [],
+    ])
+    check("for ... of walks values, for ... in walks keys", [
+        bindingOf("for (const r of [1, 2]) {}", "r"),
+        bindingOf("for (const r in { a: 1, b: \"s\" }) {}", "r"),
+        bindingOf("for (const r in [10, 20]) {}", "r"),
+        bindingOf("declare d: { [string]: number }\nfor (const r in d) {}", "r"),
+        bindingOf("for (let r in { a: 1 }) {}", "r"),
+        bindingOf("const of = 1\nconst r = of + 1", "r"),
+        bindingOf("for (const of of [1]) { const r = of }", "r"),
+    ], ["number", "\"a\" | \"b\"", "number", "string", "string", "number", "number"])
+    check("for ... in: an iterator, a pair, or not a table is reported, with what to write", [
+        errorsOf("declare d: { [string]: number }\nfor (const [k, v] in pairs(d)) {}"),
+        errorsOf("declare d: { [string]: number }\nfor (const k in pairs(d)) {}"),
+        errorsOf("declare f: () => number | nil\nfor (const x in f) {}"),
+        errorsOf("for (const k in 5) {}"),
+        errorsOf("declare t: { a: number } | nil\nfor (const k in t) {}\nfor (const v of t) {}"),
+    ], [
+        ["'for ... in' walks a table's keys, one at a time: to take each '[key, value]' apart, write 'for (const [k, v] of pairs(t))'"],
+        ["'for ... in' walks a table's keys, and this is an iterator: to walk what it gives, write 'for (const item of ...)'"],
+        ["'for ... in' walks a table's keys, and this is an iterator: to walk what it gives, write 'for (const item of ...)'"],
+        ["'for ... in' walks the keys of a table, not of '5'"],
+        [
+            "'t' is possibly nil, and nil cannot be walked: check it first, or walk 't ?? []'",
+            "'t' is possibly nil, and nil cannot be walked: check it first, or walk 't ?? []'",
+        ],
+    ])
+    check("in: what holds is t[k] ~= nil — the key one of t's, the slot not nil", [
+        bindingOf("const o = { a: 1, b: \"s\" }\ndeclare k: string\nif (k in o) { const r = o[k] }", "r"),
+        bindingOf("const o = { a: 1, b: \"s\" }\ndeclare k: string\nif (k in o) { const r = k }", "r"),
+        bindingOf("declare d: { [string]: number | nil }\ndeclare k: string\nif (k in d) { const r = d[k] }", "r"),
+        bindingOf("declare xs: string[]\nif (2 in xs) { const r = xs[2] }", "r"),
+        bindingOf("declare t: { a?: number, b: string }\nif (\"a\" in t) { } else { const r = t.a }", "r"),
+        bindingOf("type K = \"a\" | \"b\" | \"c\"\nconst o = { a: 1, b: 2 }\ndeclare k: K\nif (k in o) { } else { const r = k }", "r"),
+    ], ["number | string", "\"a\" | \"b\"", "number", "string", "nil", "\"c\""])
+    check("do: a block that always runs keeps what it assigns and rules out", [
+        bindingOf("let x: number | string = 1\ndo { x = \"s\" }\nconst r = x", "r"),
+        errorsOf("declare u: number | nil\ndo { if (u == nil) { error(\"x\") } }\nconst n: number = u"),
+        bindingOf("const x = 1\ndo { const x = \"s\" }\nconst r = x", "r"),
+    ], ["string", [], "1"])
     check("as const freezes its lists", [
         bindingOf("const c = [1, [2]] as const", "c"),
         errorsOf("const modes = [\"a\", \"b\"] as const\ndeclare s: string\nconst found = modes:includes(s)\nconst joined = modes:join(\",\")"),
@@ -5333,9 +5459,9 @@ function g() {
         return [...scopes.diagnostics, ...analyzeTypes(program, scopes, {}).diagnostics].map(d => d.message)
     }
     check("read-only lists: walked and read by the standard library, not changed by it", [
-        errorsOf("const xs = [1, 2] as const\ndeclare ys: readonly string[]\nfor (const [i, v] in ipairs(xs)) { const n: 1 | 2 = v }\nfor (const [i, v] in pairs(ys)) { const s: string = v }\nconst u: string[] = unpack(ys)\nconst c = table.concat(ys, \",\")\nconst n = table.getn(ys)"),
+        errorsOf("const xs = [1, 2] as const\ndeclare ys: readonly string[]\nfor (const [i, v] of ipairs(xs)) { const n: 1 | 2 = v }\nfor (const [i, v] of pairs(ys)) { const s: string = v }\nconst u: string[] = unpack(ys)\nconst c = table.concat(ys, \",\")\nconst n = table.getn(ys)"),
         errorsOf("declare ys: readonly string[]\ntable.insert(ys, \"a\")"),
-        errorsOf("const xs = [1, 2] as const\nfor (const x in xs) { const s: string = x }"),
+        errorsOf("const xs = [1, 2] as const\nfor (const x of xs) { const s: string = x }"),
     ], [[], ["No overload matches this call"], ["Type '1 | 2' is not assignable to 'string'"]])
 }
 
@@ -5367,7 +5493,7 @@ function g() {
         errorsOf("class C { name = \"c\" constructor() {} }\nconst s: string = C.new().name"),
     ], [[], [reserved], [reserved], []])
     check("arrays: keys, values and entries, as arrays", [
-        errorsOf("const xs = [\"a\", \"b\"]\nconst k: number[] = xs:keys()\nconst v: string[] = xs:values()\nconst e: [number, string][] = xs:entries()\nfor (const [i, s] in xs:entries()) { const n: number = i\n const t: string = s }"),
+        errorsOf("const xs = [\"a\", \"b\"]\nconst k: number[] = xs:keys()\nconst v: string[] = xs:values()\nconst e: [number, string][] = xs:entries()\nfor (const [i, s] of xs:entries()) { const n: number = i\n const t: string = s }"),
     ], [[]])
 }
 

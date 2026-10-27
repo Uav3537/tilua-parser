@@ -148,7 +148,7 @@ declare metatable<T> T[]: {
         concat: <U>(self: readonly T[], ...others: (readonly U[])[]) => (T | U)[],
         slice: (self: readonly T[], start?: number, stop?: number) => T[],
         flat: (self: readonly T[]) => T[],
-        -- JavaScript's, as arrays rather than iterators: \`for (const [i, v] in
+        -- JavaScript's, as arrays rather than iterators: \`for (const [i, v] of
         -- xs:entries())\` walks positions and values, counting from 1. Unlike
         -- JavaScript's they say all that is known: of a tuple, its positions
         -- and what each holds — \`["a", 1] as const\` has keys \`[1, 2]\` and

@@ -3,24 +3,31 @@ import { tokenize, type LexError, type SourceComment, type Token } from "@lexer/
 /**
  * Comments that switch checking off, as TypeScript's `// @ts-...` comments do:
  *
- *     --@tilua-nocheck         no scope or type errors anywhere in this file
- *     --@tilua-ignore          none on the next line of code
- *     --@tilua-expect-error    none on the next line of code, and an error if
- *                              that line has none to suppress
+ *     --@tilua-nocheck          no scope or type errors or warnings anywhere
+ *                               in this file
+ *     --@tilua-ignore           none on the next line of code
+ *     --@tilua-expect-error     no errors on the next line of code, and an
+ *                               error if that line has none to suppress
+ *     --@tilua-expect-warning   no warnings on the next line of code, and a
+ *                               warning if that line has none to suppress
+ *
+ * An `expect-` directive covers its own kind only: an error is not what an
+ * `expect-warning` is there for, nor a warning what an `expect-error` waits
+ * for, so neither hides the other or is answered by it.
  *
  * A space after `--` is fine, and so is text after the directive (a reason).
  * `nocheck` counts only in the comments before the first line of code, as in
  * TypeScript. Syntax errors are never suppressed: code that does not parse
  * cannot be compiled either way.
  */
-export type DirectiveKind = "nocheck" | "ignore" | "expect-error"
+export type DirectiveKind = "nocheck" | "ignore" | "expect-error" | "expect-warning"
 
 export interface Directive {
     kind: DirectiveKind
     /** Where the comment starts. */
     line: number
     column: number
-    /** `ignore` / `expect-error`: the line whose diagnostics it covers — the
+    /** `ignore` / `expect-...`: the line whose diagnostics it covers — the
      *  next line with code on it. */
     target?: number
 }
@@ -33,7 +40,7 @@ export interface Directives {
     all: Directive[]
 }
 
-const DIRECTIVE = /^\s*@tilua-(nocheck|ignore|expect-error)(?![\w-])/
+const DIRECTIVE = /^\s*@tilua-(nocheck|ignore|expect-error|expect-warning)(?![\w-])/
 
 /** The directives in `comments`, placed against `tokens` (both from one
  *  `tokenize` of the file). */
@@ -68,19 +75,24 @@ export function directivesOf(source: string): Directives {
 export interface DirectiveOutcome<T> {
     /** The diagnostics no directive suppresses. */
     kept: T[]
-    /** `--@tilua-expect-error` comments with nothing to suppress. Each is an
+    /** `--@tilua-expect-error` comments with no error to suppress. Each is an
      *  error to report: "Unused '@tilua-expect-error' directive". */
     unusedExpectErrors: Directive[]
+    /** `--@tilua-expect-warning` comments with no warning to suppress. Each
+     *  is a warning to report: "Unused '@tilua-expect-warning' directive". */
+    unusedExpectWarnings: Directive[]
 }
 
 /** Filter scope and type diagnostics — never syntax errors — through the
- *  file's directives. `lineOf` gives the line a diagnostic starts on. */
+ *  file's directives. `lineOf` gives the line a diagnostic starts on, and
+ *  `isWarning` whether it is a warning; without it, every one is an error. */
 export function applyDirectives<T>(
     directives: Directives,
     diagnostics: readonly T[],
     lineOf: (diagnostic: T) => number,
+    isWarning: (diagnostic: T) => boolean = () => false,
 ): DirectiveOutcome<T> {
-    if (directives.nocheck) return { kept: [], unusedExpectErrors: [] }
+    if (directives.nocheck) return { kept: [], unusedExpectErrors: [], unusedExpectWarnings: [] }
     const covering = new Map<number, Directive[]>()
     for (const d of directives.all) {
         if (d.target === undefined) continue
@@ -88,13 +100,14 @@ export function applyDirectives<T>(
     }
     const used = new Set<Directive>()
     const kept = diagnostics.filter(diagnostic => {
-        const on = covering.get(lineOf(diagnostic))
-        if (!on) return true
-        for (const d of on) used.add(d)
-        return false
+        const covers = (covering.get(lineOf(diagnostic)) ?? []).filter(d =>
+            d.kind === "ignore" || d.kind === (isWarning(diagnostic) ? "expect-warning" : "expect-error"))
+        for (const d of covers) used.add(d)
+        return covers.length === 0
     })
-    const unusedExpectErrors = directives.all.filter(d => d.kind === "expect-error" && !used.has(d))
-    return { kept, unusedExpectErrors }
+    const unused = (kind: DirectiveKind): Directive[] => directives.all.filter(d => d.kind === kind && !used.has(d))
+    return { kept, unusedExpectErrors: unused("expect-error"), unusedExpectWarnings: unused("expect-warning") }
 }
 
 export const UNUSED_EXPECT_ERROR = "Unused '@tilua-expect-error' directive"
+export const UNUSED_EXPECT_WARNING = "Unused '@tilua-expect-warning' directive"

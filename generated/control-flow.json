@@ -1025,6 +1025,7 @@
               {
                 "type": "GenericForStatement",
                 "kind": "const",
+                "over": "values",
                 "variable": {
                   "type": "IdentifierPattern",
                   "name": "item",
@@ -1485,6 +1486,7 @@
               {
                 "type": "GenericForStatement",
                 "kind": "const",
+                "over": "values",
                 "variable": {
                   "type": "IdentifierPattern",
                   "name": "item",
@@ -3161,6 +3163,7 @@
               {
                 "type": "GenericForStatement",
                 "kind": "const",
+                "over": "values",
                 "variable": {
                   "type": "IdentifierPattern",
                   "name": "item",

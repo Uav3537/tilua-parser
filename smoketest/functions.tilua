@@ -47,7 +47,7 @@ function join(separator: string, ...parts: string[]): string {
 
 function total(...numbers: number[]): number {
     let sum = 0
-    for (const n in numbers) {
+    for (const n of numbers) {
         sum += n
     }
     return sum

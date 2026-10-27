@@ -1433,7 +1433,7 @@ export class Parser {
         // ends it is the `)`.
         this.expectPunctuator("(")
 
-        // `for (const item in source)`: one value each time, named the way
+        // `for (const item of source)`: one value each time, named the way
         // any other value is — `let` when the body assigns to it.
         const declared = this.checkKeyword("const") || this.checkKeyword("let")
             ? ((this.advance() as { value: string }).value as "const" | "let")
@@ -1465,12 +1465,19 @@ export class Parser {
         // the whole of what is wrong with the line, so a missing `const` goes
         // unsaid here.
         if (this.checkPunctuator(",")) {
-            this.problemAt(this.current(), "A loop takes one value each time: take its parts with a destructuring, 'for (const [k, v] in pairs(t))'")
+            this.problemAt(this.current(), "A loop takes one value each time: take its parts with a destructuring, 'for (const [k, v] of pairs(t))'")
             while (this.matchPunctuator(",")) this.parseBindingTarget(true)
         } else if (!declared) {
-            this.problemAt(start, "A loop over a source names its value with 'const' or 'let': 'for (const item in source)'")
+            this.problemAt(start, "A loop over a source names its value with 'const' or 'let': 'for (const item of source)'")
         }
-        this.expectKeyword("in")
+        // `of` walks the values, `in` the keys, as in TypeScript. `of` is a
+        // keyword only here: anywhere else it is a name like any other.
+        let over: "values" | "keys" = "values"
+        if (this.checkIdentifierValue("of")) this.advance()
+        else {
+            this.expectKeyword("in")
+            over = "keys"
+        }
         const iterator = this.expressionOr(() => untilDo() || this.checkPunctuator(","))
         // `in f, s, v` is Luau's pack of three; tilua's is one array.
         if (this.checkPunctuator(",")) {
@@ -1481,6 +1488,7 @@ export class Parser {
         return {
             type: "GenericForStatement",
             kind: declared ?? "const",
+            over,
             variable: first, iterator, body,
             ...spanFrom(start, this.previous()),
         }

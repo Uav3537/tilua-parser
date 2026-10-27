@@ -335,6 +335,7 @@
       {
         "type": "GenericForStatement",
         "kind": "const",
+        "over": "values",
         "variable": {
           "type": "ArrayPattern",
           "elements": [
@@ -516,6 +517,7 @@
       {
         "type": "GenericForStatement",
         "kind": "const",
+        "over": "values",
         "variable": {
           "type": "IdentifierPattern",
           "name": "record",
@@ -929,6 +931,7 @@
       {
         "type": "GenericForStatement",
         "kind": "const",
+        "over": "values",
         "variable": {
           "type": "ArrayPattern",
           "elements": [
@@ -1613,6 +1616,7 @@
       {
         "type": "GenericForStatement",
         "kind": "const",
+        "over": "values",
         "variable": {
           "type": "IdentifierPattern",
           "name": "n",

@@ -85,8 +85,9 @@ const MAX_TYPE = 120
 const MAX_INSTANTIATION_DEPTH = 100
 const MAX_REDUCE_DEPTH = 800
 
-/** How a `for (const item in source)` walks its source — what lowering needs,
+/** How a `for (const item of source)` walks its source — what lowering needs,
  *  decided with the item's type so the two cannot drift apart.
+ *  - `keys`: `for (const key in table)`, a table's keys.
  *  - `values`: an array or a table, walked directly; the item is each value.
  *  - `function`: an iterator function, called until it answers nil; the item
  *    is each answer.
@@ -96,7 +97,7 @@ const MAX_REDUCE_DEPTH = 800
  *  `viaIter`: the source is an object whose `__iter` method gives the function
  *  or the iteration. */
 export interface LoopForm {
-    readonly walks: "values" | "function" | "iteration"
+    readonly walks: "keys" | "values" | "function" | "iteration"
     readonly viaIter: boolean
 }
 
@@ -125,7 +126,7 @@ export interface TypeAnalysis {
     /** Top-level type aliases, resolved — and the type names this module
      *  imports, so tooling treats both alike. */
     readonly aliases: Map<string, Type>
-    /** How each `for (const item in source)` walks its source; see
+    /** How each `for (const item of source)` walks its source; see
      *  `LoopForm`. A loop missing here walks values. */
     readonly loops: ReadonlyMap<GenericForStatement, LoopForm>
     /** Each `receiver:method(...)` whose method the receiver's metatable
@@ -2946,17 +2947,21 @@ class TypeAnalyzer {
                 }
                 case "tuple":
                     return tupleMeta(tuple(t.elements.map(e => this.reduceType(e)), t.rest && this.reduceType(t.rest)), t)
-                case "function":
+                case "function": {
+                    const params = t.params.map(p => ({ ...p, type: this.reduceType(p.type) }))
+                    const varargs = t.varargs && this.reduceType(t.varargs)
+                    // `...args: A`, once `A` is a known list, is its elements,
+                    // as `withRest` reads one written out: `(...args: Events[K])`
+                    // with `K = "click"` takes `(x: number, y: number)`.
+                    const list = t.restIsWhole && varargs ? this.expand(varargs) : undefined
+                    if (list?.kind === "tuple" && !hasSpread(list)) {
+                        return fn([...params, ...tupleParams(list)], this.reduceType(t.returns), list.rest, t.typeParams, t.predicate)
+                    }
                     return {
-                        ...fn(
-                            t.params.map(p => ({ ...p, type: this.reduceType(p.type) })),
-                            this.reduceType(t.returns),
-                            t.varargs && this.reduceType(t.varargs),
-                            t.typeParams,
-                            t.predicate,
-                        ),
+                        ...fn(params, this.reduceType(t.returns), varargs, t.typeParams, t.predicate),
                         ...(t.restIsWhole ? { restIsWhole: true } : {}),
                     }
+                }
                 case "object": {
                     // A class is concrete, and rebuilding it would drop what
                     // makes it one.
@@ -3566,8 +3571,11 @@ class TypeAnalyzer {
                 this.infer(stmt.expression, env)
                 return
 
+            // A `do` block always runs, start to end: what it assigns and what
+            // its tests rule out hold after it. Its own names are its own
+            // bindings, so nothing of it is in the way outside.
             case "DoStatement":
-                this.visitBlock(stmt.body, forkEnv(env))
+                this.visitBlock(stmt.body, env)
                 return
 
             case "WhileStatement": {
@@ -3616,11 +3624,27 @@ class TypeAnalyzer {
             }
 
             case "GenericForStatement": {
-                const sourceType = this.infer(stmt.iterator, env)
+                let sourceType = this.infer(stmt.iterator, env)
+                // Walking nil fails where it runs: say so, and walk the rest.
+                if (this.includesNil(sourceType)) {
+                    if (this.emitDiagnostics) {
+                        const label = expressionLabel(stmt.iterator)
+                        this.diagnostics.push({
+                            node: stmt.iterator,
+                            message: `${label === undefined ? "The source" : `'${label}'`} is possibly nil, and nil cannot be walked: `
+                                + `check it first, or walk '${label ?? "source"} ?? []'`,
+                        })
+                    }
+                    sourceType = withoutNil(this.expand(sourceType))
+                }
                 const bodyEnv = forkEnv(env)
-                const rows = this.iterationRows(stmt.iterator, sourceType)
-                if (rows) {
-                    // `for (const [name, value] in pairs(record))`: each item is
+                const rows = stmt.over === "values" ? this.iterationRows(stmt.iterator, sourceType) : undefined
+                if (stmt.over === "keys") {
+                    this.bindPattern(stmt.variable, this.loopKeys(stmt, sourceType), bodyEnv,
+                        stmt.kind === "const" ? "keep" : "widen")
+                    this.loops.set(stmt, { walks: "keys", viaIter: false })
+                } else if (rows) {
+                    // `for (const [name, value] of pairs(record))`: each item is
                     // one property's `[name, value]`, and the two names stay
                     // correlated — testing `name == "a"` narrows `value` to
                     // `a`'s type, and back.
@@ -4169,6 +4193,7 @@ class TypeAnalyzer {
         selfOf: (f: FunctionType) => number,
         extra: (f: FunctionType, args: Type[]) => Type[],
         env: FlowEnv,
+        explicit?: readonly Type[],
     ): Type[] {
         const expected = this.expectedArguments(written, fns as FunctionType[], selfOf)
         written.forEach((a, i) => this.applyContext(a, expected[i]))
@@ -4184,7 +4209,7 @@ class TypeAnalyzer {
         const picked = this.pickOverload(fns as FunctionType[], argTypes, f => extra(f, argTypes), spread)
             ?? this.pickOverload(fns as FunctionType[], provisional, f => extra(f, provisional), spread)
         const subst = picked?.typeParams?.length
-            ? this.inferTypeArgs(picked, extra(picked, argTypes))
+            ? this.contextTypeArgs(picked, extra(picked, argTypes), extra(picked, argTypes.map((t, i) => (waits[i] ? undefined : t)) as Type[]), explicit)
             : undefined
         written.forEach((a, i) => {
             if (!waits[i]) return
@@ -4196,6 +4221,20 @@ class TypeAnalyzer {
             argTypes[i] = this.infer(a, env)
         })
         return argTypes
+    }
+
+    /** The type arguments a callback waiting on them is read with. The quiet
+     *  read of `(total, v) => total + v` has `total: any`, and so answers
+     *  `any`: a name that pinned is read from the other arguments instead,
+     *  as TypeScript defers a callback — `reduce`'s `U` from the `0` after
+     *  it, widened, as a callback's parameter wants it. */
+    private contextTypeArgs(f: FunctionType, all: Type[], others: (Type | undefined)[], explicit?: readonly Type[]): Map<string, Type> {
+        const full = this.inferTypeArgs(f, all, explicit)
+        const pinned = this.inferTypeArgs({ ...f, typeParamDefaults: undefined }, others, explicit)
+        for (const [name, t] of pinned) {
+            if (t.kind !== "unknown" && full.get(name)?.kind === "any") full.set(name, widen(t, this.keepRead))
+        }
+        return full
     }
 
     /** Is this argument a function whose own type waits on the call's? */
@@ -4630,8 +4669,11 @@ class TypeAnalyzer {
             }
         }
         for (const i of later) this.unifyArgument(f.params[i].type, argTypes[i], vars, subst, topLevel)
+        // `<T, U = T[]>`: a default may name the parameters before it.
         for (const name of f.typeParams ?? []) {
-            if (!subst.has(name)) subst.set(name, f.typeParamDefaults?.[name] ?? unknownType)
+            if (subst.has(name)) continue
+            const fallback = f.typeParamDefaults?.[name]
+            subst.set(name, fallback ? this.reduceType(substitute(fallback, subst)) : unknownType)
         }
         return subst
     }
@@ -4959,12 +5001,18 @@ class TypeAnalyzer {
         f: FunctionType,
         argTypes: readonly Type[],
         self: number,
+        explicit?: readonly Type[],
     ): void {
         if (!this.emitDiagnostics || !f.typeParams?.length) return
-        const subst = this.inferTypeArgs(f, [...argTypes])
+        const subst = this.inferTypeArgs(f, [...argTypes], explicit)
         // A parameter nothing pinned down stands for anything, and checking
         // against what it fell back to would invent errors.
         for (const bound of subst.values()) if (bound.kind === "unknown") return
+        // `<T, K extends keyof T>`: picking the overload could not check `K`
+        // (see `boundParams`), so it is checked now that `T` is known. A place
+        // holding a `K` that breaks it expects what the constraint allows.
+        const broken = this.brokenConstraints(f, subst)
+        const checked = broken.size ? new Map([...subst, ...broken]) : subst
         const declaredAt = (i: number): Type | undefined =>
             i < f.params.length ? f.params[i].type : f.varargs
         // `...args: A`, with `A` now known, is checked as the whole list below.
@@ -4974,7 +5022,7 @@ class TypeAnalyzer {
             const arg = argTypes[i]
             const declared = declaredAt(i)
             if (arg === undefined || declared === undefined || !containsTypeParam(declared)) continue
-            const expected = this.reduceType(substitute(declared, subst))
+            const expected = this.reduceType(substitute(declared, checked))
             if (containsTypeParam(expected) || expected.kind === "any" || expected.kind === "unknown") continue
             if (isAssignable(arg, expected) || isAssignable(widen(arg), expected)) continue
             this.diagnostics.push({
@@ -4989,6 +5037,40 @@ class TypeAnalyzer {
         const shapes = containsTypeParam(whole) ? undefined : this.restShapes(whole)
         if (!shapes) return
         this.reportRestList(call, written, f, argTypes, self, whole, shapes)
+    }
+
+    /** The type parameters of `f` whose constraint names another one and
+     *  which `subst` breaks, each mapped to that constraint as `subst` makes
+     *  it read: `K = "c"` against `keyof T`, `T = { a: number }`, maps `K` to
+     *  `"a"`. */
+    private brokenConstraints(f: FunctionType, subst: Map<string, Type>): Map<string, Type> {
+        const broken = new Map<string, Type>()
+        const names = new Set(f.typeParams ?? [])
+        const seen = new WeakSet<object>()
+        const walk = (value: unknown): void => {
+            if (!value || typeof value !== "object" || seen.has(value)) return
+            seen.add(value)
+            if (value instanceof Map) {
+                value.forEach(walk)
+                return
+            }
+            const t = value as { kind?: unknown; name?: unknown; constraint?: Type; class?: unknown }
+            if (t.kind === "object" && t.class) return
+            if (t.kind === "typeParam" && typeof t.name === "string" && names.has(t.name)
+                && t.constraint && containsTypeParam(t.constraint)) {
+                names.delete(t.name)
+                const arg = subst.get(t.name)
+                const bound = this.reduceType(substitute(t.constraint, subst))
+                if (arg && !containsTypeParam(arg) && !containsTypeParam(bound)
+                    && bound.kind !== "any" && bound.kind !== "unknown" && !isAssignable(arg, bound)) {
+                    broken.set(t.name, bound)
+                }
+            }
+            for (const child of Object.values(value)) walk(child)
+        }
+        for (const p of f.params) walk(p.type)
+        if (f.varargs) walk(f.varargs)
+        return broken
     }
 
     /** Report a call whose arguments after the fixed parameters fit none of
@@ -5281,13 +5363,13 @@ class TypeAnalyzer {
                 type: this.paramType(p, new Map()),
                 optional: p.optional || p.default !== undefined,
             }))
-            return this.withRest(fn(
+            return this.withTypeParamDefaults(this.withRest(fn(
                 params,
                 sig.returnType ? this.resolveType(sig.returnType) : sig.predicate ? booleanType : anyType,
                 undefined,
                 names,
                 this.resolvePredicate(sig.predicate, params),
-            ), sig.params)
+            ), sig.params), sig.generics)
         }))
     }
 
@@ -5402,14 +5484,14 @@ class TypeAnalyzer {
             } finally {
                 this.inferringBodies.delete(func)
             }
-            return this.withRest(fn(
+            return this.withTypeParamDefaults(this.withRest(fn(
                 params, returns,
                 undefined,
                 names,
                 func.predicate || func.returnType
                     ? this.resolvePredicate(func.predicate, params)
                     : this.inferPredicate(func, params, returns, bodyEnv),
-            ), func.params)
+            ), func.params), func.generics)
         })
     }
 
@@ -5664,7 +5746,56 @@ class TypeAnalyzer {
         return step.kind === "function" ? step : undefined
     }
 
-    /** What one `for (const item in source)` hands over each time, and how it
+    /** What `for (const key in table)` names each time: the table's keys — a
+     *  list's positions, a record's property names, an indexer's key type.
+     *  An iterator has values to give, not keys, and a key is one value:
+     *  either was a loop over values before `of` was written for those, and
+     *  is reported as what to write now. */
+    private loopKeys(stmt: GenericForStatement, sourceType: Type): Type {
+        const report = (message: string, node: Expression | BindingTarget): Type => {
+            if (this.emitDiagnostics) this.diagnostics.push({ node: node as Expression, message })
+            return anyType
+        }
+        if (stmt.variable.type !== "IdentifierPattern") {
+            return report("'for ... in' walks a table's keys, one at a time: to take each "
+                + "'[key, value]' apart, write 'for (const [k, v] of pairs(t))'", stmt.variable)
+        }
+        const ofInstead = "'for ... in' walks a table's keys, and this is an iterator: "
+            + "to walk what it gives, write 'for (const item of ...)'"
+        // `"iterator"` and `"not a table"` say why there are no keys to give.
+        const keys = (raw: Type, depth: number): Type | "iterator" | "not a table" => {
+            const t = this.expand(raw)
+            if (depth > 8) return anyType
+            switch (t.kind) {
+                case "any": return anyType
+                case "never": return neverType
+                case "array": return numberType
+                case "tuple": return this.iterationTriple(t) ? "iterator" : numberType
+                case "function": return "iterator"
+                case "object": {
+                    if (t.properties.has("__iter")) return "iterator"
+                    const names: Type[] = [...t.properties.keys()].map(k => literal(k))
+                    if (t.indexer) names.push(t.indexer.key)
+                    return union(names)
+                }
+                case "union": case "intersection": {
+                    const each = t.types.map(m => keys(m, depth + 1))
+                    return each.find(k => typeof k === "string") ?? union(each as Type[])
+                }
+                case "typeParam": return t.constraint ? keys(t.constraint, depth + 1) : unknownType
+                case "difference": return keys(t.base, depth + 1)
+                default: return "not a table"
+            }
+        }
+        const found = keys(sourceType, 0)
+        if (found === "iterator") return report(ofInstead, stmt.iterator)
+        if (found === "not a table") {
+            return report(`'for ... in' walks the keys of a table, not of '${briefType(sourceType)}'`, stmt.iterator)
+        }
+        return found
+    }
+
+    /** What one `for (const item of source)` hands over each time, and how it
      *  walks the source. `pairs`/`ipairs` are read from the table they are
      *  given, so a record's keys stay the literals they are. */
     private iterationOf(source: Expression, sourceType: Type, report = true): [Type, LoopForm] {
@@ -5893,7 +6024,7 @@ class TypeAnalyzer {
         }
         this.patternSourceType.set(pattern, type)
         const read = this.expand(type)
-        if (read.kind === "unknown" && read.declared) report("is of type 'unknown'")
+        if (this.isDeclaredUnknown(read)) report("is of type 'unknown'")
         // `const [ok, err] = pcall(f)` reads positions 1 and 2 of a table
         // that has none: an error, not two `unknown`s.
         else if (pattern.type === "ArrayPattern" && !this.isListLike(read)) {
@@ -6795,8 +6926,10 @@ class TypeAnalyzer {
             }
 
             case "TypeAssertionExpression": {
-                this.infer(expr.expression, env)
-                return this.resolveType(expr.typeAnnotation)
+                const from = this.infer(expr.expression, env)
+                const to = this.resolveType(expr.typeAnnotation)
+                this.checkAssertion(expr, from, to)
+                return to
             }
 
             case "SatisfiesExpression": {
@@ -7115,7 +7248,7 @@ class TypeAnalyzer {
         const united = this.unionSignatures(callee)
         const fns = united ?? this.overloadsOf(callee)
         const explicit = this.explicitTypeArguments(expr, fns)
-        const argTypes = this.inferArguments(expr.arguments, fns, () => 0, (_, args) => args, env)
+        const argTypes = this.inferArguments(expr.arguments, fns, () => 0, (_, args) => args, env, explicit)
         // `part.FindFirstChild("A")`: a method read with `.` and called
         // without the receiver it takes first. Said as that, and read as the
         // call that was meant, rather than as one argument too few.
@@ -7141,7 +7274,7 @@ class TypeAnalyzer {
                 const distributed = this.distributedReturn(fns, args, picked, (_, a) => a)
                 if (distributed) return distributed
                 if (picked) {
-                    this.checkInferredArguments(expr, expr.arguments, picked, args, 0)
+                    this.checkInferredArguments(expr, expr.arguments, picked, args, 0, explicit)
                     const written = placed ? args : this.positional(expr.arguments, this.constArgs(picked, expr.arguments, argTypes, env))
                     if (topLevelParams(picked.returns).size) this.widensInLet.add(expr)
                     return this.callReturn(picked, written, explicit)
@@ -7287,6 +7420,50 @@ class TypeAnalyzer {
         }
     }
 
+    /** `x as T` claims more than the checker knows, not something else
+     *  entirely: as in TypeScript, one of the two has to fit the other.
+     *  `1 as string` is a mistake; `1 as any as string` says it is not. */
+    private checkAssertion(node: Expression, from: Type, to: Type): void {
+        if (!this.emitDiagnostics) return
+        const loose = (t: Type): boolean => {
+            const x = this.expand(t)
+            return x.kind === "any" || x.kind === "unknown" || x.kind === "never" || containsTypeParam(x)
+        }
+        if (loose(from) || loose(to)) return
+        const wide = widen(from)
+        if (this.comparable(wide, to, 0)) return
+        this.diagnostics.push({
+            node,
+            message: `Conversion of type '${briefType(wide)}' to type '${briefType(to)}' may be a mistake: neither fits the other. `
+                + "If it is meant, assert to 'any' first",
+        })
+    }
+
+    /** TypeScript's comparability, which an assertion asks for: either fits
+     *  the other, one member of a union is enough, and two tables are when
+     *  the members they share are and one has every member the other needs —
+     *  `{ Instance: Frame } as Widget` starts a `Widget` to be filled in.
+     *  Anything it cannot take apart is given the benefit of the doubt. */
+    private comparable(a: Type, b: Type, depth: number): boolean {
+        if (depth > 8 || isAssignable(a, b) || isAssignable(b, a)) return true
+        const x = this.expand(a)
+        const y = this.expand(b)
+        if (x.kind === "union") return x.types.some(m => this.comparable(m, y, depth + 1))
+        if (y.kind === "union") return y.types.some(m => this.comparable(x, m, depth + 1))
+        // A string is no table, and `1` no `"a"`.
+        const plain = (t: Type): boolean => t.kind === "primitive" || t.kind === "literal" || t.kind === "templateLiteral"
+        const table = (t: Type): boolean => t.kind === "object" || t.kind === "array" || t.kind === "tuple" || t.kind === "function"
+        if (plain(x) || plain(y)) return !(plain(x) || table(x)) || !(plain(y) || table(y))
+        if (x.kind !== "object" || y.kind !== "object" || x.class || y.class) return true
+        for (const [name, p] of x.properties) {
+            const q = y.properties.get(name)
+            if (q && !this.comparable(p.type, q.type, depth + 1)) return false
+        }
+        const covers = (from: ObjectType, to: ObjectType): boolean =>
+            [...to.properties].every(([name, p]) => p.optional || from.properties.has(name))
+        return covers(x, y) || covers(y, x)
+    }
+
     private checkInterpolation(node: Expression, type: Type): void {
         if (!this.emitDiagnostics) return
         const prints = this.unprintable(type)
@@ -7324,14 +7501,29 @@ class TypeAnalyzer {
         this.checkMissingMember(expr.method, objType, expr.method.name)
         const fromMetatable = this.receiverMetatableMember(objType, expr.method.name)
         if (fromMetatable) this.methodSources.set(expr, fromMetatable.source)
-        const method = fromMetatable?.type ?? this.propertyType(objType, expr.method.name)
+        let method = fromMetatable?.type ?? this.propertyType(objType, expr.method.name)
+        // `f?(): number`: an optional method may not be there to call. Say
+        // so — unless a test already has, `if (a.f) a:f()` — and call it as
+        // the method it is when it is.
+        if (this.includesNil(method) && this.expand(withoutNil(method)).kind !== "never") {
+            const objectKey = this.refKeyOf(expr.object)
+            const tested = objectKey === undefined ? undefined : env.get(`${objectKey}.${expr.method.name}`)
+            if (this.emitDiagnostics && !(tested && !this.includesNil(tested))) {
+                const object = expressionLabel(expr.object)
+                this.diagnostics.push({
+                    node: expr.method,
+                    message: `'${object === undefined ? "" : `${object}.`}${expr.method.name}' is possibly nil. Check it first`,
+                })
+            }
+            method = withoutNil(this.expand(method))
+        }
         // The name is the method, where the call is what it answers.
         this.typeOf.set(expr.method, method)
         const united = this.unionSignatures(method)
         const fns = united ?? this.overloadsOf(method)
         const explicit = this.explicitTypeArguments(expr, fns)
         const argTypes = this.inferArguments(expr.arguments, fns, f => (this.takesSelf(f) ? 1 : 0),
-            (f, args) => (this.takesSelf(f) ? [objType, ...args] : args), env)
+            (f, args) => (this.takesSelf(f) ? [objType, ...args] : args), env, explicit)
         if (fns.length) {
             // `obj:m(a)` passes `obj` as the implicit first argument, but
             // only to a signature that actually declares a `self` slot —
@@ -7367,7 +7559,7 @@ class TypeAnalyzer {
                 if (distributed) return distributed
                 if (picked) {
                     const self = this.takesSelf(picked) ? 1 : 0
-                    this.checkInferredArguments(expr, expr.arguments, picked, withSelf(picked), self)
+                    this.checkInferredArguments(expr, expr.arguments, picked, withSelf(picked), self, explicit)
                     const written = placedAll ? args : this.positional(expr.arguments, this.constArgs(picked, expr.arguments, argTypes, env, self))
                     if (topLevelParams(picked.returns).size) this.widensInLet.add(expr)
                     return this.callReturn(picked, this.takesSelf(picked) ? [objType, ...written] : written, explicit)
@@ -7413,7 +7605,7 @@ class TypeAnalyzer {
             type = withoutNil(this.expand(type))
         }
         const read = this.expand(type)
-        if (read.kind === "unknown" && read.declared) this.reportUnknownAccess(object)
+        if (this.isDeclaredUnknown(read)) this.reportUnknownAccess(object)
         // A `?.` on an object that cannot be nil never short-circuits: on a
         // `BoolValue`, `v?.Value` is `boolean`, not `boolean | nil`.
         const optionalNil = link.optional === true && this.mayBeNil(inChain ?? full)
@@ -7554,6 +7746,18 @@ class TypeAnalyzer {
 
     /** `unknown` is the type that promises nothing: unlike `any`, a member of
      *  it has to be narrowed out first. */
+    /** An `unknown` the program wrote, still unknown: as it is, or with only
+     *  what a test ruled out taken from it — `if (typeof u == "string")
+     *  return` leaves `Exclude<unknown, string>`, which is no more known to
+     *  have members than `unknown` was. A union is when any member is. */
+    private isDeclaredUnknown(raw: Type): boolean {
+        const t = this.expand(raw)
+        if (t.kind === "unknown") return t.declared === true
+        if (t.kind === "difference") return this.isDeclaredUnknown(t.base)
+        if (t.kind === "union") return t.types.some(m => this.isDeclaredUnknown(m))
+        return false
+    }
+
     private reportUnknownAccess(object: Expression): void {
         if (!this.emitDiagnostics || this.unknownAccessReported.has(object)) return
         this.unknownAccessReported.add(object)
@@ -8772,7 +8976,7 @@ class TypeAnalyzer {
      *  is there; where it does not, `t` is none of the members that must. */
     private narrowByIn(left: Expression, right: Expression, env: FlowEnv, t: FlowEnv, f: FlowEnv): void {
         const key = this.asLiteral(unwrapParens(left))
-        if (typeof key !== "string" && typeof key !== "number") return
+        if (typeof key !== "string" && typeof key !== "number") return this.narrowByKeyIn(left, right, env, t, f)
         const name = String(key)
         const filter = (cur: Type, present: boolean): Type => {
             const members = this.membersOf(cur)
@@ -8790,12 +8994,40 @@ class TypeAnalyzer {
             return intersection([cur, objectType([[name, { type: unknownType, optional: false }]])])
         }
         this.narrowRef(right, env, t, f, cur => ({ yes: filter(cur, true), no: filter(cur, false) }))
-        // And `t.key` itself is there.
+        // And `t.key` itself is there — `in` is `t[key] ~= nil` — or, where
+        // the test fails, nil.
         const parent = this.refKeyOf(right)
         if (parent === undefined) return
         const child = typeof key === "number" ? `${parent}#${key}` : `${parent}.${name}`
         const held = t.get(parent) ?? this.typeAtRef(right, env)
-        this.setRef(t, child, withoutNil(this.propertyType(held, name)))
+        const at = typeof key === "number" ? this.indexedType(held, literal(key)) : this.propertyType(held, name)
+        this.setRef(t, child, withoutNil(at))
+        this.setRef(f, child, nilType)
+    }
+
+    /** `k in t` with `k` a variable: where it holds, `k` is one of the keys
+     *  `t` has and `t[k]` is not nil; where it fails, `t[k]` is nil, and `k`
+     *  is none of the keys `t` always holds. */
+    private narrowByKeyIn(left: Expression, right: Expression, env: FlowEnv, t: FlowEnv, f: FlowEnv): void {
+        const parent = this.refKeyOf(right)
+        const keyRef = this.refKeyOf(left)
+        if (parent === undefined || keyRef === undefined) return
+        const table = withoutNil(this.expand(this.typeAtRef(right, env)))
+        const keys = this.keysOf(table)
+        const always = this.expand(table)
+        const held = always.kind === "object" && !always.class
+            ? [...always.properties].filter(([, p]) => !p.optional && !this.includesNil(p.type)).map(([k]) => literal(k))
+            : []
+        this.narrowRef(left, env, t, f, cur => {
+            const yes = narrowTo(cur, keys)
+            const no = union(this.membersOf(cur).filter(m => !held.some(k => isAssignable(m, k))))
+            return { yes: yes.kind === "never" ? cur : yes, no: no.kind === "never" ? cur : no }
+        })
+        const inner = unwrapParens(left)
+        if (inner.type !== "Identifier") return
+        const slot = `${parent}[${keyRef}]`
+        this.setRef(t, slot, withoutNil(this.indexedType(table, t.get(keyRef) ?? this.typeAtRef(left, env))))
+        this.setRef(f, slot, nilType)
     }
 
     /** `v instanceof C`: `v` is a `C` where it holds, and none of the members
@@ -8814,14 +9046,20 @@ class TypeAnalyzer {
      *  plain object to `never` because of a property test would be worse than
      *  learning nothing. */
     private filterByProperty(parent: Type, prop: string, want: Type, optional = false): Type {
+        parent = this.distributedIntersection(parent)
         // A discriminant tested down to nothing: no member can be the value —
         // `if (s.kind == "c") ... elseif (s.kind == "s") ...` leaves `s`
         // itself `never` after the last test, as TypeScript has it.
         if (want.kind === "never") {
             const members = (parent.kind === "union" ? parent.types : [parent]).map(m => this.expand(m))
             const literalTyped = (t: Type): boolean => t.kind === "literal" || (t.kind === "union" && t.types.every(literalTyped))
-            const discriminated = members.length > 0 && members.every(m => m.kind === "object" && !m.class
-                && m.properties.has(prop) && literalTyped(this.expand(m.properties.get(prop)!.type)))
+            const own = (m: Type): Type | undefined => m.kind === "object" && !m.class ? m.properties.get(prop)?.type
+                : m.kind === "intersection" ? m.types.map(p => own(this.expand(p))).find(t => t !== undefined)
+                : undefined
+            const discriminated = members.length > 0 && members.every(m => {
+                const t = own(m)
+                return t !== undefined && literalTyped(this.expand(t))
+            })
             return discriminated ? neverType : parent
         }
         if (parent.kind !== "union") return parent
@@ -8831,6 +9069,19 @@ class TypeAnalyzer {
             ? optional && overlaps(nilType, want)
             : overlaps(this.propertyType(m, prop), want))
         return kept.length ? union(kept) : parent
+    }
+
+    /** `(A | B) & C` as the union `(A & C) | (B & C)` it is, so a discriminant
+     *  in `A` and `B` picks a member of it as it would of `A | B`. Anything
+     *  else is returned as it is. */
+    private distributedIntersection(t: Type): Type {
+        const x = this.expand(t)
+        if (x.kind !== "intersection") return t
+        const parts = x.types.map(m => this.expand(m))
+        const at = parts.findIndex(m => m.kind === "union")
+        if (at < 0) return t
+        const others = parts.filter((_, i) => i !== at)
+        return union((parts[at] as Extract<Type, { kind: "union" }>).types.map(m => intersection([m, ...others])))
     }
 
     /** Record a narrowing. Deliberately does *not* discard what is known about
@@ -9261,7 +9512,7 @@ class TypeAnalyzer {
             // Checked again once the call's type arguments are read from
             // this way's arguments: `emit("say", ...pair)` reads `K` first.
             const before = this.diagnostics.length
-            this.checkInferredArguments(call, args, picked, withSelf(picked, way), selfOf(picked))
+            this.checkInferredArguments(call, args, picked, withSelf(picked, way), selfOf(picked), explicit)
             if (this.diagnostics.length > before) return union(fns.map(f => this.callReturn(f, withSelf(f, way), explicit)))
             results.push(this.callReturn(picked, withSelf(picked, way), explicit))
         }
