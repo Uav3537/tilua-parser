@@ -22,10 +22,26 @@
  * does — loads nothing a second time. With `noLib` it loads as it always did.
  * A later file adds to the names an earlier one declared rather than
  * replacing them, which is what makes those layers layers.
+ *
+ * A library may also add options to the config — what only it knows how to
+ * act on. Its package.json declares them:
+ *
+ *   "tilua": {
+ *       "lowering": "lowering.mjs",
+ *       "options": {
+ *           "typedExports": { "type": "boolean", "default": true, "description": "..." }
+ *       }
+ *   }
+ *
+ * and the config sets them beside its own (`"typedExports": false`). They are
+ * checked here, where the libraries are known: a key no loaded library
+ * declares is an unknown option, and a value of the wrong type is reported
+ * and the default kept. What they mean is the library's lowering's to say;
+ * it is handed its own (`LoweringModule.options`).
  */
 import { dirname, join, resolve } from "node:path"
 import type { ConfigProblem, TiluaConfig } from "./config"
-import { keyPosition } from "./config"
+import { CONFIG_OPTIONS, keyPosition } from "./config"
 import { nodeHost, type ProjectHost } from "./host"
 
 export interface TypeLibraries {
@@ -33,7 +49,28 @@ export interface TypeLibraries {
     readonly files: readonly string[]
     /** Lowering modules the libraries ship, in the same order. */
     readonly lowerings: readonly LoweringModule[]
+    /** The options the libraries declare, in the order they were loaded. */
+    readonly options: readonly LibraryOption[]
     readonly problems: readonly ConfigProblem[]
+}
+
+/** What a library's option may hold. */
+export type LibraryOptionType = "boolean" | "number" | "string"
+
+/** An option a type library adds to the config. */
+export interface LibraryOption {
+    readonly name: string
+    readonly type: LibraryOptionType
+    /** What it is when the config does not set it. */
+    readonly default?: boolean | number | string
+    /** The only values it may take, where it is one of a few. */
+    readonly values?: readonly (number | string)[]
+    readonly description?: string
+    /** The package that declares it. */
+    readonly from: string
+    /** What it is for this config: the config's value if that fits, else
+     *  the default. */
+    readonly value: boolean | number | string | undefined
 }
 
 /** A library's own lowering: JavaScript the compiler loads and asks what a
@@ -55,13 +92,20 @@ export interface LoweringModule {
      *  analyzer names when a method comes from a metatable the package
      *  declared (`MethodSource`), so the compiler asks this lowering. */
     readonly library: number
+    /** The package's own options, as this config has them — the default for
+     *  one it does not set. */
+    readonly options: Readonly<Record<string, boolean | number | string | undefined>>
 }
 
 export function resolveTypeLibraries(config: TiluaConfig, host: ProjectHost = nodeHost): TypeLibraries {
     const files: string[] = []
-    const lowerings: LoweringModule[] = []
+    const lowerings: (Omit<LoweringModule, "options"> & { directory: string })[] = []
     const problems: ConfigProblem[] = []
     const loaded = new Set<string>()
+    /** Every option declared, by name: the first package to declare it. */
+    const declared = new Map<string, Omit<LibraryOption, "value">>()
+    /** The names each package declares, by its folder. */
+    const ownOptions = new Map<string, string[]>()
 
     const addFile = (file: string): void => {
         const key = pathKey(file)
@@ -84,9 +128,20 @@ export function resolveTypeLibraries(config: TiluaConfig, host: ProjectHost = no
             if (found) addPackage(found.directory, found.file, visiting)
         }
         addFile(entryFile)
+        const own = packageOptions(directory, host, problems, config)
+        for (const option of own) {
+            const before = declared.get(option.name)
+            if (before && before.type !== option.type) {
+                problems.push({
+                    file: config.path,
+                    message: `'${option.from}' and '${before.from}' both declare the option '${option.name}', as different types`,
+                })
+            } else if (!before) declared.set(option.name, option)
+        }
+        ownOptions.set(key, own.map(o => o.name))
         const lowering = loweringModule(directory, host, problems, config)
         const library = files.findIndex(file => pathKey(file) === pathKey(entryFile))
-        if (lowering) lowerings.push({ ...lowering, library })
+        if (lowering) lowerings.push({ ...lowering, library, directory: key })
     }
 
     /** The standard library's old package, which is built in unless `noLib`. */
@@ -145,7 +200,83 @@ export function resolveTypeLibraries(config: TiluaConfig, host: ProjectHost = no
         }
     }
 
-    return { files, lowerings, problems }
+    // What the config sets, checked against what the libraries declare.
+    const values = new Map<string, boolean | number | string | undefined>()
+    for (const option of declared.values()) values.set(option.name, option.default)
+    for (const [key, value] of Object.entries(config.libraryOptions)) {
+        const at = keyPosition(config.source, key)
+        const option = declared.get(key)
+        if (!option) {
+            const known = [...CONFIG_OPTIONS, ...declared.keys()]
+            problems.push({ file: config.path, message: `Unknown option '${key}'. Options are: ${known.join(", ")}`, ...at })
+            continue
+        }
+        const fits = typeof value === option.type && (!option.values || option.values.includes(value as number | string))
+        if (fits) values.set(key, value as boolean | number | string)
+        else problems.push({ file: config.path, message: `'${key}' must be ${describeOption(option)} (an option of '${option.from}')`, ...at })
+    }
+    const options: LibraryOption[] = [...declared.values()].map(o => ({ ...o, value: values.get(o.name) }))
+    const withOptions: LoweringModule[] = lowerings.map(({ directory, ...lowering }) => ({
+        ...lowering,
+        options: Object.fromEntries((ownOptions.get(directory) ?? []).map(name => [name, values.get(name)])),
+    }))
+
+    return { files, lowerings: withOptions, options, problems }
+}
+
+/** The options the package in `directory` declares, as far as they are
+ *  declared well; a declaration that is not is reported and skipped. */
+function packageOptions(
+    directory: string,
+    host: ProjectHost,
+    problems: ConfigProblem[],
+    config: TiluaConfig,
+): Omit<LibraryOption, "value">[] {
+    const manifest = readJson(join(directory, "package.json"), host)
+    const declared = (manifest?.tilua as { options?: unknown } | undefined)?.options
+    if (declared === undefined) return []
+    const from = typeof manifest?.name === "string" ? manifest.name : directory
+    const bad = (message: string): void => { problems.push({ file: config.path, message: `'${from}': ${message}` }) }
+    if (!declared || typeof declared !== "object" || Array.isArray(declared)) {
+        bad("'tilua.options' must be an object of options by name")
+        return []
+    }
+    const out: Omit<LibraryOption, "value">[] = []
+    for (const [name, raw] of Object.entries(declared)) {
+        if ((CONFIG_OPTIONS as readonly string[]).includes(name) || name === "target") {
+            bad(`the option '${name}' is the config's own, and cannot be declared again`)
+            continue
+        }
+        const spec = raw && typeof raw === "object" ? raw as Record<string, unknown> : {}
+        const type = spec.type
+        if (type !== "boolean" && type !== "number" && type !== "string") {
+            bad(`the option '${name}' needs a 'type': "boolean", "number" or "string"`)
+            continue
+        }
+        const listed = spec.values
+        const values = type !== "boolean" && Array.isArray(listed) && listed.every(v => typeof v === type)
+            ? listed as (number | string)[] : undefined
+        if (listed !== undefined && !values) bad(`the 'values' of the option '${name}' must be a list of ${type}s`)
+        let fallback: boolean | number | string | undefined
+        if (spec.default !== undefined) {
+            if (typeof spec.default === type && (!values || values.includes(spec.default as number | string))) {
+                fallback = spec.default as boolean | number | string
+            } else bad(`the default of the option '${name}' is not a ${values ? "listed value" : type}`)
+        }
+        out.push({
+            name, type, from,
+            ...(fallback !== undefined && { default: fallback }),
+            ...(values && { values }),
+            ...(typeof spec.description === "string" && { description: spec.description }),
+        })
+    }
+    return out
+}
+
+/** What an option's value has to be, in words. */
+function describeOption(option: Omit<LibraryOption, "value">): string {
+    if (option.values) return `one of: ${option.values.map(v => JSON.stringify(v)).join(", ")}`
+    return option.type === "boolean" ? "true or false" : `a ${option.type}`
 }
 
 /** The `tilua.lowering` of a package, if it has one. */
@@ -154,7 +285,7 @@ function loweringModule(
     host: ProjectHost,
     problems: ConfigProblem[],
     config: TiluaConfig,
-): Omit<LoweringModule, "library"> | undefined {
+): Omit<LoweringModule, "library" | "options"> | undefined {
     const manifest = readJson(join(directory, "package.json"), host)
     const declared = (manifest?.tilua as { lowering?: unknown } | undefined)?.lowering
     if (typeof declared !== "string") return undefined

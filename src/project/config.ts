@@ -29,10 +29,19 @@ export interface TiluaConfig {
     /** How many files the compiler writes. `"single"` (the default) is one
      *  file holding every module. `"chunks"` keeps what the entry imports in
      *  the entry's file and writes what only an `import()` reaches to files of
-     *  their own, loaded when first asked for. `"modules"` writes one file per
-     *  module. The parser does not care — it is the compiler's to act on,
-     *  and lives here because it belongs to the project. */
+     *  their own, loaded when first asked for. `"files"` has no entry: every
+     *  file under `rootDir` becomes a file of its own under `outDir`, which
+     *  returns its exports and `require`s the files it imports. The parser
+     *  does not care — it is the compiler's to act on, and lives here because
+     *  it belongs to the project. */
     readonly output: OutputMode
+    /** With `"output": "files"`, the folder whose `.tilua` files are
+     *  compiled, absolute. The config's folder unless set. */
+    readonly rootDir: string
+    /** With `"output": "files"`, the folder the output goes in, absolute,
+     *  laid out as `rootDir` is. `rootDir` unless set: each `.luau` beside
+     *  its `.tilua`. */
+    readonly outDir: string
     /** Leave out Lua's standard library, which every file otherwise has the
      *  way every TypeScript file has JavaScript's: `print`, `string`, `pcall`.
      *  For a host that offers none of it, or a library of one's own in its
@@ -48,10 +57,22 @@ export interface TiluaConfig {
      *  compiler's to act on. `true` unless set; a release build that will
      *  not be debugged can leave it out. */
     readonly lineMap: boolean
+    /** How the output is indented, a block level at a time: `"\t"`, or a
+     *  number of spaces. The compiler's to act on. No indentation unless set. */
+    readonly indent: "\t" | number | undefined
+    /** Write the output on as few lines and with as few `;` as it can take.
+     *  One line cannot be mapped back to the project's, so it goes without
+     *  the line map. The compiler's to act on. `false` unless set. */
+    readonly minify: boolean
+    /** Every other key the config holds, as written: options a type library
+     *  declares (`tilua.options` in its package.json). Which are real, and
+     *  whether their values fit, only the libraries can say — see
+     *  `resolveTypeLibraries`, which checks them. */
+    readonly libraryOptions: Readonly<Record<string, unknown>>
 }
 
 /** See `TiluaConfig.output`. */
-export type OutputMode = "single" | "chunks" | "modules"
+export type OutputMode = "single" | "chunks" | "files"
 
 export interface ConfigProblem {
     /** The file the problem is about: a config file, or a sourcemap it names. */
@@ -96,11 +117,16 @@ export function findConfig(file: string, host: ProjectHost = nodeHost): ConfigLo
     }
 }
 
-const OPTIONS = ["types", "paths", "baseUrl", "sourceMap", "output", "noLib", "treeShaking", "lineMap"] as const
-const OUTPUTS = ["single", "chunks", "modules"] as const
+/** The options every project has. A type library may declare more. */
+export const CONFIG_OPTIONS = [
+    "types", "paths", "baseUrl", "sourceMap", "output", "rootDir", "outDir", "noLib", "treeShaking", "lineMap", "indent", "minify",
+] as const
+const OUTPUTS = ["single", "chunks", "files"] as const
 
 /** Read and check one config file. Problems do not stop the rest of it from
- *  applying: an unknown option is reported and the known ones still work. */
+ *  applying. A key that is not one of `CONFIG_OPTIONS` is kept in
+ *  `libraryOptions` rather than reported: it may be a type library's, and
+ *  `resolveTypeLibraries` reports it if it is no library's. */
 export function loadConfig(path: string, host: ProjectHost = nodeHost): { config?: TiluaConfig; problems: ConfigProblem[] } {
     const file = resolve(path)
     const source = host.readFile(file)
@@ -123,10 +149,9 @@ export function loadConfig(path: string, host: ProjectHost = nodeHost): { config
     const at = (key: string): { line?: number; column?: number } => keyPosition(source, key)
     const problem = (key: string, message: string): void => { problems.push({ file, message, ...at(key) }) }
 
-    for (const key of Object.keys(options)) {
-        if (!(OPTIONS as readonly string[]).includes(key) && key !== "target") {
-            problem(key, `Unknown option '${key}'. Options are: ${OPTIONS.join(", ")}`)
-        }
+    const libraryOptions: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(options)) {
+        if (!(CONFIG_OPTIONS as readonly string[]).includes(key) && key !== "target") libraryOptions[key] = value
     }
 
     let types: string[] = []
@@ -172,9 +197,25 @@ export function loadConfig(path: string, host: ProjectHost = nodeHost): { config
     if (options.output !== undefined) {
         if (typeof options.output === "string" && (OUTPUTS as readonly string[]).includes(options.output)) {
             output = options.output as OutputMode
+        } else if (options.output === "modules") {
+            // One file per module, each loaded by the entry's: what `"files"`
+            // does now without the entry, every file one a script can require.
+            problem("output", "'modules' is gone: \"files\" writes one file per module, each of which returns its exports")
         } else {
             problem("output", `'output' must be one of: ${OUTPUTS.join(", ")}`)
         }
+    }
+
+    let rootDir = directory
+    if (options.rootDir !== undefined) {
+        if (typeof options.rootDir === "string") rootDir = resolve(directory, options.rootDir)
+        else problem("rootDir", "'rootDir' must be a path string")
+    }
+
+    let outDir = rootDir
+    if (options.outDir !== undefined) {
+        if (typeof options.outDir === "string") outDir = resolve(directory, options.outDir)
+        else problem("outDir", "'outDir' must be a path string")
     }
 
     let noLib = false
@@ -195,7 +236,26 @@ export function loadConfig(path: string, host: ProjectHost = nodeHost): { config
         else problem("lineMap", "'lineMap' must be true or false")
     }
 
-    return { config: { path: file, directory, source, types, paths, baseUrl, sourceMap, output, noLib, treeShaking, lineMap }, problems }
+    let indent: "\t" | number | undefined
+    if (options.indent !== undefined) {
+        const value = options.indent
+        if (value === "\t" || (typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 8)) indent = value
+        else problem("indent", "'indent' must be \"\\t\" or a number of spaces from 0 to 8")
+    }
+
+    let minify = false
+    if (options.minify !== undefined) {
+        if (typeof options.minify === "boolean") minify = options.minify
+        else problem("minify", "'minify' must be true or false")
+    }
+
+    return {
+        config: {
+            path: file, directory, source, types, paths, baseUrl, sourceMap, output, rootDir, outDir, noLib, treeShaking, lineMap,
+            indent, minify, libraryOptions,
+        },
+        problems,
+    }
 }
 
 /** Blank out `//` and `/* *\/` comments and trailing commas, keeping every

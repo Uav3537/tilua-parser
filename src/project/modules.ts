@@ -5,7 +5,9 @@
  * through the config's `paths`, tsconfig-style: an exact pattern wins, then
  * the matching `*` pattern with the longest prefix, and each of its targets —
  * relative to `baseUrl` — is tried in order. In every case the extension may be
- * left off, and a folder means its `index.tilua`.
+ * left off, and a folder means its `index.tilua` — or its `init.tilua`, the
+ * folder-module of Luau and Rojo, which compiles to the `init.luau` they read
+ * as the folder itself.
  */
 import { dirname, join, resolve } from "node:path"
 import type { ImportExpression, Program } from "@ast/nodes"
@@ -21,7 +23,7 @@ export function moduleCandidates(fromFile: string, specifier: string, config?: T
         : config ? aliasTargets(config, specifier) : []
     return bases.flatMap(base => (base.endsWith(".tilua")
         ? [base]
-        : [`${base}.tilua`, `${base}.d.tilua`, join(base, "index.tilua")]))
+        : [`${base}.tilua`, `${base}.d.tilua`, join(base, "index.tilua"), join(base, "init.tilua")]))
 }
 
 /** The file `specifier` names from `fromFile`, if it exists. */

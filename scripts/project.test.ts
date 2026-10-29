@@ -90,10 +90,15 @@ const rel = (path: string | undefined): string | undefined =>
     check("config: comments and trailing commas are allowed", ok.problems, [])
     check("config: sourceMap resolves from the config's folder", rel(ok.config?.sourceMap ?? undefined), "ok/sourcemap.json")
 
+    // A key that is not the config's own may be a library's: it is kept, and
+    // `resolveTypeLibraries`, which knows the libraries, reports it if not.
     const typo = loadConfig(join(ROOT, "typo/tilua.config.json"), h)
-    check("config: an unknown option is reported on its line",
-        typo.problems.map(p => [p.line, p.message.split(".")[0]]), [[3, "Unknown option 'typo'"]])
+    check("config: a key that is not the config's own is kept for the libraries",
+        [typo.problems, typo.config?.libraryOptions], [[], { typo: true }])
     check("config: and the rest of the config still applies", typo.config?.types, ["luau"])
+    check("config: an option no library declares is reported on its line",
+        resolveTypeLibraries(typo.config!, h).problems.filter(p => p.message.startsWith("Unknown"))
+            .map(p => [p.line, p.message.split(".")[0]]), [[3, "Unknown option 'typo'"]])
 
     const broken = loadConfig(join(ROOT, "broken/tilua.config.json"), h)
     check("config: invalid JSON is reported with a position",
@@ -148,6 +153,57 @@ const rel = (path: string | undefined): string | undefined =>
         { files: [], problems: ["Cannot find type library '@tilua-types/nope' or 'nope'. Install it with: npm i -D @tilua-types/nope"] })
     check("types: a missing scoped one, by its own name", libraries(["@me/gone"]).problems,
         ["Cannot find type library '@me/gone'. Install it with: npm i -D @me/gone"])
+
+    // A library adds options to the config: checked against its declaration,
+    // with the default where the config sets none, and handed to its lowering.
+    const optionFiles: Record<string, string> = {
+        ...files,
+        "node_modules/@tilua-types/opts/package.json": JSON.stringify({
+            name: "@tilua-types/opts",
+            dependencies: { "@tilua-types/luau": "^1.0.0" },
+            tilua: {
+                lowering: "lowering.mjs",
+                options: {
+                    typed: { type: "boolean", default: true, description: "Types" },
+                    mode: { type: "string", values: ["fast", "safe"], default: "fast" },
+                    level: { type: "number" },
+                    lineMap: { type: "boolean" },
+                    broken: { type: "date" },
+                },
+            },
+        }),
+        "node_modules/@tilua-types/opts/index.d.tilua": "",
+        "node_modules/@tilua-types/opts/lowering.mjs": "export default {}",
+    }
+    const withOptions = (options: Record<string, unknown>) => {
+        const h = host({ ...optionFiles, "tilua.config.json": JSON.stringify({ types: ["opts"], ...options }) })
+        const config = loadConfig(join(ROOT, "tilua.config.json"), h).config!
+        return resolveTypeLibraries(config, h)
+    }
+    const defaults = withOptions({})
+    check("options: a library's are declared, with their defaults", [
+        defaults.options.map(o => [o.name, o.type, o.value, o.from]),
+        defaults.lowerings.map(l => l.options),
+    ], [
+        [["typed", "boolean", true, "@tilua-types/opts"], ["mode", "string", "fast", "@tilua-types/opts"], ["level", "number", undefined, "@tilua-types/opts"]],
+        [{ typed: true, mode: "fast", level: undefined }],
+    ])
+    check("options: a bad declaration is reported, and skipped", defaults.problems.map(p => p.message), [
+        "'@tilua-types/opts': the option 'lineMap' is the config's own, and cannot be declared again",
+        "'@tilua-types/opts': the option 'broken' needs a 'type': \"boolean\", \"number\" or \"string\"",
+    ])
+    const set = withOptions({ typed: false, mode: "safe", level: 3 })
+    check("options: the config sets them, and the lowering is handed them",
+        set.lowerings.map(l => l.options), [{ typed: false, mode: "safe", level: 3 }])
+    const wrong = withOptions({ typed: "no", mode: "slow", other: 1 })
+    check("options: a wrong value is reported and the default kept; an undeclared key is unknown", [
+        wrong.problems.map(p => p.message).slice(2),
+        wrong.lowerings.map(l => l.options),
+    ], [[
+        "'typed' must be true or false (an option of '@tilua-types/opts')",
+        "'mode' must be one of: \"fast\", \"safe\" (an option of '@tilua-types/opts')",
+        "Unknown option 'other'. Options are: types, paths, baseUrl, sourceMap, output, rootDir, outDir, noLib, treeShaking, lineMap, indent, minify, typed, mode, level",
+    ], [{ typed: true, mode: "fast", level: undefined }]])
 
     // Lua's standard library is built in: its old package loads nothing,
     // whether it is named, matched or depended on — unless `noLib`.

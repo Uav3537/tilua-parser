@@ -114,6 +114,13 @@ npm i -D @tilua-types/roblox        # Luau + Roblox
 - **`lineMap`** — the compiler's: `false` leaves out of a bundle the map that
   names an error's place in the project's files (`true` unless set). The
   parser only checks it.
+- **`indent`** / **`minify`** — the compiler's: how the output is laid out.
+  `indent` is `"\t"` or a number of spaces a block level; `minify: true`
+  writes it on one line, without the line map. The parser only checks them.
+- **A library's options** — any other key is an option a type library in
+  `types` declares (see below), such as `@tilua-types/luau`'s
+  `typedExports`. `resolveTypeLibraries` checks them against what the loaded
+  libraries declare; a key none declares is an unknown option.
 - **`noLib`** — `true` leaves the standard library out, as TypeScript's
   `noLib` does: no `print`, no `string`, only what `types` declares. For a
   host with none of Lua's, or a library of one's own in its place. With it,
@@ -127,7 +134,9 @@ npm i -D @tilua-types/roblox        # Luau + Roblox
   the same path.
 - **`output`** — the compiler's: how many files to write (`"single"`, the
   default; `"chunks"`, which also writes a file for what only an `import()`
-  reaches; or `"modules"`, one file per module). The parser only checks it.
+  reaches; or `"files"`, every file under `rootDir` compiled to one of its
+  own under `outDir`, with no entry). The parser only checks it, and
+  `rootDir` and `outDir`, which resolve from the config's folder.
   Which Lua the output is written for is no option: it is Lua any Lua runs,
   and a type library says what more its Lua has (`"luau"`). A config that
   still sets `target` is told so.
@@ -136,7 +145,7 @@ npm i -D @tilua-types/roblox        # Luau + Roblox
 |---|---|
 | `findConfig(file, host?)` | the config that applies, problems with it, and every path searched |
 | `loadConfig(path, host?)` | read and check one config |
-| `resolveTypeLibraries(config, host?)` | the `.d.tilua` files to load, in order |
+| `resolveTypeLibraries(config, host?)` | the `.d.tilua` files to load, in order; the lowerings; the libraries' options |
 | `moduleCandidates(from, specifier, config?)` / `resolveModulePath(...)` | what an `import` means |
 | `importExpressions(program)` | every `import("...")` written in a file |
 | `sourceMapTypes(text, path, { classes })` | the tree's types, and `scriptFor(file)` |
@@ -445,6 +454,34 @@ A plugin may also list `syntax`: what its Lua can write beyond Lua 5.1's
 `"floorDivision"`, `"iteration"`, `"attributes"`, `"numberLiterals"`,
 `"requireByPath"`). Without one the compiler writes Lua any Lua runs;
 `@tilua-types/luau` lists Luau's, so a Luau project is written as Luau.
+
+`entryExports` answers for what a file of the output returns — a module's
+exports table, `value`: the entry's in a bundle, and each module's with
+`"output": "files"` — with that module's exports as `exports`, the types an
+importer sees. It may return a different expression and statements to put
+before it; `@tilua-types/luau` casts the table to its Luau type there.
+
+`files` answers, with `"output": "files"`, where each file ends up in the
+host and how the files reach each other there: a `place` for each file (names
+from the top of the host's tree), the `root` alias a `require` reaches that
+top by, where the `runtime` goes, a `prelude` run first in a file, and which
+files are a `script` the host runs, which nothing may import.
+`@tilua-types/roblox` answers from a Rojo project.
+
+A library adds options to `tilua.config.json` by declaring them:
+
+```json
+"tilua": {
+    "lowering": "lowering.mjs",
+    "options": { "typedExports": { "type": "boolean", "default": true, "description": "..." } }
+}
+```
+
+An option has a `type` (`"boolean"`, `"number"` or `"string"`), and may have
+a `default`, `values` it is limited to, and a `description`. The config sets
+it as it sets its own (`"typedExports": false`); a value of the wrong type is
+reported, and the default kept. Every hook is told its library's own options
+as `options`, and `resolveTypeLibraries` lists them all, declared and set.
 
 **A `(` that starts a line** continues the statement above it, as in Lua and
 in JavaScript — `const v = map[key]` followed by `("A"):upper()` is one

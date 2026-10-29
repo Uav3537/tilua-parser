@@ -31,6 +31,7 @@
  * `loweringHelpers.ts`), so no plugin keeps a copy.
  */
 import type { Type } from "../ast/typeModel"
+import type { ModuleExports } from "../ast/analyzeTypes"
 
 export interface LoweringPlugin {
     /** Luau the plugin needs in the output, by a key it chooses. Each is a
@@ -78,6 +79,23 @@ export interface LoweringPlugin {
      *  There is no call site to describe here, so this is where a plugin
      *  that rewrites calls keeps the rest of the program consistent with it. */
     globalValue?(value: GlobalValue): string | undefined
+
+    /** What a file of the output hands to whoever loads it — a module's
+     *  exports table: the entry's, for a bundle whose entry exports, and
+     *  every module's with `"output": "files"`, where each is a file a script
+     *  can require. Asked once a file, last library loaded first, and the
+     *  first answer is taken; `undefined` returns `value` as it is. This is
+     *  where a library for a Lua with types says what that table's type is
+     *  (`@tilua-types/luau` casts it). */
+    entryExports?(entry: EntryExports): EntryExportsLowering | undefined
+
+    /** With `"output": "files"`, where the files end up in the host and how
+     *  they reach each other there. Asked once a build, last library loaded
+     *  first; the first answer is taken. Without one, the files are where
+     *  they are written and require each other by their paths from one
+     *  another, as Luau reads them. A host that puts the output somewhere
+     *  else — Roblox, through a Rojo project — answers here. */
+    files?(layout: FilesLayout): FilesAnswer | undefined
 
     /** What the Lua the output runs on can write beyond Lua 5.1's syntax.
      *  The compiler knows only Lua: what it writes runs on Lua 5.1 to 5.4,
@@ -137,7 +155,14 @@ export interface ArgumentInfo {
     readonly spread: boolean
 }
 
-interface CallContext {
+/** What every hook is told about the project. */
+export interface PluginContext {
+    /** The options this library declares (`tilua.options` in its
+     *  package.json), as the project's config sets them — or their defaults. */
+    readonly options: Readonly<Record<string, boolean | number | string | undefined>>
+}
+
+interface CallContext extends PluginContext {
     /** Where the call was written. */
     readonly at: CallSite
     /** Each written argument, in order. */
@@ -166,11 +191,65 @@ export interface GlobalCall extends CallContext {
     readonly name: string
 }
 
-export interface GlobalValue {
+export interface GlobalValue extends PluginContext {
     /** The global read. */
     readonly name: string
     readonly at: CallSite
     use(runtime: string): string
+}
+
+export interface EntryExports extends PluginContext {
+    /** The module whose exports these are, by its name in the output:
+     *  `src/main`. */
+    readonly module: string
+    /** The Luau expression the file returns: the module's exports table. */
+    readonly value: string
+    /** What the entry exports, as a module that imports it sees it. */
+    readonly exports: ModuleExports
+    /** The syntax the output is written in: what the loaded libraries say
+     *  their Lua has. */
+    readonly syntax: readonly LuaSyntax[]
+}
+
+export interface EntryExportsLowering {
+    /** Luau statements put at the top level of the file, before it
+     *  returns — type aliases, say. */
+    readonly statements?: readonly string[]
+    /** The Luau expression returned instead of `value`. */
+    readonly value: string
+}
+
+export interface FilesLayout extends PluginContext {
+    /** The config's folder, absolute: where the project's own paths start. */
+    readonly directory: string
+    /** The folder the output is written to, absolute. */
+    readonly outDir: string
+    /** Every file of the output but the runtime, as absolute paths. */
+    readonly files: readonly string[]
+    /** Where the runtime would go, absolute: `_tilua.luau` in `outDir`. */
+    readonly runtime: string
+}
+
+export interface FilesAnswer {
+    /** Where `file` (absolute) ends up, as names from the top of the host's
+     *  tree down: `["ReplicatedStorage", "Shared", "util"]`. A file that
+     *  is the folder it is in (`init.luau`) is that folder. `undefined`
+     *  leaves it where it is written. */
+    place?(file: string): readonly string[] | undefined
+    /** The alias a `require` names the top of that tree by — `"@game"` —
+     *  for a file whose place starts somewhere else than the requiring
+     *  file's. Without one every path is relative. */
+    readonly root?: string
+    /** Where the runtime goes instead, absolute, inside `outDir`: every
+     *  file requires it, so it has to be where every one can reach. */
+    readonly runtime?: string
+    /** Luau run first in `file`, before it requires anything. */
+    prelude?(file: string): string | undefined
+    /** Is `file` a script the host runs, rather than a module a `require`
+     *  loads? Nothing may import one, and what it returns is not typed. */
+    script?(file: string): boolean
+    /** What is wrong with the layout: a file the host has no place for. */
+    readonly problems?: readonly { readonly file?: string; readonly message: string; readonly severity?: "warning" }[]
 }
 
 export interface CallLowering {
