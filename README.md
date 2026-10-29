@@ -130,8 +130,15 @@ npm i -D @tilua-types/roblox        # Luau + Roblox
   config's folder).
 - **`sourceMap`** — the instance tree becomes types: `game` and `workspace`
   follow it, and a file the tree maps gets its own `script`, so
-  `script.Parent.Remotes` is typed. A `.tilua` file matches the Luau file of
-  the same path.
+  `script.Parent.Remotes` is typed. An instance's children are also what its
+  `FindFirstChild` and `WaitForChild` take by name — the editor offers them,
+  and `WaitForChild("Baseplate")` is that part. It is a sourcemap
+  `rojo sourcemap` wrote, or a Rojo project (`*.project.json`), read as the
+  tree it builds: its nodes, and the files under each `$path` as Rojo makes
+  them into instances. Left unset, the `default.project.json` beside the
+  config is read, if there is one and a library declares `game`; `null`
+  reads nothing. A `.tilua` file matches the Luau file it compiles to —
+  under `outDir`, where the output has its own.
 - **`output`** — the compiler's: how many files to write (`"single"`, the
   default; `"chunks"`, which also writes a file for what only an `import()`
   reaches; or `"files"`, every file under `rootDir` compiled to one of its

@@ -15,6 +15,10 @@ export interface ProjectHost {
      *  such folder. Only a `types` entry with a `*` in it lists anything; a
      *  host without this cannot load one. */
     readDirectory?(path: string): string[] | undefined
+    /** The names of the files in a folder, or `undefined` when there is no
+     *  such folder. A Rojo project's tree is read with it; a host without
+     *  this lists the project's own nodes alone. */
+    listFiles?(path: string): string[] | undefined
 }
 
 export const nodeHost: ProjectHost = {
@@ -30,6 +34,13 @@ export const nodeHost: ProjectHost = {
             return readdirSync(path, { withFileTypes: true })
                 .filter(entry => entry.isDirectory() || entry.isSymbolicLink())
                 .map(entry => entry.name)
+        } catch {
+            return undefined
+        }
+    },
+    listFiles(path) {
+        try {
+            return readdirSync(path, { withFileTypes: true }).filter(entry => entry.isFile()).map(entry => entry.name)
         } catch {
             return undefined
         }

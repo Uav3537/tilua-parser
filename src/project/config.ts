@@ -6,7 +6,7 @@
  * `tilua.config.jsonc`; either allows comments and trailing commas. Both in one
  * folder is an error, since it would be ambiguous which applies.
  */
-import { dirname, join, resolve } from "node:path"
+import { dirname, isAbsolute, join, relative, resolve } from "node:path"
 import { nodeHost, type ProjectHost } from "./host"
 
 export const CONFIG_FILE_NAMES = ["tilua.config.json", "tilua.config.jsonc"] as const
@@ -24,8 +24,11 @@ export interface TiluaConfig {
     readonly paths: Readonly<Record<string, readonly string[]>>
     /** Where `paths` targets resolve from, absolute. The config's folder unless set. */
     readonly baseUrl: string
-    /** Absolute path of a Rojo sourcemap, or `null` for none. */
-    readonly sourceMap: string | null
+    /** Absolute path of the instance tree's source — a Rojo sourcemap, or a
+     *  Rojo project (`*.project.json`) — or `null` for none. `undefined` when
+     *  the config does not say: the `default.project.json` beside it is read,
+     *  if there is one (see `sourceMapOf`). */
+    readonly sourceMap: string | null | undefined
     /** How many files the compiler writes. `"single"` (the default) is one
      *  file holding every module. `"chunks"` keeps what the entry imports in
      *  the entry's file and writes what only an `import()` reaches to files of
@@ -69,6 +72,17 @@ export interface TiluaConfig {
      *  whether their values fit, only the libraries can say — see
      *  `resolveTypeLibraries`, which checks them. */
     readonly libraryOptions: Readonly<Record<string, unknown>>
+}
+
+/** Where the file `file` (absolute) is compiled to: with `"output": "files"`
+ *  and an `outDir` of its own, the same place under `outDir` — which is where
+ *  a Rojo sourcemap lists it. Anything else is where it is. The extension is
+ *  left as it is: a sourcemap matches a `.tilua` to the Luau file of its name. */
+export function outputPathOf(config: TiluaConfig, file: string): string {
+    if (config.output !== "files") return file
+    const below = relative(config.rootDir, file)
+    if (below === "" || below.startsWith("..") || isAbsolute(below)) return file
+    return join(config.outDir, below)
 }
 
 /** See `TiluaConfig.output`. */
@@ -180,7 +194,7 @@ export function loadConfig(path: string, host: ProjectHost = nodeHost): { config
         else problem("baseUrl", "'baseUrl' must be a string")
     }
 
-    let sourceMap: string | null = null
+    let sourceMap: string | null | undefined = options.sourceMap === null ? null : undefined
     if (options.sourceMap !== undefined && options.sourceMap !== null) {
         if (typeof options.sourceMap === "string") sourceMap = resolve(directory, options.sourceMap)
         else problem("sourceMap", "'sourceMap' must be a path string, or null for none")

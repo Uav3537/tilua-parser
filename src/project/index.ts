@@ -5,7 +5,7 @@
  */
 export { nodeHost, type ProjectHost } from "./host"
 export {
-    CONFIG_FILE_NAMES, CONFIG_OPTIONS, findConfig, loadConfig, stripJsonComments,
+    CONFIG_FILE_NAMES, CONFIG_OPTIONS, findConfig, outputPathOf, loadConfig, stripJsonComments,
     type TiluaConfig, type OutputMode, type ConfigProblem, type ConfigLookup,
 } from "./config"
 export {
@@ -16,4 +16,4 @@ export type {
     PluginContext, EntryExports, EntryExportsLowering, FilesLayout, FilesAnswer,
 } from "./lowering"
 export { moduleCandidates, resolveModulePath, importExpressions } from "./modules"
-export { sourceMapTypes, type SourceMapNode, type SourceMapOptions, type SourceMapTypes } from "./sourcemap"
+export { sourceMapTypes, rojoSourceMap, sourceMapOf, type SourceMapNode, type SourceMapOptions, type SourceMapTypes } from "./sourcemap"
