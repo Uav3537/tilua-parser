@@ -921,9 +921,14 @@ export function union(types: Type[]): Type {
             if (t.kind === "union") flat.push(...t.types)
             else flat.push(t)
         }
+        // The same object twice is the same member, and asking that first
+        // spares printing it: joining two branches unions every variable
+        // with itself, most of them untouched by either branch.
+        const distinct = flat.length < 2 ? flat : [...new Set(flat)]
+        if (distinct.length < 2) return distinct.filter(t => t.kind !== "never")
         // drop `never`, dedupe by structural key
         const seen = new Map<string, Type>()
-        for (const t of flat) {
+        for (const t of distinct) {
             if (t.kind === "never") continue
             const key = memberKey(t)
             if (!seen.has(key)) seen.set(key, t)
@@ -2287,9 +2292,13 @@ function formatTypeUncached(t: Type): string {
             // The constraints live on the `typeParam` nodes the signature
             // uses, not on the name list: `<K extends keyof Services>` reads
             // far better than `<K>`.
+            // Only a generic signature shows any, and the walk is through
+            // every object its parameters mention — a whole Roblox class.
             const constraints = new Map<string, Type>()
-            for (const part of [...t.params.map(p => p.type), t.varargs, t.returns]) {
-                collectTypeParams(part, constraints)
+            if (t.typeParams?.length) {
+                for (const part of [...t.params.map(p => p.type), t.varargs, t.returns]) {
+                    collectTypeParams(part, constraints)
+                }
             }
             const gen = t.typeParams?.length
                 ? `<${t.typeParams.map(n => {

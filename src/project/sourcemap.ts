@@ -131,6 +131,22 @@ export function sourceMapTypes(
             members.push("WaitForChild: <T = Instance>(self: Instance, name: string) => T")
             members.push("WaitForChild: <T = Instance>(self: Instance, name: string, timeout: number) => T | nil")
         }
+        // `game:GetService("ReplicatedStorage")` is the same instance as
+        // `game.ReplicatedStorage`, tree and all — then every other service,
+        // as Roblox declares them.
+        if (node.className === "DataModel" && options.classes.has("Services")) {
+            const services = [...found].filter(([name]) => options.classes.has(name) &&
+                (node.children ?? []).some(child => isNode(child) && child.name === name && child.className === name))
+            if (services.length) {
+                for (const [name, childAlias] of services) {
+                    const literal = JSON.stringify(name)
+                    members.push(`GetService: (self: Instance, className: ${literal}) => ${childAlias}`)
+                    members.push(`FindService: (self: Instance, className: ${literal}) => ${childAlias} | nil`)
+                }
+                members.push("GetService: <K extends keyof Services>(self: Instance, className: K) => Services[K]")
+                members.push("FindService: <K extends keyof Services>(self: Instance, className: K) => Services[K] | nil")
+            }
+        }
 
         lines.push(`declare class ${alias} extends ${className} { ${members.join(", ")} }`)
         return alias

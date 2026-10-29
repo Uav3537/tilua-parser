@@ -316,6 +316,44 @@ const rel = (path: string | undefined): string | undefined =>
     const reads = parse("const remotes: Folder = game.ReplicatedStorage.Shared.Remotes")
     check("sourcemap: a service child takes over the member of the same name",
         analyzeTypes(reads, analyzeScopes(reads), { libs: [roblox, withServices.program] }).diagnostics.map(d => d.message), [])
+    // `game:GetService` names the same service the tree does; a service the
+    // tree leaves out is still what the library says.
+    const provider = parse([
+        "declare class ServiceProvider extends Instance { GetService: <K extends keyof Services>(self: ServiceProvider, className: K) => Services[K] }",
+        "declare class Players extends Instance { }",
+        "type Services = { ReplicatedStorage: ReplicatedStorage, Workspace: Workspace, Players: Players }",
+    ].join("\n"))
+    const services = sourceMapTypes(JSON.stringify(tree), join(ROOT, "sourcemap.json"), {
+        classes: new Set([...classes, "Services"]),
+        membersOf: className => new Set(className === "DataModel" ? ["Name", "ReplicatedStorage", "Workspace"] : ["Name"]),
+    }).types!
+    const viaService = parse([
+        "const remotes: Folder = game:GetService(\"ReplicatedStorage\").Shared.Remotes",
+        "const players: Players = game:GetService(\"Players\")",
+    ].join("\n"))
+    check("sourcemap: `GetService` returns the service as the tree has it",
+        analyzeTypes(viaService, analyzeScopes(viaService), { libs: [roblox, provider, services.program] }).diagnostics.map(d => d.message), [])
+    // Its `Parent` reads as the folder it is in, and still takes `nil` or any
+    // other instance, as the class it extends says.
+    const withParent = parse([
+        "declare class Instance { Name: string, Parent: Instance | nil }",
+        "declare class Folder extends Instance { }",
+        "declare class ModuleScript extends Instance { }",
+        "declare class Part extends Instance { }",
+        "declare class ReplicatedStorage extends Instance { }",
+        "declare class Workspace extends Instance { }",
+        "declare class DataModel extends Instance { ReplicatedStorage: ReplicatedStorage, Workspace: Workspace }",
+    ].join("\n"))
+    const moves = parse([
+        "const remotes = game.ReplicatedStorage.Shared.Remotes",
+        "const shared: Folder = remotes.Parent",
+        "remotes.Parent = nil",
+        "remotes.Parent = game.Workspace",
+        "remotes.Name = 5",
+    ].join("\n"))
+    check("sourcemap: `Parent` reads as the parent, and takes any instance or `nil`",
+        analyzeTypes(moves, analyzeScopes(moves), { libs: [withParent, withServices.program] }).diagnostics.map(d => d.message),
+        ["Type '5' is not assignable to 'string'"])
     check("sourcemap: invalid JSON is reported",
         sourceMapTypes("{ nope", join(ROOT, "sourcemap.json"), { classes }).problem?.startsWith("Invalid sourcemap"), true)
 }

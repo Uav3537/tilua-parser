@@ -1,5 +1,5 @@
 import type {
-    Program, Block, Statement, Expression, TypeNode,
+    BaseNode, Program, Block, Statement, Expression, TypeNode,
     Identifier, FunctionBody, FunctionSignature, FunctionParameter, BindingTarget, GenericTypeParameter, VariableDeclaration,
     ObjectPattern, ArrayPattern, ObjectPatternProperty, ReturnStatement, AssignmentStatement, MemberExpression, IndexExpression,
     TableExpression, ArrayExpression, IfStatement, TypePredicateNode, DeclareClassStatement, DeclareStatement,
@@ -816,6 +816,19 @@ function assignedFields(block: Block): Set<string> {
     return names
 }
 
+/** Is `name` an identifier anywhere under `root` — a variable, a member, a
+ *  method? Stops at the first. */
+function mentionsName(root: unknown, name: string): boolean {
+    if (!root || typeof root !== "object") return false
+    if (Array.isArray(root)) return root.some(item => mentionsName(item, name))
+    const record = root as { type?: string; name?: unknown }
+    if (record.type === "Identifier" && record.name === name) return true
+    for (const [key, value] of Object.entries(root)) {
+        if (key !== "line" && key !== "column" && value && typeof value === "object" && mentionsName(value, name)) return true
+    }
+    return false
+}
+
 /** Every node under `root`, spans excepted. */
 function walkNodes(root: unknown, visit: (node: object) => void): void {
     if (!root || typeof root !== "object") return
@@ -1009,7 +1022,7 @@ class TypeAnalyzer {
     private readonly bindingType = new LazyMap<BindingId>()
     private readonly narrowedTypeOf = new Map<Identifier, Type>()
     private readonly typeOfTypeNode = new Map<TypeNode, Type>()
-    private readonly expectedTypeOf = new Map<Expression, Type>()
+    private readonly expectedTypeOf = new LazyMap<Expression>()
     private readonly loops = new Map<GenericForStatement, LoopForm>()
     /** Every `declare metatable`, libraries first, in declaration order. */
     private readonly metatables: MetatableEntry[] = []
@@ -3418,14 +3431,12 @@ class TypeAnalyzer {
                 for (const sig of stmt.signatures ?? []) this.checkParamOrder(sig.params, stmt, sig.generics)
                 const id = this.bindingIdByName(stmt.name.name, stmt.name)
                 this.paramsFromSignatures(stmt.func, stmt.signatures)
-                const fnType = stmt.signatures?.length
-                    ? intersection(stmt.signatures.map(s => this.signatureToFnType(s)))
-                    : this.inferFunctionBody(stmt.func, env)
-                if (id !== undefined) {
-                    this.bindingType.set(id, fnType)
-                    this.setBinding(env, id, fnType)
-                }
-                this.visitFunctionBody(stmt.func, env)
+                this.visitDeclaredFunction(stmt.func, stmt.signatures, stmt.name.name, env, fnType => {
+                    if (id !== undefined) {
+                        this.bindingType.set(id, fnType)
+                        this.setBinding(env, id, fnType)
+                    }
+                })
                 return
             }
 
@@ -3440,13 +3451,13 @@ class TypeAnalyzer {
                     // Plain `function f(...)` — rebinds the name itself.
                     if (targetId !== undefined) {
                         this.paramsFromSignatures(stmt.func, stmt.signatures)
-                        const fnType = stmt.signatures?.length
-                            ? intersection(stmt.signatures.map(s => this.signatureToFnType(s)))
-                            : this.inferFunctionBody(stmt.func, env)
-                        this.bindingType.set(targetId, fnType)
-                        this.setBinding(env, targetId, fnType)
+                        this.visitDeclaredFunction(stmt.func, stmt.signatures, stmt.target.base.name, env, fnType => {
+                            this.bindingType.set(targetId, fnType)
+                            this.setBinding(env, targetId, fnType)
+                        })
+                    } else {
+                        this.visitFunctionBody(stmt.func, env)
                     }
-                    this.visitFunctionBody(stmt.func, env)
                     return
                 }
 
@@ -3457,10 +3468,8 @@ class TypeAnalyzer {
                 const recv = targetId === undefined ? anyType : this.currentType(targetId, env)
                 this.withSelfType(stmt.isMethod ? recv : undefined, () => {
                     this.paramsFromSignatures(stmt.func, stmt.signatures)
-                    const fnType = stmt.signatures?.length
-                        ? intersection(stmt.signatures.map(s => this.signatureToFnType(s)))
-                        : this.inferFunctionBody(stmt.func, env)
-                    if (memberName !== undefined && targetId !== undefined) {
+                    this.visitDeclaredFunction(stmt.func, stmt.signatures, memberName, env, fnType => {
+                        if (memberName === undefined || targetId === undefined) return
                         // Types are immutable, so the member is recorded by
                         // intersecting rather than by mutating the receiver.
                         const grown = intersection([
@@ -3469,8 +3478,7 @@ class TypeAnalyzer {
                         ])
                         this.bindingType.set(targetId, grown)
                         this.setBinding(env, targetId, grown)
-                    }
-                    this.visitFunctionBody(stmt.func, env)
+                    })
                 })
                 return
             }
@@ -4941,7 +4949,10 @@ class TypeAnalyzer {
                     : f.varargs
                 if (param) candidates.push(param)
             }
-            if (candidates.length) this.expectedTypeOf.set(arg, union(candidates))
+            // Joined when asked for: an overloaded method's parameters are
+            // fresh types on every call, and printing them to dedupe was most
+            // of what a call cost — for an answer only some arguments read.
+            if (candidates.length) this.expectedTypeOf.defer(arg, () => union(candidates))
         })
     }
 
@@ -5411,6 +5422,59 @@ class TypeAnalyzer {
             asserts: node.asserts,
             ...node.implies ? { implies: true } : {},
         }
+    }
+
+    /** A function declaration: its type handed to `bind`, and its body
+     *  visited. A body that never says the name it is declared as cannot ask
+     *  for its own type, so it is walked once — the real visit, its `return`s
+     *  read as they go, as a function expression's are. One that may call
+     *  itself needs its type before the visit, which costs a silent pre-visit
+     *  of the body first: every unannotated function walked twice, its nested
+     *  ones three times, was a third of the time a file took. */
+    private visitDeclaredFunction(
+        func: FunctionBody,
+        signatures: readonly FunctionSignature[] | undefined,
+        name: string | undefined,
+        env: FlowEnv,
+        bind: (fnType: Type) => void,
+    ): void {
+        if (signatures?.length) {
+            bind(intersection(signatures.map(s => this.signatureToFnType(s))))
+        } else if (
+            !func.returnType && !func.predicate && name !== undefined &&
+            !mentionsName(func, name) && !this.closureReadsAhead(func.body)
+        ) {
+            const returned: Type[] = []
+            this.visitFunctionBody(func, env, returned)
+            bind(this.inferFunctionBody(func, env, returned))
+            return
+        } else {
+            bind(this.inferFunctionBody(func, env))
+        }
+        this.visitFunctionBody(func, env)
+    }
+
+    /** Does a function written in `body` read a name declared further down?
+     *  It runs later, so it may — and the one walk reaches it before the
+     *  declaration, which the pre-visit had already typed. */
+    private closureReadsAhead(body: Block): boolean {
+        const visit = (node: unknown, inClosure: boolean): boolean => {
+            if (!node || typeof node !== "object") return false
+            if (Array.isArray(node)) return node.some(item => visit(item, inClosure))
+            const record = node as { type?: string } & BaseNode
+            if (inClosure && record.type === "Identifier") {
+                const id = this.bindingIdOf(node as Identifier)
+                const declared = id === undefined ? undefined : this.scopes.bindings.get(id)?.declarationNode
+                if (declared && (declared.line.start > record.line.start ||
+                    (declared.line.start === record.line.start && declared.column.start > record.column.start))) return true
+            }
+            const closure = inClosure || record.type === "FunctionBody"
+            for (const [key, value] of Object.entries(node)) {
+                if (key !== "line" && key !== "column" && value && typeof value === "object" && visit(value, closure)) return true
+            }
+            return false
+        }
+        return visit(body, false)
     }
 
     /** `visited`, when given, is what the real walk of the body just
@@ -7707,13 +7771,29 @@ class TypeAnalyzer {
             const id = this.bindingIdOf(target.object)
             if (id !== undefined && this.scopes.bindings.get(id)?.declaredBy === "namespace") return
         }
-        const declared = this.declaredProperty(this.expand(this.infer(target.object, env)), name)
+        const object = this.expand(this.infer(target.object, env))
+        const declared = this.declaredProperty(object, name)
         if (!declared || declared.kind === "any" || declared.kind === "unknown") return
         if (this.fitsAnnotation(stmt.value, declared, value, env)) return
+        if (this.fitsInheritedProperty(object, name, value)) return
         this.diagnostics.push({
             node: stmt,
             message: `Type '${briefType(value)}' is not assignable to '${briefType(declared)}'`
                 + this.explainMismatch(value, declared),
+        })
+    }
+
+    /** A `declare class` that narrows a member it inherits narrows what is
+     *  read, not what may be written: the host still takes whatever the class
+     *  it extends declares. A sourcemap's instance says its `Parent` is the
+     *  folder it sits in — and `remote.Parent = nil` is still how Roblox
+     *  takes it out. */
+    private fitsInheritedProperty(object: Type, name: string, value: Type): boolean {
+        if (!isClassType(object) || object.class.runtime) return false
+        return object.class.ancestors.slice(1).some(ancestor => {
+            const base = this.aliases.get(ancestor)
+            const declared = base && this.declaredProperty(this.expand(base), name)
+            return declared !== undefined && isAssignable(value, declared)
         })
     }
 
