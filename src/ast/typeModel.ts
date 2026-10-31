@@ -165,11 +165,18 @@ export interface ClassInfo {
      *  `Box<string>`. A class with no type parameters anywhere carries
      *  nothing, and costs nothing. */
     typeArguments?: ReadonlyMap<string, readonly Type[]>
+    /** What the class is called to a reader, where that is not `name`: an
+     *  instance of a sourcemap's tree (`TREE_CLASS_PREFIX`) is its Roblox class. */
+    shown?: string
     /** A `class` the program writes, whose instances are Lua tables — as
      *  opposed to a `declare class`, a value the host made (a Roblox
      *  `Instance`, a `Vector3`), which knows how to print itself. */
     runtime?: boolean
 }
+
+/** How the classes a sourcemap's tree turns into are named. Each is one node of
+ *  one place, so the name has to be unique — and means nothing to a reader. */
+export const TREE_CLASS_PREFIX = "SourceMap_"
 
 export function isClassType(t: Type): t is ObjectType & { class: ClassInfo } {
     return t.kind === "object" && t.class !== undefined
@@ -910,7 +917,7 @@ function memberKey(t: Type): string {
         case "literal": return `l${t.base}:${String(t.value)}`
         case "primitive": return `p${t.name}`
         case "any": case "unknown": case "never": return t.kind
-        default: return formatType(t)
+        default: return typeKey(t)
     }
 }
 
@@ -1250,8 +1257,9 @@ export function isAssignable(rawA: Type, rawB: Type): boolean {
     // `-> ()` annotation, and the reverse.
     // `void` is `nil` as a value; only a function type's return reads it
     // otherwise (`isFunctionAssignable`).
-    let a: Type = isNoValue(rawA) || isVoid(rawA) ? nilType : rawA
-    let b: Type = isNoValue(rawB) || isVoid(rawB) ? nilType : rawB
+    // `[]` is written the same way, and where a list is wanted it is one.
+    let a: Type = (isNoValue(rawA) && !holdsList(rawB)) || isVoid(rawA) ? nilType : rawA
+    let b: Type = (isNoValue(rawB) && !holdsList(rawA)) || isVoid(rawB) ? nilType : rawB
     if (a === b) return true
 
     // See through nominal references before comparing structurally, but only
@@ -1290,7 +1298,7 @@ function isAssignableInner(a: Type, b: Type): boolean {
     // Two mapped types over one source, keyed alike: the one fits the other
     // where what it maps each key to does.
     if (a.kind === "mapped" && b.kind === "mapped" && !a.nameType && !b.nameType &&
-        a.source && b.source && formatType(a.source) === formatType(b.source) &&
+        a.source && b.source && typeKey(a.source) === typeKey(b.source) &&
         (a.readonly ?? false) === (b.readonly ?? false)) {
         const key: Type = { kind: "typeParam", name: a.parameter }
         return isAssignable(a.template, substitute(b.template, new Map([[b.parameter, key]])))
@@ -1642,8 +1650,15 @@ function isNoValue(t: Type): boolean {
     return t.kind === "tuple" && t.elements.length === 0 && !t.rest
 }
 
+/** Is `t` a list, or a union with one in it? */
+function holdsList(t: Type): boolean {
+    const x = t.kind === "genericRef" && expandAlias ? expandAlias(t) : t
+    if (x.kind === "union") return x.types.some(holdsList)
+    return x.kind === "array" || x.kind === "tuple"
+}
+
 export function equalTypes(a: Type, b: Type): boolean {
-    return formatType(a) === formatType(b)
+    return typeKey(a) === typeKey(b)
 }
 
 // ============================================================
@@ -2189,11 +2204,34 @@ export function overlaps(a: Type, b: Type): boolean {
 // formatting (also the structural key for dedupe)
 // ============================================================
 
-/** `formatType` doubles as the structural key for union/intersection dedupe
- *  and `equalTypes`, so it runs constantly — and a class hierarchy formats to
- *  a very large string. Types are immutable by construction (every
- *  constructor returns a fresh value), so caching by identity is sound. */
+/** `formatType`'s text, for telling types apart rather than showing them: the
+ *  structural key for union/intersection dedupe and `equalTypes`. It runs
+ *  constantly — and a class hierarchy formats to a very large string. Types are
+ *  immutable by construction (every constructor returns a fresh value), so
+ *  caching by identity is sound. */
 const formatCache = new WeakMap<object, string>()
+const keyCache = new WeakMap<object, string>()
+let formattingKey = false
+
+/** `t` as `formatType` writes it, except that two different types never read
+ *  the same: two `Folder`s of a sourcemap's tree are told apart. */
+export function typeKey(t: Type): string {
+    const was = formattingKey
+    formattingKey = true
+    try {
+        return formatType(t)
+    } finally {
+        formattingKey = was
+    }
+}
+
+/** The name of a class or alias, as a reader knows it. */
+function shownName(t: ObjectType | GenericRefType): string {
+    const name = t.name!
+    if (formattingKey || !name.startsWith(TREE_CLASS_PREFIX)) return name
+    const type = t.kind === "genericRef" ? t.origin?.expand(t) ?? expandAlias?.(t) : t
+    return type?.kind === "object" ? type.class?.shown ?? name : name
+}
 
 /** A constraint as a signature shows it. A long union — every service name —
  *  is cut short, the way a diagnostic's types are. */
@@ -2231,10 +2269,11 @@ function collectTypeParams(t: Type | undefined, out: Map<string, Type>, seen = n
 }
 
 export function formatType(t: Type): string {
-    const cached = formatCache.get(t)
+    const cache = formattingKey ? keyCache : formatCache
+    const cached = cache.get(t)
     if (cached !== undefined) return cached
     const out = formatTypeUncached(t)
-    formatCache.set(t, out)
+    cache.set(t, out)
     return out
 }
 
@@ -2276,7 +2315,7 @@ function formatTypeUncached(t: Type): string {
             if (t.name) {
                 // An instantiated generic class says which one it is.
                 const args = t.class?.typeArguments?.get(t.class.name)
-                return args?.length ? `${t.name}<${args.map(formatType).join(", ")}>` : t.name
+                return args?.length ? `${t.name}<${args.map(formatType).join(", ")}>` : shownName(t)
             }
             const props = [...t.properties.entries()]
                 .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
@@ -2316,12 +2355,12 @@ function formatTypeUncached(t: Type): string {
             return `${gen}(${ps.join(", ")}) => ${formatPredicate(t) ?? formatType(t.returns)}`
         }
         case "typeParam": return t.name
-        case "union": return t.types.map(formatAtom).join(" | ")
+        case "union": return [...new Set(t.types.map(formatAtom))].join(" | ")
         case "intersection": return t.name ?? t.types.map(formatAtom).join(" & ")
         case "genericRef":
             return t.typeArguments.length
                 ? `${t.name}<${t.typeArguments.map(formatType).join(", ")}>`
-                : t.name
+                : shownName(t)
         case "keyof": return `keyof ${formatAtom(t.target)}`
         case "difference": return `Exclude<${formatType(t.base)}, ${formatType(t.excluded)}>`
         case "templateLiteral": {
@@ -2355,6 +2394,8 @@ function formatPredicate(t: FunctionType): string | undefined {
 function formatAtom(t: Type): string {
     // A named intersection prints as a bare alias name, so it needs no parens.
     if (t.kind === "intersection" && t.name) return t.name
+    // Members that read alike print as one: `Folder`s of a sourcemap tree.
+    if (t.kind === "union" && new Set(t.types.map(formatAtom)).size === 1) return formatAtom(t.types[0])
     if (t.kind === "union" || t.kind === "intersection" || t.kind === "function" ||
         t.kind === "conditional") {
         return `(${formatType(t)})`
@@ -2372,7 +2413,7 @@ function formatKey(k: string): string {
  *  the intersection of their types. Aliases are seen through. `undefined` when
  *  a member is not an object (a function, a primitive), since merging would
  *  then lose what that member means. */
-function mergeObjectMembers(types: readonly Type[]): ObjectType | undefined {
+export function mergeObjectMembers(types: readonly Type[]): ObjectType | undefined {
     const objects: ObjectType[] = []
     const seen = new Set<Type>()
     const collect = (t: Type): boolean => {

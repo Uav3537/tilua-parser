@@ -1,5 +1,5 @@
 import type {
-    BaseNode, Program, Block, Statement, Expression, TypeNode,
+    BaseNode, Program, Block, Statement, Expression, TypeNode, TypeReference, MappedTypeNode,
     Identifier, FunctionBody, FunctionSignature, FunctionParameter, BindingTarget, GenericTypeParameter, VariableDeclaration,
     ObjectPattern, ArrayPattern, ObjectPatternProperty, ReturnStatement, AssignmentStatement, MemberExpression, IndexExpression,
     TableExpression, ArrayExpression, IfStatement, TypePredicateNode, DeclareClassStatement, DeclareStatement,
@@ -17,8 +17,8 @@ import {
     typeParam, substitute, unify, containsTypeParam, matchInfer, setAliasExpander, setDeferredBound, setBuiltinMember, difference,
     widen, isAssignable, overlaps, narrowTo, narrowExclude, narrowTruthy, narrowFalsy,
     isClassType,
-    isPossiblyFalsy, isPossiblyTruthy, THIS_TYPE, withThis, tupleMeta, tupleLength, minLengthOf, tupleParams, type TupleType,
-    formatType, withAliasName, equalTypes, withoutReceiver,
+    isPossiblyFalsy, isPossiblyTruthy, THIS_TYPE, withThis, tupleMeta, tupleLength, minLengthOf, tupleParams, type ArrayType, type TupleType,
+    formatType, typeKey, TREE_CLASS_PREFIX, mergeObjectMembers, withAliasName, equalTypes, withoutReceiver,
 } from "./typeModel"
 
 // ============================================================
@@ -154,6 +154,8 @@ export interface TypeAnalysis {
     /** The members a value's metatable `__index` gives it — what an editor
      *  offers after `:`. Empty for a value no metatable matches. */
     readonly metatableMembers: (type: Type) => ReadonlyMap<string, Type>
+    /** The defaults of a generic this module declares, as `ExportedType.defaults`. */
+    readonly typeDefaults: (generics: readonly GenericTypeParameter[]) => (Type | undefined)[]
     /** Each run of statements no path reaches: what follows a `return`,
      *  `break` or `continue` in its block, a call that never returns, or an
      *  `if` every branch of which leaves. An editor dims them; the compiler
@@ -189,6 +191,11 @@ interface MetatableEntry {
 export interface ExportedType {
     readonly type: Type
     readonly params: readonly string[]
+    /** How many of `params` have no default, and so have to be written. */
+    readonly required?: number
+    /** Each parameter's default, resolved where it was written, in terms of
+     *  the parameters before it. Absent when none has one. */
+    readonly defaults?: readonly (Type | undefined)[]
 }
 
 /** What a module makes available to `import`. See `moduleExports`. */
@@ -283,10 +290,10 @@ export function moduleExports(
         const type = from.types.get(name)
         if (type) exportedTypes.set(as, type)
     }
-    const aliasParams = (name: string): string[] => {
+    const aliasGenerics = (name: string): GenericTypeParameter[] => {
         for (const s of program.body.statements) {
             const alias = s.type === "TypeAliasStatement" ? s : s.type === "ExportTypeAliasStatement" ? s.alias : undefined
-            if (alias?.name.name === name) return alias.generics.map(g => g.name)
+            if (alias?.name.name === name) return alias.generics
         }
         return []
     }
@@ -323,7 +330,7 @@ export function moduleExports(
                 if (instance) {
                     exportedTypes.set(declaration.name.name, {
                         type: instance,
-                        params: declaration.typeParams.map(g => g.name),
+                        ...exportedParams(declaration.typeParams, types),
                     })
                 }
             }
@@ -331,14 +338,14 @@ export function moduleExports(
         } else if (stmt.type === "ExportTypeAliasStatement") {
             const name = stmt.alias.name.name
             const type = types.aliases.get(name)
-            if (type) exportedTypes.set(name, { type, params: stmt.alias.generics.map(g => g.name) })
+            if (type) exportedTypes.set(name, { type, ...exportedParams(stmt.alias.generics, types) })
         } else if (stmt.type === "ExportDefaultStatement") {
             if (stmt.declaration.type === "ClassDeclaration") {
                 const id = byDeclaration.get(stmt.declaration.name)
                 defaultType = (id !== undefined ? types.bindingType.get(id) : undefined) ?? anyType
                 const instance = types.aliases.get(stmt.declaration.name.name)
                 if (instance) {
-                    const exported = { type: instance, params: stmt.declaration.typeParams.map(g => g.name) }
+                    const exported = { type: instance, ...exportedParams(stmt.declaration.typeParams, types) }
                     exportedTypes.set(stmt.declaration.name.name, exported)
                     // `import Box from "./box"` brings the type in as well as
                     // the class table, under whatever the importer calls it.
@@ -356,7 +363,7 @@ export function moduleExports(
                     const id = scopes.bindingOf.get(s.local)
                     if (id !== undefined && !stmt.typeOnly) setValue(s.exported.name, types.bindingType.get(id) ?? anyType)
                     const alias = types.aliases.get(s.local.name)
-                    if (alias) exportedTypes.set(s.exported.name, { type: alias, params: aliasParams(s.local.name) })
+                    if (alias) exportedTypes.set(s.exported.name, { type: alias, ...exportedParams(aliasGenerics(s.local.name), types) })
                 }
             }
         } else if (stmt.type === "ExportAllStatement") {
@@ -482,6 +489,15 @@ function patternAnnotated(pattern: ObjectPattern | ArrayPattern): boolean {
     return pattern.type === "ObjectPattern"
         ? pattern.properties.some(p => leaf(p.value, p.default))
         : pattern.elements.some(el => el !== undefined && el !== null && leaf(el.value, el.default))
+}
+
+/** A generic's parameters, as a module says them to whoever imports it. */
+function exportedParams(generics: readonly GenericTypeParameter[], types: TypeAnalysis): Omit<ExportedType, "type"> {
+    return {
+        params: generics.map(g => g.name),
+        required: generics.filter(g => !g.default).length,
+        ...(generics.some(g => g.default) ? { defaults: types.typeDefaults(generics) } : {}),
+    }
 }
 
 /** `t` with every list in it — at the top, in a list, in a member — read-only. */
@@ -1190,6 +1206,7 @@ class TypeAnalyzer {
             typeofTables: this.typeofTables,
             unreachable: [...this.unreachable.values()],
             metatableMembers: type => this.metatableMembers(type),
+            typeDefaults: generics => this.typeDefaults(generics),
             diagnostics: this.diagnostics,
         }
     }
@@ -1408,7 +1425,8 @@ class TypeAnalyzer {
             })
         }
 
-        const type = { kind: "object", name, class: { name, superclass: superclass?.name.name, ancestors } } as unknown as ObjectType
+        const shown = name.startsWith(TREE_CLASS_PREFIX) ? superclass?.name.name : undefined
+        const type = { kind: "object", name, class: { name, superclass: superclass?.name.name, ancestors, ...(shown ? { shown } : {}) } } as unknown as ObjectType
         Object.defineProperties(type, {
             properties: { enumerable: true, get: () => members()?.properties ?? own?.properties ?? new Map() },
             indexer: { enumerable: true, get: () => members()?.indexer ?? own?.indexer },
@@ -2590,15 +2608,56 @@ class TypeAnalyzer {
         }
     }
 
+    /** References reported by `checkTypeArgumentCount` and `hasOnlyKeys`, once each: a type is
+     *  resolved every time it is read. */
+    private readonly countReported = new WeakSet<object>()
+
+    /** `StatsType` alone, where `StatsType<C>` has no default for `C`: left to
+     *  itself the parameter would quietly be `unknown`. */
+    private checkTypeArgumentCount(node: TypeReference, required: number, most: number): void {
+        if (!this.emitDiagnostics || this.instantiationDepth > 0) return
+        const given = node.typeArguments.length
+        if ((given >= required && given <= most) || this.countReported.has(node)) return
+        this.countReported.add(node)
+        const name = node.namespace ? `${node.namespace}.${node.base}` : node.base
+        const count = required === most ? String(most) : `${required} to ${most}`
+        this.diagnostics.push({
+            node,
+            message: most === 0
+                ? `Type '${name}' is not generic`
+                : `Type '${name}' takes ${count} type argument${most === 1 ? "" : "s"}, got ${given}`,
+        })
+    }
+
     /** An imported type, with its type arguments applied. */
     private importedType(imported: ExportedType, typeArguments: readonly (TypeNode)[]): Type {
         if (!imported.params.length) return imported.type
+        const subst = this.bindImportedArguments(imported, typeArguments.map(a => this.resolveType(a)))
+        return this.reduceType(substitute(imported.type, subst))
+    }
+
+    /** `bindTypeArguments` for a generic of another module. */
+    private bindImportedArguments(imported: ExportedType, args: readonly Type[]): Map<string, Type> {
         const subst = new Map<string, Type>()
         imported.params.forEach((name, i) => {
-            const arg = typeArguments[i]
-            subst.set(name, arg ? this.resolveType(arg) : unknownType)
+            const fallback = imported.defaults?.[i]
+            subst.set(name, args[i] ?? (fallback ? this.reduceType(substitute(fallback, subst)) : unknownType))
         })
-        return this.reduceType(substitute(imported.type, subst))
+        return subst
+    }
+
+    /** See `TypeAnalysis.typeDefaults`. Asked once the analysis is over, so
+     *  it sets up what comparing types needs again. */
+    private typeDefaults(generics: readonly GenericTypeParameter[]): (Type | undefined)[] {
+        const expander = setAliasExpander(t => this.expand(t))
+        const emitting = this.emitDiagnostics
+        this.emitDiagnostics = false
+        try {
+            return this.withTypeParams(generics, () => generics.map(g => g.default && this.resolveType(g.default)))
+        } finally {
+            this.emitDiagnostics = emitting
+            setAliasExpander(expander)
+        }
     }
 
     // --------------------------------------------------------
@@ -2672,8 +2731,9 @@ class TypeAnalyzer {
                         // instead re-resolves it at every mention, which for a
                         // set of mutually referring classes blows up.
                         const typeArguments = node.typeArguments.map(a => this.resolveType(a))
-                        this.checkTypeArgumentConstraints(
-                            node.typeArguments, this.aliasDefs.get(node.base)!.params, typeArguments)
+                        const def = this.aliasDefs.get(node.base)!
+                        if (!def.class) this.checkTypeArgumentCount(node, def.params.filter(p => !p.default).length, def.params.length)
+                        this.checkTypeArgumentConstraints(node.typeArguments, def.params, typeArguments)
                         return this.expand({
                             kind: "genericRef",
                             name: node.base,
@@ -2682,7 +2742,10 @@ class TypeAnalyzer {
                         })
                     }
                     const imported = this.importedTypes.get(node.base)
-                    if (imported) return this.importedType(imported, node.typeArguments)
+                    if (imported) {
+                        if (imported.required !== undefined) this.checkTypeArgumentCount(node, imported.required, imported.params.length)
+                        return this.importedType(imported, node.typeArguments)
+                    }
                     const lib = this.options.libTypes?.[node.base]
                     if (lib) return lib
                     // TypeScript's `object`: anything that is not a
@@ -2850,6 +2913,8 @@ class TypeAnalyzer {
 
             case "MappedTypeNode": {
                 const constraint = this.resolveType(node.constraint)
+                // Reported once; `any` so the mistake is not repeated per key.
+                if (!node.nameType && !this.hasOnlyKeys(node, constraint)) return anyType
                 // `[K in keyof T]` is *homomorphic*: remember `T` so each
                 // property can inherit its own `?` / `readonly`.
                 const source = node.constraint.type === "KeyofTypeNode"
@@ -2871,6 +2936,25 @@ class TypeAnalyzer {
             }
 
         }
+    }
+
+    /** `{ [K in X]: V }` where `X` is not keys, which is reported: what is not a
+     *  key is left out, and the type left with nothing would quietly be `{}`. */
+    private hasOnlyKeys(node: MappedTypeNode, constraint: Type): boolean {
+        const reduced = this.expand(this.reduceType(constraint))
+        const members = reduced.kind === "union" ? reduced.types.map(m => this.expand(m)) : [reduced]
+        const bad = members.find(m => m.kind === "array" || m.kind === "tuple" || m.kind === "object" || m.kind === "function" ||
+            (m.kind === "literal" && m.base === "boolean"))
+        if (!bad) return true
+        if (this.emitDiagnostics && this.instantiationDepth === 0 && !this.countReported.has(node)) {
+            this.countReported.add(node)
+            const list = bad.kind === "array" || bad.kind === "tuple"
+            this.diagnostics.push({
+                node: node.constraint,
+                message: `Type '${briefType(reduced)}' cannot be used as keys${list ? ": it is a list, and '[number]' reads what it holds" : ""}`,
+            })
+        }
+        return false
     }
 
     // --------------------------------------------------------
@@ -4224,7 +4308,7 @@ class TypeAnalyzer {
             if (picked && subst) {
                 const self = selfOf(picked)
                 const declared = i + self < picked.params.length ? picked.params[i + self].type : picked.varargs
-                if (declared) this.applyContext(a, this.reduceType(substitute(declared, subst)))
+                if (declared) this.applyContext(a, this.reduceType(substitute(this.boundOf(declared) ?? declared, subst)))
             }
             argTypes[i] = this.infer(a, env)
         })
@@ -4250,9 +4334,24 @@ class TypeAnalyzer {
         if (!expected || !containsTypeParam(expected)) return false
         let e = arg
         while (e.type === "ParenthesizedExpression") e = e.expression
+        // `M extends Handlers<T>`: the table the call infers `M` from is read
+        // with that bound once `T` is known, which is what its functions'
+        // parameters are read from, a `self` as much as any.
+        if (e.type === "TableExpression" && this.boundOf(expected)) {
+            return e.fields.some(field => {
+                const value = field.type === "TableFieldNamed" ? unwrapParens(field.value) : undefined
+                return value?.type === "FunctionExpression" && value.func.params.some(p => !p.typeAnnotation && !p.default && !p.pattern)
+            })
+        }
         if (e.type !== "FunctionExpression") return false
         return e.func.params.some(p =>
             !p.typeAnnotation && !p.default && !p.pattern && p.name !== "self" && p.name !== "this")
+    }
+
+    /** The bound of a parameter whose type is a type parameter, `nil` or not. */
+    private boundOf(t: Type): Type | undefined {
+        const members = t.kind === "union" ? t.types : [t]
+        return members.find((m): m is Extract<Type, { kind: "typeParam" }> => m.kind === "typeParam" && !!m.constraint)?.constraint
     }
 
     /** Read something without saying anything about it: a first pass whose
@@ -4275,6 +4374,7 @@ class TypeAnalyzer {
         // inside `const mode: Mode = "|"` reads this.
         this.expectedTypeOf.set(expr, expected)
         this.expectedTypeOf.set(e, expected)
+        if (e.type === "AsConstExpression") return this.applyContext(e.expression, expected)
         if (e.type === "ArrayExpression") return this.applyArrayContext(e, expected)
         if (e.type === "TableExpression") return this.applyTableContext(e, expected)
         // `Config.Paths or []` is the Lua way to write a default, and
@@ -6191,9 +6291,8 @@ class TypeAnalyzer {
             const imported = this.importedTypes.get(t.name)
             if (!imported) return t
             if (!imported.params.length) return imported.type
-            const subst = new Map<string, Type>()
-            imported.params.forEach((name, i) => subst.set(name, t.typeArguments[i] ?? unknownType))
-            const key = `import ${formatType(t)}`
+            const subst = this.bindImportedArguments(imported, t.typeArguments)
+            const key = `import ${typeKey(t)}`
             const cached = this.expandCache.get(key)
             if (cached) return cached
             this.expandCache.set(key, t)
@@ -6208,7 +6307,7 @@ class TypeAnalyzer {
         // stops the very same instantiation coming round again.
         if (this.resolvingAliases.has(t.name) && !this.computesWith(t)) return t
 
-        const key = t.typeArguments.length ? formatType(t) : t.name
+        const key = t.typeArguments.length ? typeKey(t) : t.name
         const cached = this.expandCache.get(key)
         if (cached) return cached
         this.expandCache.set(key, t)
@@ -7031,9 +7130,10 @@ class TypeAnalyzer {
             }
 
             // `as const` freezes the lists written in it too, as TypeScript's
-            // does: `[1, 2] as const` is a `readonly [1, 2]`.
+            // does: `[1, 2] as const` is a `readonly [1, 2]` — unless what
+            // the surroundings want of it is a list that can be written to.
             case "AsConstExpression":
-                return readonlyLists(this.inferAsConst(expr.expression, env))
+                return this.readonlyListsUnlessAsked(this.inferAsConst(expr.expression, env), this.expectedTypeOf.get(expr))
 
             case "UnaryExpression": {
                 const arg = this.infer(expr.argument, env)
@@ -7263,9 +7363,16 @@ class TypeAnalyzer {
     /** `new Name(args)` is `Name.new(args)` — the same function, and the
      *  same check. Saying so here rather than rewriting the tree keeps the
      *  error messages pointing at what was written. */
+    /** `t` expanded, an intersection of objects as the one object it is: a table
+     *  with a metatable is what it holds and the metamethods together. */
+    private withMembersMerged(raw: Type): Type {
+        const t = this.expand(raw)
+        return t.kind === "intersection" ? mergeObjectMembers(t.types.map(m => this.expand(m))) ?? t : t
+    }
+
     /** `__call` of a value with one, as what calling the value calls. */
     private callMetamethod(raw: Type): Type | undefined {
-        const t = this.expand(raw)
+        const t = this.withMembersMerged(raw)
         if (t.kind !== "object" || this.overloadsOf(t).length) return undefined
         const method = t.properties.get("__call")
         if (!method) return undefined
@@ -8369,9 +8476,69 @@ class TypeAnalyzer {
         }
     }
 
+    /** `readonlyLists` for an `as const` with a type expected of it. As in
+     *  TypeScript, a list stays writable where that type wants one that is:
+     *  `{ Melee: [] } as const satisfies { Melee: Animation[] }` meets the
+     *  contract and keeps its literal shape. A list already read-only stays so. */
+    private readonlyListsUnlessAsked(t: Type, context: Type | undefined): Type {
+        if (context === undefined) return readonlyLists(t)
+        // A contract not known yet — the import an import cycle has not
+        // finished — says nothing either way, and freezing now would fail
+        // the very contract it stands for once a later reader knows it.
+        if (this.expand(context).kind === "genericRef") return t
+        switch (t.kind) {
+            case "tuple": {
+                // `[]` has nothing of its own to keep: it is the list the
+                // contract asks for, as `[] satisfies T[]` is.
+                const list = !t.elements.length && !t.rest && !t.readonly
+                    ? this.membersOf(context).find(m => m.kind === "array" && !m.readonly)
+                    : undefined
+                if (list) return list
+                const elements = t.elements.map((e, i) => this.readonlyListsUnlessAsked(e, this.contextElement(context, i)))
+                const rest = t.rest && this.readonlyListsUnlessAsked(t.rest, this.contextElement(context, t.elements.length))
+                return { ...tupleMeta(tuple(elements, rest), t), readonly: t.readonly || !this.wantsWritableList(context) }
+            }
+            case "array":
+                return {
+                    ...arrayOf(this.readonlyListsUnlessAsked(t.element, this.contextElement(context, 0))),
+                    readonly: t.readonly || !this.wantsWritableList(context),
+                }
+            case "object": {
+                if (t.class) return t
+                const made = objectType(
+                    [...t.properties].map(([k, p]): [string, ObjectProperty] => [k, { ...p, type: this.readonlyListsUnlessAsked(p.type, this.contextProperty(context, k)) }]),
+                    t.indexer,
+                    t.frozen,
+                )
+                return t.name ? { ...made, name: t.name, nameRef: t.nameRef } : made
+            }
+            case "union": return union(t.types.map(m => this.readonlyListsUnlessAsked(m, context)))
+            default: return t
+        }
+    }
+
+    /** Does a contract allow a list that may be written to? */
+    private wantsWritableList(ctx: Type): boolean {
+        return this.membersOf(ctx).some(m => (m.kind === "array" || m.kind === "tuple") && !m.readonly)
+    }
+
     private membersOf(t: Type): Type[] {
         const x = this.expand(t)
         return x.kind === "union" ? x.types.map(m => this.expand(m)) : [x]
+    }
+
+    /** What a contract expects of the place `index` (from 0) of a list, over
+     *  every list it allows. */
+    private contextElement(ctx: Type, index: number): Type | undefined {
+        const found = this.membersOf(ctx).flatMap((m): Type[] => {
+            if (m.kind === "array") return [m.element]
+            if (m.kind !== "tuple") return []
+            const place = m.elements[index] ?? m.rest
+            if (place?.kind !== "spread") return place ? [place] : []
+            const spread = this.expand(place.type)
+            return spread.kind === "array" ? [spread.element] : []
+        })
+        return found.length ? union(found) : undefined
     }
 
     /** Does a contract accept literals of `base` as such? */
@@ -9441,7 +9608,7 @@ class TypeAnalyzer {
         const candidates: [Type, Type | undefined][] = right === undefined ? [[left, undefined]] : [[left, right], [right, left]]
         let declared: Type | undefined
         for (const [receiver, other] of candidates) {
-            const t = this.expand(receiver)
+            const t = this.withMembersMerged(receiver)
             const method = t.kind === "object" ? t.properties.get(name) : undefined
             if (!method) continue
             declared ??= receiver
@@ -9870,10 +10037,14 @@ class TypeAnalyzer {
     /** Why `actual` does not fit `expected`, when something shorter than the
      *  two whole shapes can be said: the properties it is missing, or the
      *  first one whose type is wrong. Empty when it cannot — the types
-     *  themselves are then the whole story. */
-    private explainMismatch(actual: Type, expected: Type): string {
+     *  themselves are then the whole story. `path` names where in the value
+     *  this is, for a mismatch deep inside one: `Anims.Melee`. */
+    private explainMismatch(actual: Type, expected: Type, path?: string): string {
         const from = this.expand(actual)
-        if (from.kind !== "object") return ""
+        if (path !== undefined && (from.kind === "array" || from.kind === "tuple")) {
+            return this.explainListMismatch(from, expected, path)
+        }
+        if (from.kind !== "object" || (path !== undefined && from.class)) return ""
         // A union target is the common case worth explaining, not the one to
         // give up on: `Stat` is `StatSuccess | StatError`, and a value that
         // says `Status: true` was reaching for the first. Name what that arm
@@ -9894,18 +10065,41 @@ class TypeAnalyzer {
             // worth naming only by name, and a signature spelled out in full
             // would bury the sentence it is meant to finish.
             const withTypes = shown.map(m => `${m.name}: ${m.type}`).join(", ")
-            if (withTypes.length <= MAX_EXPLANATION) return `, missing ${withTypes}${tail}`
-            return `, missing ${shown.map(m => m.name).join(", ")}${tail}`
+            const missingOf = path === undefined ? ", missing" : `, '${path}' is missing`
+            if (withTypes.length <= MAX_EXPLANATION) return `${missingOf} ${withTypes}${tail}`
+            return `${missingOf} ${shown.map(m => m.name).join(", ")}${tail}`
         }
         // Every key is there, so the reason is one of their types.
         for (const [name, property] of to.properties) {
             if (INTERNAL_MEMBERS.has(name)) continue
             const own = from.properties.get(name)
             if (!own || isAssignable(own.type, property.type)) continue
+            const at = path === undefined ? name : `${path}.${name}`
             const is = formatType(own.type)
             const wanted = formatType(property.type)
-            if (is.length + wanted.length > MAX_EXPLANATION) return `, '${name}' does not match`
-            return `, '${name}' is ${is}, not ${wanted}`
+            // What actually differs may be further in; two near-identical
+            // shapes quoted side by side would leave the reader to diff them.
+            const inner = this.explainMismatch(own.type, property.type, at)
+            if (inner) return inner
+            if (is.length + wanted.length > MAX_EXPLANATION) return `, '${at}' does not match`
+            return `, '${at}' is ${is}, not ${wanted}`
+        }
+        return ""
+    }
+
+    /** `explainMismatch` for a list found inside a value. */
+    private explainListMismatch(from: ArrayType | TupleType, expected: Type, path: string): string {
+        const lists = this.membersOf(expected).filter(m => m.kind === "array" || m.kind === "tuple")
+        if (!lists.length) return ""
+        if (from.readonly && !lists.some(m => (m as ArrayType | TupleType).readonly)) {
+            return `, '${path}' is 'readonly' and cannot be assigned to the mutable type '${briefType(expected)}'`
+        }
+        const elements = from.kind === "tuple" ? from.elements : [from.element]
+        for (const [i, element] of elements.entries()) {
+            const wanted = this.contextElement(expected, i)
+            if (!wanted || isAssignable(element, wanted)) continue
+            const at = `${path}[${i + 1}]`
+            return this.explainMismatch(element, wanted, at) || `, '${at}' is ${briefType(element)}, not ${briefType(wanted)}`
         }
         return ""
     }

@@ -849,7 +849,8 @@ An array is a table, at runtime as much as in the types: `return [a, b]` is
 `return { a, b }`. Where Luau answers several values — `pcall`, `string.find`,
 a Roblox method such as `FindPartOnRay` — the type library puts a function of
 its own in place of that global or method, which answers one value, as its
-type says. A tuple may end in a rest,
+type says. A signal's `Wait` is the value the signal hands over, and an array
+only when it hands over several. A tuple may end in a rest,
 `[string, ...number[]]`: that many, then any number more.
 
 A declaration and an assignment take one value, and a call is one value
@@ -995,6 +996,12 @@ and to an assignment such as `remote.OnServerInvoke = function(player) { ... }`.
 list of arguments: `type Signal<T extends unknown[] = any[]> = { Connect:
 (self, cb: (...args: T) => void) => Connection }`, given as a tuple —
 `Signal<[Player, string]>`, `Signal<[]>` for none.
+
+**Metatables** — `setmetatable(t, mt)` checks `mt` against the metamethods Luau
+knows, reads their parameters from `t` (`__newindex: function(self, k, v)` has
+`self` typed), and answers `t` with what the metatable adds: the members of an
+`__index` table, an index signature for an `__index` or `__newindex` function,
+and the metamethods calls and operators read.
 
 **Operators** — on a type that declares metamethods (`__add`, `__mul`,
 `__unm`, ...), an operator has the metamethod's result, tried on the left
@@ -1305,8 +1312,6 @@ analyzeTypes(program, scopes, {
 ## Known limitations
 
 - `export * as ns from` is not supported.
-- `setmetatable` is not modelled: a table given a metatable at runtime keeps
-  the type it had.
 - A sourcemap child whose name is not an identifier (`"My Part"`) is not typed.
 
 ## Development

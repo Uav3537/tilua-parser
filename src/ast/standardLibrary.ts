@@ -82,7 +82,38 @@ declare function unpack<V>(list: readonly V[], i?: number, j?: number): V[]
 declare function rawget(t: unknown, key: unknown): unknown
 declare function rawset<T>(t: T, key: unknown, value: unknown): T
 declare function rawequal(a: unknown, b: unknown): boolean
-declare function setmetatable<T>(t: T, mt: unknown): T
+-- What a metatable may hold, for a table of type T.
+type Metatable<T> = {
+    __index?: object | ((self: T, key: any) => unknown),
+    __newindex?: object | ((self: T, key: any, value: any) => void),
+    __call?: (self: T, ...args: any[]) => unknown,
+    __add?: (a: any, b: any) => unknown,
+    __sub?: (a: any, b: any) => unknown,
+    __mul?: (a: any, b: any) => unknown,
+    __div?: (a: any, b: any) => unknown,
+    __idiv?: (a: any, b: any) => unknown,
+    __mod?: (a: any, b: any) => unknown,
+    __pow?: (a: any, b: any) => unknown,
+    __concat?: (a: any, b: any) => unknown,
+    __unm?: (self: T) => unknown,
+    __len?: (self: T) => number,
+    __eq?: (a: T, b: T) => boolean,
+    __lt?: (a: any, b: any) => boolean,
+    __le?: (a: any, b: any) => boolean,
+    __tostring?: (self: T) => string,
+    __iter?: (self: T) => unknown,
+    __mode?: "k" | "v" | "kv",
+    __metatable?: unknown,
+}
+-- A table with its metatable: what it holds, what __index gives it, what
+-- __newindex takes, and the metamethods operators and calls read.
+type WithMetatable<T, M> = T
+    & (M extends { __index: infer I } ? (I extends (...args: any[]) => infer R ? { [string]: R } : I) : {})
+    & (M extends { __newindex: (self: any, key: any, value: infer V) => unknown } ? { [string]: V } : {})
+    & Omit<M, "__index" | "__newindex" | "__mode" | "__metatable">
+-- nil takes the metatable away.
+declare function setmetatable<T>(t: T, mt: nil): T
+declare function setmetatable<T, M extends Metatable<T>>(t: T, mt: M): WithMetatable<T, M>
 declare function getmetatable(t: unknown): unknown
 declare function newproxy(addMeta?: boolean): unknown
 -- The entry after \`key\` — or nil, past the last one.

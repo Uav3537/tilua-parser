@@ -31,6 +31,7 @@
 import { basename, dirname, extname, isAbsolute, join, relative, resolve } from "node:path"
 import { parse } from "@ast/builders"
 import type { Program } from "@ast/nodes"
+import { TREE_CLASS_PREFIX } from "@ast/typeModel"
 import { isIdentifier } from "../luau"
 import type { TiluaConfig } from "./config"
 import { nodeHost, type ProjectHost } from "./host"
@@ -83,7 +84,7 @@ export function sourceMapTypes(
     const aliasOfNode = new Map<SourceMapNode, string>()
 
     const aliasFor = (segments: readonly string[]): string => {
-        const base = `SourceMap_${segments.map(s => s.replace(/[^A-Za-z0-9_]/g, "_")).join("_")}`
+        const base = `${TREE_CLASS_PREFIX}${segments.map(s => s.replace(/[^A-Za-z0-9_]/g, "_")).join("_")}`
         let alias = base
         for (let n = 2; used.has(alias); n++) alias = `${base}_${n}`
         used.add(alias)

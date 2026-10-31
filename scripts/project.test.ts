@@ -7,7 +7,7 @@
 import { join, resolve, sep } from "node:path"
 import {
     findConfig, loadConfig, resolveTypeLibraries, resolveModulePath, importExpressions, sourceMapTypes,
-    parse, parseWithRecovery, analyzeScopes, analyzeTypes, moduleExports, formatType, withoutAliasName, applyDirectives,
+    parse, parseWithRecovery, analyzeScopes, analyzeTypes, moduleExports, formatType, typeKey, withoutAliasName, applyDirectives,
     type ProjectHost, type ModuleExports, type GenericForStatement,
     luauString, escapeLuauString, isLuauName, isIdentifier, withoutNil, isFunctionType, isInstanceOf, returnsTuple,
     union, difference, literal, unknownType, numberType, nilType,
@@ -316,6 +316,26 @@ const rel = (path: string | undefined): string | undefined =>
     const reads = parse("const remotes: Folder = game.ReplicatedStorage.Shared.Remotes")
     check("sourcemap: a service child takes over the member of the same name",
         analyzeTypes(reads, analyzeScopes(reads), { libs: [roblox, withServices.program] }).diagnostics.map(d => d.message), [])
+    // A node of the tree reads as its Roblox class, and stays its own type.
+    const shown = parse([
+        "const remotes = game.ReplicatedStorage.Shared.Remotes",
+        "const util = game.ReplicatedStorage.Shared.Util",
+        "const spawn = game.Workspace.Spawn",
+        "const part: typeof spawn = remotes",
+        "const folders = [remotes, remotes]",
+        "const shared = game.ReplicatedStorage.Shared",
+        "const mixed = [remotes, shared]",
+    ].join("\n"))
+    const shownScopes = analyzeScopes(shown)
+    const shownTypes = analyzeTypes(shown, shownScopes, { libs: [roblox, withServices.program] })
+    const shownType = (name: string) => [...shownTypes.bindingType].find(([id]) => shownScopes.bindings.get(id)!.name === name)![1]
+    const shownBinding = (name: string): string => formatType(shownType(name))
+    check("sourcemap: a node reads as its Roblox class", [shownBinding("remotes"), shownBinding("util"), shownBinding("folders"), shownBinding("mixed")],
+        ["Folder", "ModuleScript", "Folder[]", "Folder[]"])
+    check("sourcemap: the name a node has inside it stays out of what is said about it",
+        shownTypes.diagnostics.map(d => d.message), ["Type 'Folder' is not assignable to 'Part', 'Parent' is Folder, not Workspace"])
+    check("sourcemap: two nodes of one class are still two types",
+        typeKey(shownType("remotes")) === typeKey(shownType("shared")), false)
     // `game:GetService` names the same service the tree does; a service the
     // tree leaves out is still what the library says.
     const provider = parse([
@@ -1071,6 +1091,149 @@ const rel = (path: string | undefined): string | undefined =>
                 "Object literal may only specify known properties, and 'b' does not exist in type '{ a: number }'",
             ],
         ])
+
+    // A list written under `as const` stays writable where the contract wants
+    // that, as in TypeScript; one that is read-only already does not fit.
+    const constLists = analyze([
+        "type Config = { Anims: { Melee: string[], Combo: [number, number] }, Pages: { Name: string, Skills: string[] }[], Tags: readonly string[] }",
+        "const Good = {",
+        "    Anims: { Melee: [], Combo: [1, 2] },",
+        "    Pages: [{ Name: \"Bones\", Skills: [\"a\"] }],",
+        "    Tags: [\"t\"],",
+        "} as const satisfies Config",
+        "const Parens = ([1, 2] as const) satisfies number[]",
+        "const Kept = [1, 2] as const satisfies readonly number[]",
+        "const Melee = [\"a\"] as const",
+        "const Read = { Anims: { Melee: Melee, Combo: [1, 2] }, Pages: [], Tags: [] } as const satisfies Config",
+        "const Deep = {",
+        "    Anims: { Melee: [], Combo: [1, 2] },",
+        "    Pages: [{ Name: \"Bones\", Skills: [1] }],",
+        "    Tags: [],",
+        "} as const satisfies Config",
+    ].join("\n"))
+    check("satisfies: `as const` lists take their mutability from the contract",
+        [constLists.bindings.Good, constLists.bindings.Parens, constLists.bindings.Kept, constLists.errors], [
+            `{ readonly Anims: { readonly Combo: [1, 2], readonly Melee: string[] }, readonly Pages: [{ readonly Name: "Bones", readonly Skills: ["a"] }], readonly Tags: readonly ["t"] }`,
+            "[1, 2]",
+            "readonly [1, 2]",
+            [
+                `Type '{ Anims, Pages, Tags }' does not satisfy the expected type 'Config', 'Anims.Melee' is 'readonly' and cannot be assigned to the mutable type 'string[]'`,
+                `Type '{ Anims, Pages, Tags }' does not satisfy the expected type 'Config', 'Pages[1].Skills[1]' is 1, not string`,
+            ],
+        ])
+
+    // What `as const` is written into says the same as `satisfies` does.
+    check("as const: an expected type reaches what is written in it", [
+        analyze("const G = { f: (x) => x + 1 } as const satisfies { f: (x: number) => number }\nconst r = G.f(1)").bindings.r,
+        analyze("const G = { f: (x) => x.nope } as const satisfies { f: (x: number) => number }").errors,
+    ], ["number", ["Property 'nope' does not exist on type 'number'"]])
+    check("as const: a writable list is wanted of it", [
+        "const A: number[] = [1, 2] as const",
+        "const A: string[] = [] as const",
+        "function f(x: { a: number[] }) {}\nf({ a: [1] } as const)",
+        "function f(): number[] { return [1] as const }",
+        "let x: number[] = []\nx = [1] as const",
+    ].flatMap(code => analyze(code).errors), [])
+    check("as const: read-only where nothing asks otherwise", [
+        analyze("function f<T>(x: T): T { return x }\nconst r = f([1] as const)").bindings.r,
+        analyze("const r: readonly number[] = [1] as const").errors,
+        analyze("const M = [1] as const\nconst bad: number[] = M").errors,
+    ], ["readonly [1]", [], ["Type 'readonly [1]' is not assignable to 'number[]'"]])
+
+    // `[]` as a type is the empty list wherever a list is wanted.
+    check("empty list: fits a list, and is still not a value of anything else", [
+        "declare X: { M: [] }\nconst H: { M: string[] } = X",
+        "declare X: { M: [] }\nconst H: { M: string[] | number } = X",
+        "type L = string[]\ndeclare X: []\nconst H: L = X",
+        "const g: () => string[] = () => {}",
+        "function h(): string[] { }",
+        "declare X: []\nconst n: number = X",
+    ].map(code => analyze(code).errors.length), [0, 0, 0, 1, 1, 1])
+
+    // A table keeps its type through `setmetatable`, and gains what it adds.
+    const withMeta = (code: string) => {
+        const { bindings, errors } = analyze(code)
+        return errors.length ? errors : bindings.x
+    }
+    check("setmetatable: what the metatable gives the table", [
+        withMeta(`const r = setmetatable({ a: 1 }, { __index: { b: "s" } })\nconst x = [r.a, r.b]`),
+        withMeta(`const M = { __index: { q: 1 } }\nconst r = setmetatable({}, M)\nconst x = r.q`),
+        withMeta(`declare n: number\nconst r = setmetatable({ a: 1 }, { __index: (t, k) => n })\nconst x = r.zzz`),
+        withMeta(`const r = setmetatable({}, { __newindex: function(self, k: any, v: number) { } })\nr.hello = 1\nconst x = 1`),
+        withMeta(`const r = setmetatable({ a: 1 }, { __add: (l, o) => "s" })\nconst x = r + r`),
+        withMeta(`const r = setmetatable({ a: 1 }, { __call: (self, n: number) => self.a + n })\nconst x = r(1)`),
+        withMeta(`const r = setmetatable({ a: 1 }, nil)\nconst x = r.a`),
+        withMeta(`class K { v: number = 1 }\nconst r = setmetatable(K.new(), { __index: { z: 1 } })\nconst x = [r.v, r.z]`),
+    ], ["(number | string)[]", "number", "number", "1", `"s"`, "number", "number", "number[]"])
+    check("setmetatable: a metamethod's parameters are read from the table", [
+        withMeta(`const r = setmetatable({ a: 1 }, { __newindex: function(self, k, v) { print(self.nope) } })`),
+        withMeta(`const r = setmetatable({ a: 1 }, { __index: 5 })`).length,
+    ], [["Property 'nope' does not exist on type '{ a: number }'"], 1])
+
+    // A default travels with the type that declares it.
+    const defaulted = (code: string) => {
+        const { bindings, errors } = analyze(`import type { B, P, K } from "./b"\n${code}`, { "./b": [
+            "type Hidden = { h: string }",
+            "export type B<C = number> = { a: C }",
+            "export type P<A, D = A[], E = Hidden> = { a: A, d: D, e: E }",
+            "export class K<T = string> { v: T | nil }",
+        ].join("\n") })
+        return errors.length ? errors : bindings.r
+    }
+    check("type arguments: an imported type's default is the one it declares", [
+        defaulted("declare x: B\nconst r = x.a"),
+        defaulted("declare x: B<string>\nconst r = x.a"),
+        defaulted("declare x: P<boolean>\nconst r = x.d"),
+        defaulted("declare x: P<boolean>\nconst r = x.e.h"),
+        defaulted("declare x: K\nconst r = x.v"),
+        defaulted("declare x: B\nconst bad: string = x.a"),
+    ], [
+        "number", "string", "boolean[]", "string", "string | nil",
+        ["Type 'number' is not assignable to 'string'"],
+    ])
+
+    // What is not a key does not quietly make a mapped type `{}`.
+    const keyed = (code: string) => analyze(`const C = [{ L: ["x"] }, { L: ["y"] }] as const@@${code}`.replace("@@", String.fromCharCode(10))).errors
+    check("mapped types: a list is not keys, and what it holds is", [
+        keyed(`const v = { x: 1 } satisfies { [K in typeof C[number]["L"]]: number }`)[0],
+        keyed(`const v = { x: 1, y: 2 } satisfies { [K in typeof C[number]["L"][number]]: number }`),
+        keyed(`type A<T extends string> = { [K in T]: number }`),
+        keyed(`type A = { [K in string]: number }`),
+        keyed(`type A = { [K in typeof C[number] as "n"]: number }`),
+    ], [
+        `Type 'readonly ["x"] | readonly ["y"]' cannot be used as keys: it is a list, and '[number]' reads what it holds`,
+        [], [], [], [],
+    ])
+    // A contract an import cycle has not delivered yet freezes nothing.
+    check("as const: a contract not known yet leaves lists as written",
+        analyze("const a = { m: [] } as const satisfies Missing").bindings.a, "{ readonly m: [] }")
+
+    // A generic with no default for a parameter has to be given it.
+    const counted = (code: string, modules?: Record<string, string>) => analyze(code, modules).errors
+    check("type arguments: a type's are counted, as a call's are", [
+        counted("type B<C> = { a: C }\ndeclare x: B"),
+        counted("type B<C> = { a: C }\nconst x = { a: 1 } satisfies B"),
+        counted("type B<C> = { a: C }\ntype D = B"),
+        counted("type B<C> = { a: C }\ndeclare x: B<number, string>"),
+        counted("type B<C, D = number> = { a: C, b: D }\nfunction f(x: B) {}"),
+        counted("type N = number\ndeclare x: N<string>"),
+        counted("type B<C = number> = { a: C }\ndeclare x: B"),
+        counted("type B<C, D = number> = { a: C, b: D }\ndeclare x: B<string>\ndeclare y: B<string, string>"),
+        counted("type L<T> = { next: L<T> | nil }\ndeclare x: L<number>"),
+    ], [
+        ["Type 'B' takes 1 type argument, got 0"],
+        ["Type 'B' takes 1 type argument, got 0"],
+        ["Type 'B' takes 1 type argument, got 0"],
+        ["Type 'B' takes 1 type argument, got 2"],
+        ["Type 'B' takes 1 to 2 type arguments, got 0"],
+        ["Type 'N' is not generic"],
+        [], [], [],
+    ])
+    check("type arguments: an imported type's are counted too", [
+        counted(`import type { B } from "./b"\ndeclare x: B`, { "./b": "export type B<C> = { a: C }" }),
+        counted(`import type { B } from "./b"\ndeclare x: B<number>`, { "./b": "export type B<C> = { a: C }" }),
+        counted(`import type { B } from "./b"\ndeclare x: B`, { "./b": "export type B<C = number> = { a: C }" }),
+    ], [["Type 'B' takes 1 type argument, got 0"], [], []])
 
     // Names nothing declares, when asked for.
     {
@@ -2154,7 +2317,7 @@ function g() {
     ].join("\n"))
     check("correlation: a value read by key says which key it was",
         [correlated.bindings.inMap, correlated.bindings.thePath, correlated.bindings.missing],
-        [`"Blocking" | "Health"`, `readonly ["Blocking"] | readonly ["Health"]`, `"KB" | "Knocked"`])
+        [`"Blocking" | "Health"`, `["Blocking"] | ["Health"]`, `"KB" | "Knocked"`])
 
     // Each line of an overload set is a node of its own.
     {
