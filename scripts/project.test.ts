@@ -297,6 +297,36 @@ const rel = (path: string | undefined): string | undefined =>
         types!.scriptFor(join(ROOT, "src/shared/Util.tilua")) !== undefined, true)
     check("sourcemap: an unmapped file has no `script` of its own",
         types!.scriptFor(join(ROOT, "src/other.tilua")), undefined)
+    // Each file's `script` is a library of its own, and names no type: files
+    // that differ only in it still share the classes they all read.
+    {
+        const classes = parse("declare class Shared { Name: string }")
+        const part = (script: string) => {
+            const program = parse("const x: Shared = nil as any")
+            const scopes = analyzeScopes(program, { builtinGlobals: ["script"] })
+            return analyzeTypes(program, scopes, { libs: [classes, parse(script)] }).aliases.get("Shared")
+        }
+        check("libraries: a `script` does not cost a file the shared classes",
+            part("declare script: Shared") === part("declare script: string"), true)
+    }
+    // A local read from a function in its own initializer: the function runs
+    // later, when the local holds what the initializer gave it.
+    {
+        const lib = parse("declare class Conn { Disconnect: (self: Conn) => void }\ndeclare function on(callback: () => void): Conn")
+        const messages = (text: string) => {
+            const program = parse(text)
+            const scopes = analyzeScopes(program, { builtinGlobals: ["on"] })
+            return analyzeTypes(program, scopes, { libs: [lib] }).diagnostics.map(d => d.message)
+        }
+        check("hoisting: a local in a function reads itself in its initializer",
+            messages("function f() {\n    const c = on(function() {\n        const n: number = c\n    })\n}\n"),
+            ["Type 'Conn' is not assignable to 'number'"])
+        check("hoisting: and so does a local at the top level",
+            messages("const c = on(function() {\n    const n: number = c\n})\n"),
+            ["Type 'Conn' is not assignable to 'number'"])
+        check("hoisting: a method of itself is known",
+            messages("function f() {\n    const c = on(function() {\n        c:Disconnect()\n    })\n}\n"), [])
+    }
     // A library may type a service as a member of `DataModel`; the service in
     // the tree still takes that member over, so `game.ReplicatedStorage.Shared`
     // is typed. Any other child a member already names is left out.

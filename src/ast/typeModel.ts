@@ -2262,6 +2262,15 @@ function collectTypeParams(t: Type | undefined, out: Map<string, Type>, seen = n
             return
         case "genericRef": for (const a of t.typeArguments) collectTypeParams(a, out, seen); return
         case "object":
+            // A class prints as its name and arguments, and its members are
+            // not a signature's to mention. Reading them here would resolve
+            // every class the first one reaches, just to print it.
+            if (t.class) {
+                for (const args of t.class.typeArguments?.values() ?? []) {
+                    for (const a of args) collectTypeParams(a, out, seen)
+                }
+                return
+            }
             for (const [, p] of t.properties) collectTypeParams(p.type, out, seen)
             return
         default: return

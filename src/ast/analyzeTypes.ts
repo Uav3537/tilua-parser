@@ -3457,7 +3457,7 @@ class TypeAnalyzer {
                 if (target.type === "IdentifierPattern" && target.typeAnnotation && source) {
                     this.applyContext(source, this.resolveType(target.typeAnnotation))
                 }
-                const inferred = source ? this.infer(source, env) : nilType
+                const inferred = source ? this.inferInitializer(stmt, source, env) : nilType
                 if (this.emitDiagnostics && target.type === "IdentifierPattern" &&
                     target.typeAnnotation && source) {
                     const declared = this.resolveType(target.typeAnnotation)
@@ -9953,10 +9953,28 @@ class TypeAnalyzer {
     /** Declarations a reference may meet before the walk does. */
     private aheadDeclarations?: Map<BindingId, Statement>
     private readonly computingAhead = new Set<BindingId>()
+    /** Locals whose initializer is being read, with the flow it is read in:
+     *  `const c = s:Connect(function() { c:Disconnect() })` meets `c` in a
+     *  function that runs later, when `c` has its value. */
+    private readonly initializing = new Map<BindingId, { statement: VariableDeclaration; env: FlowEnv }>()
+
+    /** A declaration's initializer, its name readable from inside it. */
+    private inferInitializer(statement: VariableDeclaration, source: Expression, env: FlowEnv): Type {
+        const target = statement.name
+        const id = target.type === "IdentifierPattern" ? this.bindingIdByName(target.name, target) : undefined
+        if (id === undefined) return this.infer(source, env)
+        this.initializing.set(id, { statement, env })
+        try {
+            return this.infer(source, env)
+        } finally {
+            this.initializing.delete(id)
+        }
+    }
 
     private declaredAhead(id: BindingId): Type | undefined {
         this.aheadDeclarations ??= this.indexAheadDeclarations()
-        const statement = this.aheadDeclarations.get(id)
+        const local = this.initializing.get(id)
+        const statement = this.aheadDeclarations.get(id) ?? local?.statement
         if (!statement || this.computingAhead.has(id)) return undefined
         this.computingAhead.add(id)
         const wasEmitting = this.emitDiagnostics
@@ -9976,7 +9994,7 @@ class TypeAnalyzer {
                 if (target.type === "IdentifierPattern" && target.typeAnnotation) {
                     type = this.resolveType(target.typeAnnotation)
                 } else if (statement.init) {
-                    const value = this.infer(statement.init, new Map())
+                    const value = this.infer(statement.init, new Map(local?.env))
                     type = statement.kind === "const" ? value : widen(value)
                 }
             }
@@ -10193,28 +10211,33 @@ interface SharedClasses {
     readonly classMembers: WeakMap<ObjectType, () => { properties: Map<string, ObjectProperty>; indexer: ObjectType["indexer"] } | undefined>
 }
 
-const sharedClassesByLib = new WeakMap<Program, SharedClasses>()
+/** By the last library of the set: the first is the standard library, which
+ *  every project has, and each set of libraries has a store of its own. */
+const sharedClassesByLib = new WeakMap<Program, SharedClasses[]>()
 
 /** The store of resolved library classes this analysis may use — or
  *  `undefined` when it must resolve its own. A file that declares a name one
  *  of the libraries also declares changes what that library's classes mean,
  *  so it gets no share of theirs. */
 function shareableClasses(libs: readonly Program[], program: Program): SharedClasses | undefined {
-    if (!libs.length) return undefined
+    // A library that names no type has no say in what a class means: the
+    // `declare script: ...` each file of a sourcemap gets is a new program per
+    // file, and counting it would give every file a store of its own.
+    const typed = libs.filter(lib => namesDeclaredIn(lib).size)
+    if (!typed.length) return undefined
     const mine = namesDeclaredIn(program)
     if (mine.size) {
-        for (const lib of libs) {
+        for (const lib of typed) {
             for (const name of namesDeclaredIn(lib)) if (mine.has(name)) return undefined
         }
     }
-    const existing = sharedClassesByLib.get(libs[0])
-    if (existing) {
-        const same = existing.libs.length === libs.length && existing.libs.every((lib, i) => lib === libs[i])
-        if (same) return existing
-        return undefined
-    }
-    const store: SharedClasses = { libs: [...libs], classTypes: new WeakMap(), classMembers: new WeakMap() }
-    sharedClassesByLib.set(libs[0], store)
+    const last = typed[typed.length - 1]
+    const stores = sharedClassesByLib.get(last) ?? []
+    const existing = stores.find(store =>
+        store.libs.length === typed.length && store.libs.every((lib, i) => lib === typed[i]))
+    if (existing) return existing
+    const store: SharedClasses = { libs: typed, classTypes: new WeakMap(), classMembers: new WeakMap() }
+    sharedClassesByLib.set(last, [...stores, store])
     return store
 }
 
