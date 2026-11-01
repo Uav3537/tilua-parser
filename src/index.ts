@@ -9,6 +9,7 @@ export * from '@ast/nodes'
 import { analyzeScopes, getBinding, isGlobal, isUnassignedGlobal, LANGUAGE_GLOBALS } from '@ast/analyzeScopes'
 export type { ScopeAnalysis, ScopeDiagnostic, Binding, BindingId, BindingKind } from '@ast/analyzeScopes'
 import { analyzeTypes, moduleExports } from '@ast/analyzeTypes'
+import { classesOf, exportsFingerprint } from '@ast/exportsFingerprint'
 export type { TypeAnalysis, AnalyzeTypesOptions, TypeDiagnostic, ModuleExports, ExportedType } from '@ast/analyzeTypes'
 export * from '@ast/typeModel'
 // The language's own utility types (`Partial`, `ReturnType`, ...) are built
@@ -37,7 +38,7 @@ export {
     tokenize, LexError,
     parse, parseTokens, parseExpressionFromSource, parseWithRecovery, ParseError,
     analyzeScopes, getBinding, isGlobal, isUnassignedGlobal, LANGUAGE_GLOBALS,
-    analyzeTypes, moduleExports,
+    analyzeTypes, moduleExports, classesOf, exportsFingerprint,
 }
 
 export const tilua = {
