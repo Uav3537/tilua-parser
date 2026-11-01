@@ -102,6 +102,8 @@ export function resolveTypeLibraries(config: TiluaConfig, host: ProjectHost = no
     const lowerings: (Omit<LoweringModule, "options"> & { directory: string })[] = []
     const problems: ConfigProblem[] = []
     const loaded = new Set<string>()
+    /** The packages seen, by folder: each is loaded once, however many list it. */
+    const visited = new Set<string>()
     /** Every option declared, by name: the first package to declare it. */
     const declared = new Map<string, Omit<LibraryOption, "value">>()
     /** The names each package declares, by its folder. */
@@ -115,17 +117,17 @@ export function resolveTypeLibraries(config: TiluaConfig, host: ProjectHost = no
     }
 
     /** A package folder: its dependencies' definitions, then its own. */
-    const addPackage = (directory: string, entryFile: string, visiting: Set<string>): void => {
+    const addPackage = (directory: string, entryFile: string): void => {
         const key = pathKey(directory)
-        if (visiting.has(key)) return
-        visiting.add(key)
+        if (visited.has(key)) return
+        visited.add(key)
         // However it was reached — by name, by `@tilua-types/*`, by a path.
         const name = readJson(join(directory, "package.json"), host)?.name
         if (typeof name === "string" && builtIn(name)) return
         for (const dependency of dependencyNames(directory, host)) {
             if (builtIn(dependency)) continue
             const found = findPackage(dependency, directory, host)
-            if (found) addPackage(found.directory, found.file, visiting)
+            if (found) addPackage(found.directory, found.file)
         }
         addFile(entryFile)
         const own = packageOptions(directory, host, problems, config)
@@ -157,7 +159,7 @@ export function resolveTypeLibraries(config: TiluaConfig, host: ProjectHost = no
                 continue
             }
             const file = packageEntry(target, host)
-            if (file) addPackage(target, file, new Set())
+            if (file) addPackage(target, file)
             else problems.push({ file: config.path, message: `'${entry}' has no ${ENTRY_FILE} (or 'tilua.types' in its package.json)`, ...entryPosition(config, entry) })
             continue
         }
@@ -177,7 +179,7 @@ export function resolveTypeLibraries(config: TiluaConfig, host: ProjectHost = no
                     ...entryPosition(config, entry),
                 })
             }
-            for (const found of matched ?? []) addPackage(found.directory, found.file, new Set())
+            for (const found of matched ?? []) addPackage(found.directory, found.file)
             continue
         }
 
@@ -188,7 +190,7 @@ export function resolveTypeLibraries(config: TiluaConfig, host: ProjectHost = no
         // `"lua"`: already there.
         if (builtIn(names[0])) continue
         const found = names.map(name => findPackage(name, config.directory, host)).find(Boolean)
-        if (found) addPackage(found.directory, found.file, new Set())
+        if (found) addPackage(found.directory, found.file)
         else {
             problems.push({
                 file: config.path,

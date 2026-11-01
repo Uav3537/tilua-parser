@@ -205,6 +205,27 @@ const rel = (path: string | undefined): string | undefined =>
         "Unknown option 'other'. Options are: types, paths, baseUrl, sourceMap, output, rootDir, outDir, noLib, treeShaking, lineMap, indent, minify, typed, mode, level",
     ], [{ typed: true, mode: "fast", level: undefined }]])
 
+    // A package lowers once, after what it depends on, in whatever order the
+    // config lists them: the last lowering is asked first, so a dependency
+    // listed again must not go in front of what needs it.
+    const lowered = (types: string[]): string[] => {
+        const h = host({
+            "node_modules/@tilua-types/base/package.json": JSON.stringify({ name: "@tilua-types/base", tilua: { lowering: "lowering.mjs" } }),
+            "node_modules/@tilua-types/base/index.d.tilua": "",
+            "node_modules/@tilua-types/base/lowering.mjs": "export default {}",
+            "node_modules/@tilua-types/top/package.json": JSON.stringify({
+                name: "@tilua-types/top", dependencies: { "@tilua-types/base": "^1.0.0" }, tilua: { lowering: "lowering.mjs" },
+            }),
+            "node_modules/@tilua-types/top/index.d.tilua": "",
+            "node_modules/@tilua-types/top/lowering.mjs": "export default {}",
+            "tilua.config.json": JSON.stringify({ types }),
+        })
+        return resolveTypeLibraries(loadConfig(join(ROOT, "tilua.config.json"), h).config!, h).lowerings.map(l => l.from)
+    }
+    check("lowerings: a dependency, then what needs it", lowered(["top"]), ["@tilua-types/base", "@tilua-types/top"])
+    check("lowerings: the same whichever is listed first", [lowered(["top", "base"]), lowered(["base", "top"])],
+        [["@tilua-types/base", "@tilua-types/top"], ["@tilua-types/base", "@tilua-types/top"]])
+
     // Lua's standard library is built in: its old package loads nothing,
     // whether it is named, matched or depended on — unless `noLib`.
     const withLua = {

@@ -13,7 +13,7 @@ export {
 } from "./libraries"
 export type {
     LoweringPlugin, LuaSyntax, MethodCall, MethodLowering, GlobalCall, GlobalValue, CallLowering, CallSite, ArgumentInfo,
-    PluginContext, EntryExports, EntryExportsLowering, FilesLayout, FilesAnswer,
+    PluginContext, EntryExports, EntryExportsLowering, FilesLayout, FilesAnswer, FilesOutput, FilesProblem,
 } from "./lowering"
 export { moduleCandidates, resolveModulePath, importExpressions } from "./modules"
 export { sourceMapTypes, rojoSourceMap, sourceMapOf, type SourceMapNode, type SourceMapOptions, type SourceMapTypes } from "./sourcemap"

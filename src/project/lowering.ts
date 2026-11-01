@@ -162,9 +162,17 @@ export interface PluginContext {
     readonly options: Readonly<Record<string, boolean | number | string | undefined>>
 }
 
-interface CallContext extends PluginContext {
-    /** Where the call was written. */
+/** What a hook that lowers a site of the program can do there. */
+interface SiteContext extends PluginContext {
+    /** Where it was written. */
     readonly at: CallSite
+    /** Whether this build is `"output": "files"`. */
+    readonly perFile: boolean
+    /** Say this site cannot be built: it stops the build, at this site. */
+    report(message: string): void
+}
+
+interface CallContext extends SiteContext {
     /** Each written argument, in order. */
     readonly arguments: readonly ArgumentInfo[]
     /** The local name the output gives one of `runtime`'s entries, emitting
@@ -191,10 +199,9 @@ export interface GlobalCall extends CallContext {
     readonly name: string
 }
 
-export interface GlobalValue extends PluginContext {
+export interface GlobalValue extends SiteContext {
     /** The global read. */
     readonly name: string
-    readonly at: CallSite
     use(runtime: string): string
 }
 
@@ -222,6 +229,8 @@ export interface EntryExportsLowering {
 export interface FilesLayout extends PluginContext {
     /** The config's folder, absolute: where the project's own paths start. */
     readonly directory: string
+    /** The folder the sources are under, absolute. */
+    readonly rootDir: string
     /** The folder the output is written to, absolute. */
     readonly outDir: string
     /** Every file of the output but the runtime, as absolute paths. */
@@ -249,7 +258,22 @@ export interface FilesAnswer {
      *  loads? Nothing may import one, and what it returns is not typed. */
     script?(file: string): boolean
     /** What is wrong with the layout: a file the host has no place for. */
-    readonly problems?: readonly { readonly file?: string; readonly message: string; readonly severity?: "warning" }[]
+    readonly problems?: readonly FilesProblem[]
+    /** Files of the library's own to write with the output, asked once every
+     *  module is lowered, so it knows what the program called. */
+    output?(): Promise<FilesOutput>
+}
+
+export interface FilesProblem {
+    readonly file?: string
+    readonly message: string
+    readonly severity?: "warning"
+}
+
+export interface FilesOutput {
+    /** Each by its absolute path, inside `outDir`. */
+    readonly files: readonly { readonly file: string; readonly code: string }[]
+    readonly problems?: readonly FilesProblem[]
 }
 
 export interface CallLowering {
