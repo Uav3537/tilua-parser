@@ -1,6 +1,6 @@
 {
   "name": "@tilua/parser",
-  "version": "9.1.3",
+  "version": "9.1.4",
   "description": "tilua parser for roblox",
   "main": "./dist/index.js",
   "module": "./dist/index.js",

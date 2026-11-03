@@ -1825,10 +1825,28 @@ export function containsTypeParam(
         const hit = freeParamCache.get(t)
         if (hit !== undefined) return hit
     }
-    const result = containsFreeTypeParam(t, seen, bound)
-    if (cacheable) freeParamCache.set(t, result)
+    if (!cacheable) return containsFreeTypeParam(t, seen, bound)
+    const outer = closedWalk
+    const walked: Type[] = []
+    closedWalk = walked
+    let result: boolean
+    try {
+        result = containsFreeTypeParam(t, seen, bound)
+    } finally {
+        closedWalk = outer
+    }
+    freeParamCache.set(t, result)
+    // Nothing free anywhere below `t` means nothing free below any of the
+    // parts walked on the way: the next question about one of them, as the
+    // reducer asks about the parts of the same large types over and over,
+    // is answered without walking it again.
+    if (!result) for (const part of walked) freeParamCache.set(part, false)
     return result
 }
+
+/** The types a closed `containsTypeParam` question has walked so far, with no
+ *  names bound; `undefined` outside one. */
+let closedWalk: Type[] | undefined
 
 /** The name of TypeScript's polymorphic `this` type: the value a member is
  *  read from. It is a type parameter filled in where a member is read (see
@@ -1865,6 +1883,11 @@ export function withThis(t: Type, receiver: Type): Type {
 
 function containsFreeTypeParam(t: Type, seen: Set<Type>, bound: Set<string>): boolean {
     if (seen.has(t)) return false
+    if (closedWalk && bound.size === 0 && !seekingThis) {
+        const hit = freeParamCache.get(t)
+        if (hit !== undefined) return hit
+        closedWalk.push(t)
+    }
     seen.add(t)
     switch (t.kind) {
         case "typeParam": return seekingThis ? t.name === THIS_TYPE : !bound.has(t.name) && t.name !== THIS_TYPE
